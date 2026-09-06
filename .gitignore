@@ -46,3 +46,15 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Private finance data and signing credentials
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.finbackup
+*.jks
+*.keystore
+key.properties

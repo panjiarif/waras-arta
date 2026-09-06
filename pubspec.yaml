@@ -1,5 +1,5 @@
 name: waras_arta
-description: "A new Flutter project."
+description: "Waras Arta — pencatatan keuangan pribadi, local-first."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -7,13 +7,23 @@ environment:
   sdk: ^3.13.1
 
 dependencies:
+  drift: ^2.34.4
+  drift_flutter: ^0.3.1
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: ^3.4.3
+  go_router: ^18.0.1
+  intl: ^0.20.3
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  drift_dev: ^2.34.6
+  build_runner: ^2.16.1
 
 flutter:
   uses-material-design: true

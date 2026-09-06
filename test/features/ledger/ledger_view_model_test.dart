@@ -335,4 +335,11 @@ class FakeFinanceRepository implements FinanceRepository {
     lastLimit = limit;
     return Stream.value(snapshot);
   }
+
+  @override
+  Stream<CalendarMonthSnapshot> watchCalendarMonth(DateTime month) =>
+      Stream.value(CalendarMonthSnapshot(month: month, days: const []));
+
+  @override
+  Stream<List<FinanceEntry>> watchDay(DateTime day) => Stream.value(const []);
 }

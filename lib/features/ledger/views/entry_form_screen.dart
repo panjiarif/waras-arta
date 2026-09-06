@@ -10,9 +10,10 @@ import 'category_selection_field.dart';
 import 'form_widgets.dart';
 
 class EntryFormScreen extends ConsumerStatefulWidget {
-  const EntryFormScreen({super.key, this.initialEntry});
+  const EntryFormScreen({super.key, this.initialEntry, this.initialDate});
 
   final FinanceEntry? initialEntry;
+  final DateTime? initialDate;
 
   @override
   ConsumerState<EntryFormScreen> createState() => _EntryFormScreenState();
@@ -43,7 +44,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
     _accountId = entry?.accountId;
     _destinationId = entry?.destinationAccountId;
     _categoryId = entry?.categoryId;
-    _date = entry?.occurredAt ?? dateOnly(DateTime.now());
+    _date = dateOnly(entry?.occurredAt ?? widget.initialDate ?? DateTime.now());
     _amount.addListener(_markDirty);
     _note.addListener(_markDirty);
   }

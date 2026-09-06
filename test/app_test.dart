@@ -8,17 +8,25 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:waras_arta/app/app.dart';
 import 'package:waras_arta/domain/finance.dart';
 import 'package:waras_arta/domain/finance_repository.dart';
+import 'package:waras_arta/features/calendar/view_models/calendar_view_model.dart';
 import 'package:waras_arta/features/ledger/view_models/ledger_view_model.dart';
 import 'package:waras_arta/features/ledger/views/category_selection_field.dart';
 
 void main() {
   setUpAll(() => initializeDateFormatting('id_ID'));
 
-  Future<void> pumpApp(WidgetTester tester, _UiRepository repository) async {
+  Future<void> pumpApp(
+    WidgetTester tester,
+    _UiRepository repository, {
+    DateTime? today,
+  }) async {
     addTearDown(repository.dispose);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [financeRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          financeRepositoryProvider.overrideWithValue(repository),
+          if (today != null) currentDateProvider.overrideWithValue(today),
+        ],
         child: const WarasArtaApp(),
       ),
     );
@@ -829,6 +837,154 @@ void main() {
     expect(repository.updateCount, 0);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('calendar shows every entry kind and opens day entry details', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    final date = DateTime(2024, 2, 29);
+    repository.entries.addAll([
+      FinanceEntry(
+        id: 31,
+        kind: EntryKind.income,
+        accountId: 1,
+        amount: 90000,
+        categoryName: 'Gaji bulanan',
+        categoryIconKey: 'work',
+        note: '',
+        occurredAt: date,
+        createdAt: date,
+      ),
+      FinanceEntry(
+        id: 32,
+        kind: EntryKind.expense,
+        accountId: 1,
+        amount: 15000,
+        categoryName: 'Makan siang',
+        categoryIconKey: 'restaurant',
+        note: '',
+        occurredAt: date,
+        createdAt: date,
+      ),
+      FinanceEntry(
+        id: 33,
+        kind: EntryKind.transfer,
+        accountId: 1,
+        destinationAccountId: 2,
+        amount: 20000,
+        note: '',
+        occurredAt: date,
+        createdAt: date,
+      ),
+      FinanceEntry(
+        id: 34,
+        kind: EntryKind.adjustment,
+        accountId: 1,
+        amount: -5000,
+        note: 'Koreksi saldo',
+        occurredAt: date,
+        createdAt: date,
+      ),
+    ]);
+    await pumpApp(tester, repository, today: date);
+
+    await tester.tap(find.byKey(const Key('calendar-tab')));
+    await tester.pumpAndSettle();
+    expect(find.text('Februari 2024'), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, -620));
+    await tester.pumpAndSettle();
+    expect(find.text('29 Feb 2024'), findsOneWidget);
+    expect(find.text('Rp 90.000'), findsOneWidget);
+    expect(find.text('Rp 15.000'), findsOneWidget);
+    expect(find.text('4 catatan • 1 transfer • 1 penyesuaian'), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-entry-31')), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-entry-32')), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-entry-33')), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-entry-34')), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('calendar-entry-33')));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -140));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('calendar-entry-33')));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail transaksi'), findsOneWidget);
+    expect(find.text('Dari rekening'), findsOneWidget);
+    expect(find.text('Ke rekening'), findsOneWidget);
+    expect(find.text('Dompet'), findsWidgets);
+    expect(find.text('Bank'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'future calendar days are disabled and add pre-fills selected date',
+    (tester) async {
+      final repository = _UiRepository(withAccounts: true);
+      await pumpApp(tester, repository, today: DateTime(2024, 8, 20));
+      await tester.tap(find.byKey(const Key('calendar-tab')));
+      await tester.pumpAndSettle();
+
+      final futureDay = tester.widget<InkWell>(
+        find.byKey(const ValueKey('calendar-day-2024-08-21')),
+      );
+      expect(futureDay.onTap, isNull);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('calendar-day-2024-08-17')),
+      );
+      await tester.tap(find.byKey(const ValueKey('calendar-day-2024-08-17')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('primary-action')));
+      await tester.pumpAndSettle();
+      expect(find.text('Catat transaksi'), findsWidgets);
+      expect(find.text('Tanggal transaksi: 17 Agu 2024'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('calendar stays usable on a narrow screen with enlarged text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final repository = _UiRepository(withAccounts: true);
+    repository.entries.add(
+      FinanceEntry(
+        id: 41,
+        kind: EntryKind.income,
+        accountId: 1,
+        amount: maxAmount,
+        categoryName: 'Pendapatan dengan nama kategori yang sangat panjang',
+        categoryIconKey: 'work',
+        note: 'Catatan panjang untuk menguji kartu pada perangkat sempit.',
+        occurredAt: DateTime(2024, 2, 29),
+        createdAt: DateTime(2024, 2, 29),
+      ),
+    );
+    await pumpApp(tester, repository, today: DateTime(2024, 2, 29));
+
+    await tester.tap(find.byKey(const Key('calendar-tab')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        const ValueKey('calendar-day-2024-02-29'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    await tester.dragUntilVisible(
+      find.byKey(const ValueKey('calendar-entry-41')),
+      find.byType(ListView).first,
+      const Offset(0, -250),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('calendar-entry-41')), findsOneWidget);
+    expect(find.text('+ Rp 999.999.999.999'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _UiRepository implements FinanceRepository {
@@ -1282,6 +1438,67 @@ class _UiRepository implements FinanceRepository {
     yield await loadMonth(month, limit: limit);
     await for (final _ in _changes.stream) {
       yield await loadMonth(month, limit: limit);
+    }
+  }
+
+  @override
+  Stream<CalendarMonthSnapshot> watchCalendarMonth(DateTime month) async* {
+    if (failRead) throw StateError('Read failure');
+    CalendarMonthSnapshot snapshot() => _calendarSnapshot(month);
+    yield snapshot();
+    await for (final _ in _changes.stream) {
+      yield snapshot();
+    }
+  }
+
+  CalendarMonthSnapshot _calendarSnapshot(DateTime month) {
+    final matching = entries.where(
+      (entry) =>
+          entry.occurredAt.year == month.year &&
+          entry.occurredAt.month == month.month,
+    );
+    final byDay = <int, List<FinanceEntry>>{};
+    for (final entry in matching) {
+      byDay.putIfAbsent(entry.occurredAt.day, () => []).add(entry);
+    }
+    return CalendarMonthSnapshot(
+      month: DateTime(month.year, month.month),
+      days: [
+        for (final day in byDay.keys.toList()..sort())
+          CalendarDaySummary(
+            day: DateTime(month.year, month.month, day),
+            income: byDay[day]!
+                .where((entry) => entry.kind == EntryKind.income)
+                .fold(0, (sum, entry) => sum + entry.amount),
+            expense: byDay[day]!
+                .where((entry) => entry.kind == EntryKind.expense)
+                .fold(0, (sum, entry) => sum + entry.amount),
+            transferCount: byDay[day]!
+                .where((entry) => entry.kind == EntryKind.transfer)
+                .length,
+            adjustmentCount: byDay[day]!
+                .where((entry) => entry.kind == EntryKind.adjustment)
+                .length,
+            entryCount: byDay[day]!.length,
+          ),
+      ],
+    );
+  }
+
+  @override
+  Stream<List<FinanceEntry>> watchDay(DateTime day) async* {
+    if (failRead) throw StateError('Read failure');
+    List<FinanceEntry> matching() => entries
+        .where(
+          (entry) =>
+              entry.occurredAt.year == day.year &&
+              entry.occurredAt.month == day.month &&
+              entry.occurredAt.day == day.day,
+        )
+        .toList(growable: false);
+    yield matching();
+    await for (final _ in _changes.stream) {
+      yield matching();
     }
   }
 }

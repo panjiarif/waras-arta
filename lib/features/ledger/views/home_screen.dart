@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,8 @@ import '../../../app/theme.dart';
 import '../../../core/category_icons.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
+import '../../calendar/view_models/calendar_view_model.dart';
+import '../../calendar/views/calendar_view.dart';
 import '../view_models/ledger_view_model.dart';
 import 'account_widgets.dart';
 import 'form_widgets.dart';
@@ -17,9 +21,49 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  int _tab = 0;
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
+  _HomeTab _tab = _HomeTab.overview;
   bool _showArchivedAccounts = false;
+  Timer? _calendarDateTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleCalendarDateRefresh();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshCalendarDate();
+    }
+  }
+
+  void _refreshCalendarDate() {
+    if (!mounted) return;
+    ref.invalidate(currentDateProvider);
+    ref.read(calendarStateProvider.notifier).refreshToday();
+    _scheduleCalendarDateRefresh();
+  }
+
+  void _scheduleCalendarDateRefresh() {
+    _calendarDateTimer?.cancel();
+    final now = DateTime.now();
+    final nextDay = DateTime(now.year, now.month, now.day + 1);
+    _calendarDateTimer = Timer(
+      nextDay.difference(now) + const Duration(seconds: 1),
+      _refreshCalendarDate,
+    );
+  }
+
+  @override
+  void dispose() {
+    _calendarDateTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   void _open(String route) {
     ref.read(financeActionsProvider.notifier).clearError();
@@ -32,7 +76,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final accounts = snapshot.asData?.value.accounts;
     final ready = accounts != null;
     final hasActiveAccount = accounts?.any((account) => !account.isArchived);
-    final addAccount = _tab == 2 || hasActiveAccount != true;
+    final addAccount = _tab == _HomeTab.accounts || hasActiveAccount != true;
+    final selectedCalendarDay = _tab == _HomeTab.calendar
+        ? ref.watch(calendarStateProvider.select((value) => value.selectedDay))
+        : null;
+    final primaryRoute = addAccount
+        ? '/accounts/new'
+        : selectedCalendarDay != null
+        ? '/transactions/new?date=${civilDate(selectedCalendarDay)}'
+        : '/transactions/new';
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -93,27 +145,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       floatingActionButton: ready
           ? FloatingActionButton.extended(
               key: const Key('primary-action'),
-              onPressed: () =>
-                  _open(addAccount ? '/accounts/new' : '/transactions/new'),
+              onPressed: () => _open(primaryRoute),
               icon: const Icon(Icons.add),
               label: Text(addAccount ? 'Tambah rekening' : 'Catat transaksi'),
             )
           : null,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (value) => setState(() => _tab = value),
+        selectedIndex: _tab.index,
+        onDestinationSelected: (value) => setState(() {
+          _tab = _HomeTab.values[value];
+        }),
         destinations: const [
           NavigationDestination(
+            key: Key('overview-tab'),
             icon: Icon(Icons.space_dashboard_outlined),
             selectedIcon: Icon(Icons.space_dashboard),
             label: 'Ikhtisar',
           ),
           NavigationDestination(
+            key: Key('history-tab'),
             icon: Icon(Icons.receipt_long_outlined),
             selectedIcon: Icon(Icons.receipt_long),
             label: 'Riwayat',
           ),
           NavigationDestination(
+            key: Key('calendar-tab'),
+            icon: Icon(Icons.calendar_month_outlined),
+            selectedIcon: Icon(Icons.calendar_month),
+            label: 'Kalender',
+          ),
+          NavigationDestination(
+            key: Key('accounts-tab'),
             icon: Icon(Icons.account_balance_wallet_outlined),
             selectedIcon: Icon(Icons.account_balance_wallet),
             label: 'Rekening',
@@ -124,6 +186,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _content(FinanceSnapshot data) {
+    final names = {
+      for (final account in data.accounts) account.id: account.name,
+    };
+    if (_tab == _HomeTab.calendar) {
+      return CalendarView(accountNames: names);
+    }
     final activeAccounts = data.accounts
         .where((account) => !account.isArchived)
         .toList(growable: false);
@@ -131,7 +199,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ? data.accounts
         : activeAccounts;
     final intro = <Widget>[
-      if (_tab == 0) ...[
+      if (_tab == _HomeTab.overview) ...[
         const Text(
           'CATAT, ATUR, TETAP WARAS.',
           style: TextStyle(
@@ -146,17 +214,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         const SizedBox(height: 24),
       ] else ...[
         Text(
-          _tab == 1 ? 'Jejak keuanganmu' : 'Tempat uangmu tersimpan',
+          _tab == _HomeTab.history
+              ? 'Jejak keuanganmu'
+              : 'Tempat uangmu tersimpan',
           style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         Text(
-          _tab == 1
+          _tab == _HomeTab.history
               ? 'Setiap catatan, satu langkah lebih teratur.'
               : 'Saldo saat ini dari seluruh catatan.',
         ),
         const SizedBox(height: 24),
-        if (_tab == 2) ...[
+        if (_tab == _HomeTab.accounts) ...[
           SwitchListTile.adaptive(
             key: const Key('show-archived-accounts'),
             contentPadding: EdgeInsets.zero,
@@ -170,10 +240,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SizedBox(height: 8),
         ],
       ],
-      if (_tab != 2) ...[
+      if (_tab != _HomeTab.accounts) ...[
         const _MonthSelector(),
         const SizedBox(height: 16),
-        if (_tab == 0) ...[
+        if (_tab == _HomeTab.overview) ...[
           _MonthlyTotals(data: data),
           const SizedBox(height: 24),
           const Text(
@@ -189,38 +259,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         const SizedBox(height: 16),
       ],
     ];
-    final entries = _tab == 0 ? data.entries.take(5).toList() : data.entries;
-    final rowCount = _tab == 2 ? visibleAccounts.length : entries.length;
-    final names = {
-      for (final account in data.accounts) account.id: account.name,
-    };
+    final entries = _tab == _HomeTab.overview
+        ? data.entries.take(5).toList()
+        : data.entries;
+    final rowCount = _tab == _HomeTab.accounts
+        ? visibleAccounts.length
+        : entries.length;
     final footer = <Widget>[
       if (rowCount == 0)
         _EmptyCard(
-          title: _tab == 2
+          title: _tab == _HomeTab.accounts
               ? _showArchivedAccounts
                     ? 'Belum ada rekening'
                     : 'Belum ada rekening aktif'
               : data.accounts.isEmpty
               ? 'Mulai dari satu rekening'
               : 'Belum ada catatan bulan ini',
-          description: _tab == 2
+          description: _tab == _HomeTab.accounts
               ? _showArchivedAccounts
                     ? 'Tambahkan dompet, bank, atau e-wallet pertamamu.'
                     : 'Tambahkan rekening baru atau tampilkan rekening yang pernah diarsipkan.'
               : data.accounts.isEmpty
               ? 'Tambahkan dompet atau bank, lalu catat uang yang masuk dan keluar.'
               : 'Transaksi akan muncul di sini sesuai tanggal kejadiannya.',
-          icon: _tab == 2 || data.accounts.isEmpty
+          icon: _tab == _HomeTab.accounts || data.accounts.isEmpty
               ? Icons.wallet_outlined
               : Icons.edit_note,
         ),
-      if (_tab == 0 && data.totalEntries > 5)
+      if (_tab == _HomeTab.overview && data.totalEntries > 5)
         TextButton(
-          onPressed: () => setState(() => _tab = 1),
+          onPressed: () => setState(() => _tab = _HomeTab.history),
           child: const Text('Lihat semua catatan'),
         ),
-      if (_tab == 1 && data.hasMore)
+      if (_tab == _HomeTab.history && data.hasMore)
         OutlinedButton(
           onPressed: () => ref.read(ledgerFilterProvider.notifier).loadMore(),
           child: Text(
@@ -235,7 +306,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ];
 
     return ListView.builder(
-      key: PageStorageKey('ledger-tab-$_tab'),
+      key: PageStorageKey('ledger-tab-${_tab.name}'),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
       itemCount: intro.length + rowCount + footer.length,
       itemBuilder: (context, index) {
@@ -244,7 +315,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (row < rowCount) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _tab == 2
+            child: _tab == _HomeTab.accounts
                 ? _AccountCard(
                     account: visibleAccounts[row],
                     onTap: () => _open('/accounts/${visibleAccounts[row].id}'),
@@ -257,6 +328,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 }
+
+enum _HomeTab { overview, history, calendar, accounts }
 
 class _BalanceCard extends StatelessWidget {
   const _BalanceCard({required this.total, required this.count});

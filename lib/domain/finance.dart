@@ -217,6 +217,61 @@ class FinanceSnapshot {
   bool get hasMore => entries.length < totalEntries;
 }
 
+class CalendarDaySummary {
+  const CalendarDaySummary({
+    required this.day,
+    required this.income,
+    required this.expense,
+    required this.transferCount,
+    required this.adjustmentCount,
+    required this.entryCount,
+  });
+
+  /// A normalized civil date (year/month/day).
+  final DateTime day;
+  final int income;
+  final int expense;
+  final int transferCount;
+  final int adjustmentCount;
+  final int entryCount;
+
+  int get net => income - expense;
+}
+
+class CalendarMonthSnapshot {
+  CalendarMonthSnapshot({
+    required this.month,
+    required List<CalendarDaySummary> days,
+  }) : days = List.unmodifiable(days);
+
+  /// The first day of the represented civil month.
+  final DateTime month;
+
+  /// Active days in ascending order. Empty days are intentionally omitted.
+  final List<CalendarDaySummary> days;
+
+  int get totalIncome => days.fold(0, (sum, day) => sum + day.income);
+  int get totalExpense => days.fold(0, (sum, day) => sum + day.expense);
+  int get totalTransferCount =>
+      days.fold(0, (sum, day) => sum + day.transferCount);
+  int get totalAdjustmentCount =>
+      days.fold(0, (sum, day) => sum + day.adjustmentCount);
+  int get totalEntryCount => days.fold(0, (sum, day) => sum + day.entryCount);
+  int get activeDayCount => days.length;
+  int get net => totalIncome - totalExpense;
+
+  CalendarDaySummary? summaryForDay(DateTime value) {
+    final key = value.year * 10000 + value.month * 100 + value.day;
+    for (final summary in days) {
+      final day = summary.day;
+      if (day.year * 10000 + day.month * 100 + day.day == key) {
+        return summary;
+      }
+    }
+    return null;
+  }
+}
+
 class AccountDraft {
   const AccountDraft({
     required this.name,

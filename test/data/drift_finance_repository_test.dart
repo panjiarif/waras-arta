@@ -71,6 +71,271 @@ void main() {
     expect(() => snapshot.entries.clear(), throwsUnsupportedError);
   });
 
+  test('empty calendar month and day are immutable', () async {
+    final month = await repository.watchCalendarMonth(january).first;
+    final day = await repository.watchDay(DateTime(2024, 1, 15, 18, 30)).first;
+
+    expect(month.month, DateTime(2024, 1));
+    expect(month.days, isEmpty);
+    expect(month.totalIncome, 0);
+    expect(month.totalExpense, 0);
+    expect(month.totalTransferCount, 0);
+    expect(month.totalAdjustmentCount, 0);
+    expect(month.totalEntryCount, 0);
+    expect(month.activeDayCount, 0);
+    expect(month.net, 0);
+    expect(month.summaryForDay(DateTime(2024, 1, 15)), isNull);
+    expect(() => month.days.clear(), throwsUnsupportedError);
+    expect(day, isEmpty);
+    expect(() => day.clear(), throwsUnsupportedError);
+  });
+
+  test('calendar aggregates all entry kinds without treating transfers or '
+      'signed adjustments as cashflow', () async {
+    final source = await account('Sumber');
+    final destination = await account('Tujuan');
+    final firstDay = DateTime(2024, 1, 10);
+    final secondDay = DateTime(2024, 1, 11);
+
+    await repository.adjustAccountBalance(
+      source,
+      AccountBalanceAdjustmentDraft(targetBalance: 50, occurredAt: firstDay),
+    );
+    await repository.adjustAccountBalance(
+      source,
+      AccountBalanceAdjustmentDraft(targetBalance: -10, occurredAt: firstDay),
+    );
+    await repository.addEntry(entry(source, amount: 500, date: firstDay));
+    await repository.addEntry(
+      entry(source, kind: EntryKind.expense, amount: 125, date: firstDay),
+    );
+    await repository.addEntry(
+      entry(
+        source,
+        kind: EntryKind.transfer,
+        amount: 40,
+        destination: destination,
+        date: firstDay,
+      ),
+    );
+    await repository.addEntry(entry(source, amount: 200, date: secondDay));
+
+    final snapshot = await repository.watchCalendarMonth(january).first;
+    expect(snapshot.days.map((summary) => summary.day), [firstDay, secondDay]);
+    final first = snapshot.summaryForDay(DateTime.utc(2024, 1, 10, 23, 59));
+    expect(first?.income, 500);
+    expect(first?.expense, 125);
+    expect(first?.net, 375);
+    expect(first?.transferCount, 1);
+    expect(first?.adjustmentCount, 2);
+    expect(first?.entryCount, 5);
+    expect(snapshot.totalIncome, 700);
+    expect(snapshot.totalExpense, 125);
+    expect(snapshot.totalTransferCount, 1);
+    expect(snapshot.totalAdjustmentCount, 2);
+    expect(snapshot.totalEntryCount, 6);
+    expect(snapshot.activeDayCount, 2);
+    expect(snapshot.net, 575);
+
+    final adjustments = (await repository.watchDay(firstDay).first)
+        .where((item) => item.kind == EntryKind.adjustment)
+        .map((item) => item.amount);
+    expect(adjustments, containsAll(<int>[50, -60]));
+  });
+
+  test(
+    'calendar aggregation is complete beyond the 50-entry history page',
+    () async {
+      final id = await account('Bank');
+      for (var index = 0; index < 60; index++) {
+        await repository.addEntry(
+          entry(id, amount: 100, date: DateTime(2024, 1, 10)),
+        );
+      }
+
+      final history = await repository.loadMonth(january);
+      final calendar = await repository.watchCalendarMonth(january).first;
+      final selectedDay = await repository
+          .watchDay(DateTime(2024, 1, 10))
+          .first;
+
+      expect(history.entries, hasLength(50));
+      expect(history.totalEntries, 60);
+      expect(history.hasMore, isTrue);
+      expect(calendar.totalEntryCount, 60);
+      expect(calendar.totalIncome, 6000);
+      expect(calendar.activeDayCount, 1);
+      expect(calendar.summaryForDay(DateTime(2024, 1, 10))?.entryCount, 60);
+      expect(selectedDay, hasLength(60));
+      expect(
+        selectedDay.map((item) => item.id),
+        orderedEquals(
+          selectedDay.map((item) => item.id).toList()
+            ..sort((a, b) => b.compareTo(a)),
+        ),
+      );
+    },
+  );
+
+  test('watchDay filters one civil day, includes category metadata, and sorts '
+      'newest first', () async {
+    final source = await account('Sumber');
+    final destination = await account('Tujuan');
+    final selectedDay = DateTime(2024, 1, 15);
+    final incomeId = await repository.addEntry(
+      entry(source, amount: 300, date: selectedDay),
+    );
+    await repository.addEntry(
+      entry(source, amount: 999, date: DateTime(2024, 1, 16)),
+    );
+    final expenseId = await repository.addEntry(
+      entry(source, kind: EntryKind.expense, amount: 75, date: selectedDay),
+    );
+    final transferId = await repository.addEntry(
+      entry(
+        source,
+        kind: EntryKind.transfer,
+        amount: 25,
+        destination: destination,
+        date: selectedDay,
+      ),
+    );
+
+    final entries = await repository
+        .watchDay(DateTime.utc(2024, 1, 15, 23, 59, 59))
+        .first;
+    expect(entries.map((item) => item.id), [transferId, expenseId, incomeId]);
+    expect(entries.every((item) => item.occurredAt == selectedDay), isTrue);
+
+    final income = entries.singleWhere((item) => item.id == incomeId);
+    expect(income.categoryName, 'Umum');
+    expect(income.parentCategoryName, 'Gaji');
+    expect(income.categoryIconKey, 'work');
+    final expense = entries.singleWhere((item) => item.id == expenseId);
+    expect(expense.categoryName, 'Umum');
+    expect(expense.parentCategoryName, 'Makan & minum');
+    expect(expense.categoryIconKey, 'restaurant');
+    final transfer = entries.singleWhere((item) => item.id == transferId);
+    expect(transfer.categoryId, isNull);
+    expect(transfer.categoryName, isNull);
+  });
+
+  test('calendar read dates are normalized and bounded', () async {
+    final normalizedMonth = await repository
+        .watchCalendarMonth(DateTime.utc(2024, 1, 31, 23, 59))
+        .first;
+    expect(normalizedMonth.month, DateTime(2024, 1));
+    expect(
+      (await repository.watchCalendarMonth(DateTime.now()).first).month,
+      DateTime(DateTime.now().year, DateTime.now().month),
+    );
+
+    expect(
+      () => repository.watchCalendarMonth(DateTime(1999, 12)),
+      throwsA(validationError),
+    );
+    expect(
+      () => repository.watchCalendarMonth(
+        DateTime(DateTime.now().year, DateTime.now().month + 1),
+      ),
+      throwsA(validationError),
+    );
+    expect(
+      () => repository.watchDay(DateTime(1999, 12, 31)),
+      throwsA(validationError),
+    );
+    expect(
+      () => repository.watchDay(
+        DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day + 1,
+        ),
+      ),
+      throwsA(validationError),
+    );
+    expect(
+      () => repository.loadMonth(DateTime(1999, 12)),
+      throwsA(validationError),
+    );
+  });
+
+  test('calendar month and selected day react to ledger writes', () async {
+    final id = await account('Bank');
+    final selectedDay = DateTime(2024, 1, 20);
+    final monthAdded = repository
+        .watchCalendarMonth(january)
+        .firstWhere((snapshot) => snapshot.totalEntryCount == 1);
+    final dayAdded = repository
+        .watchDay(selectedDay)
+        .firstWhere((entries) => entries.length == 1);
+
+    final entryId = await repository.addEntry(
+      entry(id, amount: 450, date: selectedDay),
+    );
+    final added = await Future.wait([
+      monthAdded.timeout(const Duration(seconds: 5)),
+      dayAdded.timeout(const Duration(seconds: 5)),
+    ]);
+    expect((added[0] as CalendarMonthSnapshot).totalIncome, 450);
+    expect((added[1] as List<FinanceEntry>).single.id, entryId);
+
+    final monthDeleted = repository
+        .watchCalendarMonth(january)
+        .firstWhere((snapshot) => snapshot.totalEntryCount == 0);
+    final dayDeleted = repository
+        .watchDay(selectedDay)
+        .firstWhere((entries) => entries.isEmpty);
+    await repository.deleteEntry(entryId);
+    final deleted = await Future.wait([
+      monthDeleted.timeout(const Duration(seconds: 5)),
+      dayDeleted.timeout(const Duration(seconds: 5)),
+    ]);
+    expect((deleted[0] as CalendarMonthSnapshot).days, isEmpty);
+    expect(deleted[1], isEmpty);
+  });
+
+  test(
+    'calendar reacts when an edit moves an entry to another month',
+    () async {
+      final id = await account('Bank');
+      final oldDay = DateTime(2024, 1, 20);
+      final newDay = DateTime(2024, 2, 2);
+      final entryId = await repository.addEntry(
+        entry(id, amount: 450, date: oldDay),
+      );
+
+      final oldMonthUpdated = repository
+          .watchCalendarMonth(january)
+          .firstWhere((snapshot) => snapshot.totalEntryCount == 0);
+      final oldDayUpdated = repository
+          .watchDay(oldDay)
+          .firstWhere((entries) => entries.isEmpty);
+      final newMonthUpdated = repository
+          .watchCalendarMonth(february)
+          .firstWhere((snapshot) => snapshot.totalEntryCount == 1);
+      final newDayUpdated = repository
+          .watchDay(newDay)
+          .firstWhere((entries) => entries.length == 1);
+
+      await repository.updateEntry(
+        entryId,
+        entry(id, amount: 900, date: newDay),
+      );
+      final updated = await Future.wait([
+        oldMonthUpdated.timeout(const Duration(seconds: 5)),
+        oldDayUpdated.timeout(const Duration(seconds: 5)),
+        newMonthUpdated.timeout(const Duration(seconds: 5)),
+        newDayUpdated.timeout(const Duration(seconds: 5)),
+      ]);
+
+      expect((updated[0] as CalendarMonthSnapshot).days, isEmpty);
+      expect(updated[1], isEmpty);
+      expect((updated[2] as CalendarMonthSnapshot).totalIncome, 900);
+      expect((updated[3] as List<FinanceEntry>).single.id, entryId);
+    },
+  );
+
   test(
     'opening balance is traceable and excluded from monthly income',
     () async {

@@ -123,13 +123,79 @@ class DriftFinanceRepository implements FinanceRepository {
   }
 
   @override
-  Stream<FinanceSnapshot> watchMonth(DateTime month, {int limit = 50}) => _db
-      .customSelect(
-        'SELECT COUNT(*) AS entry_count FROM ledger_entries',
-        readsFrom: {_db.accounts, _db.categories, _db.ledgerEntries},
-      )
-      .watch()
-      .asyncMap((_) => loadMonth(month, limit: limit));
+  Stream<FinanceSnapshot> watchMonth(DateTime month, {int limit = 50}) {
+    final normalizedMonth = _normalizeMonthForRead(month);
+    return _db
+        .customSelect(
+          'SELECT COUNT(*) AS entry_count FROM ledger_entries',
+          readsFrom: {_db.accounts, _db.categories, _db.ledgerEntries},
+        )
+        .watch()
+        .asyncMap((_) => loadMonth(normalizedMonth, limit: limit));
+  }
+
+  @override
+  Stream<CalendarMonthSnapshot> watchCalendarMonth(DateTime month) {
+    final normalizedMonth = _normalizeMonthForRead(month);
+    final start = _dayKey(normalizedMonth);
+    final end = _dayKey(
+      DateTime(normalizedMonth.year, normalizedMonth.month + 1),
+    );
+    return _db
+        .customSelect(
+          '''SELECT occurred_day,
+               COALESCE(SUM(CASE WHEN kind = 0 THEN amount ELSE 0 END), 0)
+                 AS income,
+               COALESCE(SUM(CASE WHEN kind = 1 THEN amount ELSE 0 END), 0)
+                 AS expense,
+               SUM(CASE WHEN kind = 2 THEN 1 ELSE 0 END) AS transfer_count,
+               SUM(CASE WHEN kind = 3 THEN 1 ELSE 0 END) AS adjustment_count,
+               COUNT(*) AS entry_count
+             FROM ledger_entries
+             WHERE occurred_day >= ? AND occurred_day < ?
+             GROUP BY occurred_day
+             ORDER BY occurred_day ASC''',
+          variables: [Variable.withInt(start), Variable.withInt(end)],
+          readsFrom: {_db.ledgerEntries},
+        )
+        .watch()
+        .map(
+          (rows) => CalendarMonthSnapshot(
+            month: normalizedMonth,
+            days: rows.map(_calendarDaySummaryFromQueryRow).toList(),
+          ),
+        );
+  }
+
+  @override
+  Stream<List<FinanceEntry>> watchDay(DateTime day) {
+    final normalizedDay = _normalizeDayForRead(day);
+    final parent = _db.alias(_db.categories, 'parent_category');
+    final query = _db.select(_db.ledgerEntries).join([
+      leftOuterJoin(
+        _db.categories,
+        _db.categories.id.equalsExp(_db.ledgerEntries.categoryId),
+      ),
+      leftOuterJoin(parent, parent.id.equalsExp(_db.categories.parentId)),
+    ]);
+    query
+      ..where(_db.ledgerEntries.occurredDay.equals(_dayKey(normalizedDay)))
+      ..orderBy([
+        OrderingTerm.desc(_db.ledgerEntries.createdAt),
+        OrderingTerm.desc(_db.ledgerEntries.id),
+      ]);
+    return query.watch().map(
+      (rows) => List.unmodifiable(
+        rows.map(
+          (row) => _toEntry(
+            row.readTable(_db.ledgerEntries),
+            category: row.readTableOrNull(_db.categories),
+            parent: row.readTableOrNull(parent),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Future<FinanceSnapshot> loadMonth(DateTime month, {int limit = 50}) {
@@ -138,8 +204,11 @@ class DriftFinanceRepository implements FinanceRepository {
         'Jumlah transaksi yang ditampilkan minimal 1.',
       );
     }
-    final start = _dayKey(DateTime(month.year, month.month));
-    final end = _dayKey(DateTime(month.year, month.month + 1));
+    final normalizedMonth = _normalizeMonthForRead(month);
+    final start = _dayKey(normalizedMonth);
+    final end = _dayKey(
+      DateTime(normalizedMonth.year, normalizedMonth.month + 1),
+    );
 
     // A read transaction keeps the balances, summary, and list consistent.
     return _db.transaction(() async {
@@ -921,6 +990,24 @@ class DriftFinanceRepository implements FinanceRepository {
     }
   }
 
+  static DateTime _normalizeDayForRead(DateTime date) {
+    _validateDate(date);
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  static DateTime _normalizeMonthForRead(DateTime month) {
+    final normalized = DateTime(month.year, month.month);
+    final monthKey = normalized.year * 100 + normalized.month;
+    final current = DateTime.now();
+    final currentMonthKey = current.year * 100 + current.month;
+    if (monthKey < 200001 || monthKey > currentMonthKey) {
+      throw const FinanceValidationException(
+        'Bulan harus antara Januari 2000 dan bulan ini.',
+      );
+    }
+    return normalized;
+  }
+
   static void _validateEntryId(int id) {
     if (id < 1) _throwEntryNotFound();
   }
@@ -955,6 +1042,18 @@ class DriftFinanceRepository implements FinanceRepository {
     balance: row.read<int>('balance'),
     isArchived: row.read<int>('is_archived') != 0,
   );
+
+  static CalendarDaySummary _calendarDaySummaryFromQueryRow(QueryRow row) {
+    final dayKey = row.read<int>('occurred_day');
+    return CalendarDaySummary(
+      day: DateTime(dayKey ~/ 10000, dayKey ~/ 100 % 100, dayKey % 100),
+      income: row.read<int>('income'),
+      expense: row.read<int>('expense'),
+      transferCount: row.read<int>('transfer_count'),
+      adjustmentCount: row.read<int>('adjustment_count'),
+      entryCount: row.read<int>('entry_count'),
+    );
+  }
 
   static FinanceAccount _toAccount(AccountRow row, int balance) =>
       FinanceAccount(

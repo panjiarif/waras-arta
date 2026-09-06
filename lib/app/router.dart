@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/formatters.dart';
 import '../domain/finance.dart';
 import '../features/categories/views/category_form_screen.dart';
 import '../features/categories/views/category_list_screen.dart';
@@ -50,7 +51,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: 'transactions/new',
-            builder: (context, state) => const EntryFormScreen(),
+            builder: (context, state) => EntryFormScreen(
+              initialDate: parseTransactionDateQuery(
+                state.uri.queryParameters['date'],
+              ),
+            ),
           ),
           GoRoute(
             path: 'categories',
@@ -113,3 +118,19 @@ CategoryKind _categoryKind(GoRouterState state) =>
     state.uri.queryParameters['kind'] == CategoryKind.income.name
     ? CategoryKind.income
     : CategoryKind.expense;
+
+DateTime? parseTransactionDateQuery(String? value, {DateTime? today}) {
+  if (value == null || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+    return null;
+  }
+  final parts = value.split('-').map(int.parse).toList(growable: false);
+  final result = DateTime(parts[0], parts[1], parts[2]);
+  if (result.year != parts[0] ||
+      result.month != parts[1] ||
+      result.day != parts[2]) {
+    return null;
+  }
+  final lastDay = dateOnly(today ?? DateTime.now());
+  if (result.isBefore(DateTime(2000)) || result.isAfter(lastDay)) return null;
+  return result;
+}

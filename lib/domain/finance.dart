@@ -18,7 +18,7 @@ extension EntryKindLabel on EntryKind {
     EntryKind.income => 'Pemasukan',
     EntryKind.expense => 'Pengeluaran',
     EntryKind.transfer => 'Transfer',
-    EntryKind.adjustment => 'Saldo awal',
+    EntryKind.adjustment => 'Penyesuaian saldo',
   };
 }
 
@@ -137,12 +137,28 @@ class FinanceAccount {
     required this.name,
     required this.type,
     required this.balance,
+    this.isArchived = false,
   });
 
   final int id;
   final String name;
   final AccountType type;
   final int balance;
+  final bool isArchived;
+}
+
+class AccountDetails {
+  const AccountDetails({
+    required this.account,
+    required this.createdAt,
+    required this.ledgerEntryCount,
+  });
+
+  final FinanceAccount account;
+  final DateTime createdAt;
+  final int ledgerEntryCount;
+
+  bool get canDelete => ledgerEntryCount == 0;
 }
 
 class FinanceEntry {
@@ -213,6 +229,25 @@ class AccountDraft {
   final AccountType type;
   final int openingBalance;
   final DateTime openedAt;
+}
+
+class AccountUpdateDraft {
+  const AccountUpdateDraft({required this.name, required this.type});
+
+  final String name;
+  final AccountType type;
+}
+
+class AccountBalanceAdjustmentDraft {
+  const AccountBalanceAdjustmentDraft({
+    required this.targetBalance,
+    required this.occurredAt,
+    this.note = '',
+  });
+
+  final int targetBalance;
+  final DateTime occurredAt;
+  final String note;
 }
 
 class EntryDraft {

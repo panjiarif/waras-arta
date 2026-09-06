@@ -56,6 +56,21 @@ class $AccountsTable extends Accounts
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<bool> isArchived = GeneratedColumn<bool>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -73,6 +88,7 @@ class $AccountsTable extends Accounts
     name,
     normalizedName,
     type,
+    isArchived,
     createdAt,
   ];
   @override
@@ -117,6 +133,12 @@ class $AccountsTable extends Accounts
     } else if (isInserting) {
       context.missing(_typeMeta);
     }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -150,6 +172,10 @@ class $AccountsTable extends Accounts
         DriftSqlType.int,
         data['${effectivePrefix}type'],
       )!,
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_archived'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -168,12 +194,14 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   final String name;
   final String normalizedName;
   final int type;
+  final bool isArchived;
   final DateTime createdAt;
   const AccountRow({
     required this.id,
     required this.name,
     required this.normalizedName,
     required this.type,
+    required this.isArchived,
     required this.createdAt,
   });
   @override
@@ -183,6 +211,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     map['name'] = Variable<String>(name);
     map['normalized_name'] = Variable<String>(normalizedName);
     map['type'] = Variable<int>(type);
+    map['is_archived'] = Variable<bool>(isArchived);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -193,6 +222,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       name: Value(name),
       normalizedName: Value(normalizedName),
       type: Value(type),
+      isArchived: Value(isArchived),
       createdAt: Value(createdAt),
     );
   }
@@ -207,6 +237,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       name: serializer.fromJson<String>(json['name']),
       normalizedName: serializer.fromJson<String>(json['normalizedName']),
       type: serializer.fromJson<int>(json['type']),
+      isArchived: serializer.fromJson<bool>(json['isArchived']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -218,6 +249,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       'name': serializer.toJson<String>(name),
       'normalizedName': serializer.toJson<String>(normalizedName),
       'type': serializer.toJson<int>(type),
+      'isArchived': serializer.toJson<bool>(isArchived),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -227,12 +259,14 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     String? name,
     String? normalizedName,
     int? type,
+    bool? isArchived,
     DateTime? createdAt,
   }) => AccountRow(
     id: id ?? this.id,
     name: name ?? this.name,
     normalizedName: normalizedName ?? this.normalizedName,
     type: type ?? this.type,
+    isArchived: isArchived ?? this.isArchived,
     createdAt: createdAt ?? this.createdAt,
   );
   AccountRow copyWithCompanion(AccountsCompanion data) {
@@ -243,6 +277,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           ? data.normalizedName.value
           : this.normalizedName,
       type: data.type.present ? data.type.value : this.type,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -254,13 +291,15 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           ..write('name: $name, ')
           ..write('normalizedName: $normalizedName, ')
           ..write('type: $type, ')
+          ..write('isArchived: $isArchived, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, normalizedName, type, createdAt);
+  int get hashCode =>
+      Object.hash(id, name, normalizedName, type, isArchived, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -269,6 +308,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           other.name == this.name &&
           other.normalizedName == this.normalizedName &&
           other.type == this.type &&
+          other.isArchived == this.isArchived &&
           other.createdAt == this.createdAt);
 }
 
@@ -277,12 +317,14 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
   final Value<String> name;
   final Value<String> normalizedName;
   final Value<int> type;
+  final Value<bool> isArchived;
   final Value<DateTime> createdAt;
   const AccountsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.normalizedName = const Value.absent(),
     this.type = const Value.absent(),
+    this.isArchived = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   AccountsCompanion.insert({
@@ -290,6 +332,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     required String name,
     required String normalizedName,
     required int type,
+    this.isArchived = const Value.absent(),
     required DateTime createdAt,
   }) : name = Value(name),
        normalizedName = Value(normalizedName),
@@ -300,6 +343,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Expression<String>? name,
     Expression<String>? normalizedName,
     Expression<int>? type,
+    Expression<bool>? isArchived,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -307,6 +351,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       if (name != null) 'name': name,
       if (normalizedName != null) 'normalized_name': normalizedName,
       if (type != null) 'type': type,
+      if (isArchived != null) 'is_archived': isArchived,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -316,6 +361,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Value<String>? name,
     Value<String>? normalizedName,
     Value<int>? type,
+    Value<bool>? isArchived,
     Value<DateTime>? createdAt,
   }) {
     return AccountsCompanion(
@@ -323,6 +369,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       name: name ?? this.name,
       normalizedName: normalizedName ?? this.normalizedName,
       type: type ?? this.type,
+      isArchived: isArchived ?? this.isArchived,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -342,6 +389,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     if (type.present) {
       map['type'] = Variable<int>(type.value);
     }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<bool>(isArchived.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -355,6 +405,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
           ..write('name: $name, ')
           ..write('normalizedName: $normalizedName, ')
           ..write('type: $type, ')
+          ..write('isArchived: $isArchived, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1620,6 +1671,7 @@ typedef $$AccountsTableCreateCompanionBuilder = AccountsCompanion Function({
   required String name,
   required String normalizedName,
   required int type,
+  Value<bool> isArchived,
   required DateTime createdAt,
 });
 typedef $$AccountsTableUpdateCompanionBuilder = AccountsCompanion Function({
@@ -1627,6 +1679,7 @@ typedef $$AccountsTableUpdateCompanionBuilder = AccountsCompanion Function({
   Value<String> name,
   Value<String> normalizedName,
   Value<int> type,
+  Value<bool> isArchived,
   Value<DateTime> createdAt,
 });
 
@@ -1697,6 +1750,11 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<int> get type => $composableBuilder(
     column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1785,6 +1843,11 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -1813,6 +1876,11 @@ class $$AccountsTableAnnotationComposer
 
   GeneratedColumn<int> get type =>
       $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -1900,12 +1968,14 @@ class $$AccountsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String> normalizedName = const Value.absent(),
                 Value<int> type = const Value.absent(),
+                Value<bool> isArchived = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => AccountsCompanion(
                 id: id,
                 name: name,
                 normalizedName: normalizedName,
                 type: type,
+                isArchived: isArchived,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -1914,12 +1984,14 @@ class $$AccountsTableTableManager
                 required String name,
                 required String normalizedName,
                 required int type,
+                Value<bool> isArchived = const Value.absent(),
                 required DateTime createdAt,
               }) => AccountsCompanion.insert(
                 id: id,
                 name: name,
                 normalizedName: normalizedName,
                 type: type,
+                isArchived: isArchived,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0

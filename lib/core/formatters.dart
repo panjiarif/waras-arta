@@ -26,11 +26,25 @@ int? parseRupiah(String input) {
   return value != null && value <= maxAmount ? value : null;
 }
 
+int? parseSignedRupiah(String input) {
+  final text = input.trim();
+  if (!RegExp(r'^-?\d{1,12}$').hasMatch(text)) return null;
+  final value = int.tryParse(text);
+  return value != null && value.abs() <= maxAmount ? value : null;
+}
+
 String? validateRupiah(String? input, {bool allowZero = false}) {
   final value = parseRupiah(input ?? '');
   if (value == null) {
     return 'Gunakan rupiah bulat, maksimal 12 digit, tanpa titik/koma.';
   }
   if (!allowZero && value == 0) return 'Nominal harus lebih besar dari nol.';
+  return null;
+}
+
+String? validateSignedRupiah(String? input) {
+  if (parseSignedRupiah(input ?? '') == null) {
+    return 'Gunakan rupiah bulat, maksimal 12 digit, tanpa titik/koma.';
+  }
   return null;
 }

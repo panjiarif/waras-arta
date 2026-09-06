@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../domain/finance.dart';
 import '../features/categories/views/category_form_screen.dart';
 import '../features/categories/views/category_list_screen.dart';
+import '../features/ledger/views/account_adjustment_screen.dart';
+import '../features/ledger/views/account_detail_screen.dart';
+import '../features/ledger/views/account_edit_screen.dart';
 import '../features/ledger/views/account_form_screen.dart';
 import '../features/ledger/views/entry_detail_screen.dart';
 import '../features/ledger/views/entry_form_screen.dart';
@@ -19,6 +22,31 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'accounts/new',
             builder: (context, state) => const AccountFormScreen(),
+          ),
+          GoRoute(
+            path: 'accounts/:accountId',
+            builder: (context, state) => AccountDetailScreen(
+              accountId:
+                  int.tryParse(state.pathParameters['accountId'] ?? '') ?? -1,
+            ),
+            routes: [
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) => AccountEditScreen(
+                  accountId:
+                      int.tryParse(state.pathParameters['accountId'] ?? '') ??
+                      -1,
+                ),
+              ),
+              GoRoute(
+                path: 'adjust',
+                builder: (context, state) => AccountBalanceAdjustmentScreen(
+                  accountId:
+                      int.tryParse(state.pathParameters['accountId'] ?? '') ??
+                      -1,
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: 'transactions/new',

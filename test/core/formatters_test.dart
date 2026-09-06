@@ -70,6 +70,35 @@ void main() {
     });
   });
 
+  group('saldo bertanda', () {
+    test('menerima saldo positif, nol, dan negatif', () {
+      expect(parseSignedRupiah('25000'), 25000);
+      expect(parseSignedRupiah('0'), 0);
+      expect(parseSignedRupiah('-12500'), -12500);
+      expect(parseSignedRupiah('  -500\n'), -500);
+      expect(validateSignedRupiah('-12500'), isNull);
+    });
+
+    test('menolak format ambigu dan nilai di luar batas', () {
+      for (final input in [
+        '',
+        '-',
+        '+100',
+        '1.000',
+        '-1,000',
+        '1000000000000',
+        '-1000000000000',
+      ]) {
+        expect(parseSignedRupiah(input), isNull, reason: 'Input: "$input"');
+        expect(
+          validateSignedRupiah(input),
+          isNotNull,
+          reason: 'Input: "$input"',
+        );
+      }
+    });
+  });
+
   test('formats whole rupiah with Indonesian thousands separators', () {
     expect(formatRupiah(0), 'Rp 0');
     expect(formatRupiah(1250000), 'Rp 1.250.000');

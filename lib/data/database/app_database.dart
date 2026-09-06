@@ -2,6 +2,8 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'app_database.steps.dart';
+
 part 'app_database.g.dart';
 
 @DataClassName('AccountRow')
@@ -10,6 +12,7 @@ class Accounts extends Table {
   TextColumn get name => text().withLength(min: 1, max: 80)();
   TextColumn get normalizedName => text().unique()();
   IntColumn get type => integer()();
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
 
   @override
@@ -73,8 +76,11 @@ class LedgerEntries extends Table {
   @override
   List<String> get customConstraints => [
     'CHECK (kind BETWEEN 0 AND 3)',
-    // Keep schema-v1 literals stable; domain changes require a migration.
-    'CHECK (amount BETWEEN 1 AND 999999999999)',
+    '''CHECK (
+      (kind IN (0, 1, 2) AND amount BETWEEN 1 AND 999999999999)
+      OR (kind = 3 AND amount BETWEEN -999999999999 AND 999999999999
+        AND amount <> 0)
+    )''',
     'CHECK (occurred_day BETWEEN 20000101 AND 99991231)',
     'CHECK (length(note) <= 500)',
     '''CHECK (
@@ -100,7 +106,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -108,44 +114,21 @@ class AppDatabase extends _$AppDatabase {
       await migrator.createAll();
       await _seedDefaultCategories();
       await _createSchemaExtras();
+      await _createSchemaV3Extras();
     },
     onUpgrade: (migrator, from, to) async {
-      if (from >= 2) return;
+      if (from >= to) return;
       await customStatement('PRAGMA foreign_keys = OFF');
       try {
         await transaction(() async {
-          await migrator.createTable(categories);
-          await _seedDefaultCategories();
-          final unmapped = await customSelect('''
-            SELECT COUNT(*) AS amount
-            FROM ledger_entries AS l
-            WHERE l.kind IN (0, 1) AND NOT EXISTS (
-              SELECT 1 FROM categories AS c
-              WHERE c.kind = l.kind AND c.parent_id IS NULL
-                AND c.name = l.category
-            )
-          ''').getSingle();
-          if (unmapped.read<int>('amount') != 0) {
-            throw StateError('Kategori transaksi lama tidak dapat dipetakan.');
-          }
-          await migrator.alterTable(
-            TableMigration(
-              ledgerEntries,
-              newColumns: [ledgerEntries.categoryId],
-              columnTransformer: {
-                ledgerEntries.categoryId: const CustomExpression<int>('''
-                  (SELECT child.id
-                   FROM categories AS parent
-                   JOIN categories AS child ON child.parent_id = parent.id
-                   WHERE parent.kind = ledger_entries.kind
-                     AND parent.name = ledger_entries.category
-                     AND child.name = 'Umum')
-                '''),
-              },
-            ),
+          final runSteps = stepByStep(
+            from1To2: _migrateV1ToV2,
+            from2To3: _migrateV2ToV3,
           );
-          await _createSchemaExtras();
-          final invalid = await customSelect('''
+          await runSteps(migrator, from, to);
+
+          if (to >= 2) {
+            final invalid = await customSelect('''
             SELECT COUNT(*) AS amount
             FROM ledger_entries AS l
             LEFT JOIN categories AS c ON c.id = l.category_id
@@ -153,8 +136,9 @@ class AppDatabase extends _$AppDatabase {
                     (c.id IS NULL OR c.kind <> l.kind OR c.parent_id IS NULL))
                OR (l.kind IN (2, 3) AND l.category_id IS NOT NULL)
           ''').getSingle();
-          if (invalid.read<int>('amount') != 0) {
-            throw StateError('Hasil migrasi kategori tidak valid.');
+            if (invalid.read<int>('amount') != 0) {
+              throw StateError('Hasil migrasi kategori tidak valid.');
+            }
           }
           final foreignKeyErrors = await customSelect(
             'PRAGMA foreign_key_check',
@@ -171,6 +155,47 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  Future<void> _migrateV1ToV2(Migrator migrator, Schema2 schema) async {
+    await migrator.createTable(schema.categories);
+    await _seedDefaultCategories();
+    final unmapped = await customSelect('''
+      SELECT COUNT(*) AS amount
+      FROM ledger_entries AS l
+      WHERE l.kind IN (0, 1) AND NOT EXISTS (
+        SELECT 1 FROM categories AS c
+        WHERE c.kind = l.kind AND c.parent_id IS NULL
+          AND c.name = l.category
+      )
+    ''').getSingle();
+    if (unmapped.read<int>('amount') != 0) {
+      throw StateError('Kategori transaksi lama tidak dapat dipetakan.');
+    }
+    await migrator.alterTable(
+      TableMigration(
+        schema.ledgerEntries,
+        newColumns: [schema.ledgerEntries.categoryId],
+        columnTransformer: {
+          schema.ledgerEntries.categoryId: const CustomExpression<int>('''
+            (SELECT child.id
+             FROM categories AS parent
+             JOIN categories AS child ON child.parent_id = parent.id
+             WHERE parent.kind = ledger_entries.kind
+               AND parent.name = ledger_entries.category
+               AND child.name = 'Umum')
+          '''),
+        },
+      ),
+    );
+    await _createSchemaExtras();
+  }
+
+  Future<void> _migrateV2ToV3(Migrator migrator, Schema3 schema) async {
+    await migrator.addColumn(schema.accounts, schema.accounts.isArchived);
+    await migrator.alterTable(TableMigration(schema.ledgerEntries));
+    await _createSchemaExtras();
+    await _createSchemaV3Extras();
+  }
 
   Future<void> _seedDefaultCategories() async {
     final now = DateTime.now();
@@ -248,6 +273,60 @@ class AppDatabase extends _$AppDatabase {
              AND category.kind = NEW.kind
              AND category.parent_id IS NOT NULL)
          BEGIN SELECT RAISE(ABORT, 'invalid ledger category'); END''',
+    ];
+    for (final statement in statements) {
+      await customStatement(statement);
+    }
+  }
+
+  Future<void> _createSchemaV3Extras() async {
+    const statements = [
+      '''CREATE INDEX IF NOT EXISTS accounts_archive_order
+         ON accounts (is_archived, normalized_name, id)''',
+      '''CREATE TRIGGER IF NOT EXISTS ledger_require_active_accounts_insert
+         BEFORE INSERT ON ledger_entries
+         WHEN EXISTS (
+           SELECT 1 FROM accounts
+           WHERE id = NEW.account_id AND is_archived = 1
+         ) OR (
+           NEW.destination_account_id IS NOT NULL AND EXISTS (
+             SELECT 1 FROM accounts
+             WHERE id = NEW.destination_account_id AND is_archived = 1
+           )
+         )
+         BEGIN SELECT RAISE(ABORT, 'archived account'); END''',
+      '''CREATE TRIGGER IF NOT EXISTS ledger_require_active_accounts_update
+         BEFORE UPDATE ON ledger_entries
+         WHEN EXISTS (
+           SELECT 1 FROM accounts
+           WHERE id = OLD.account_id AND is_archived = 1
+         ) OR (
+           OLD.destination_account_id IS NOT NULL AND EXISTS (
+             SELECT 1 FROM accounts
+             WHERE id = OLD.destination_account_id AND is_archived = 1
+           )
+         ) OR EXISTS (
+           SELECT 1 FROM accounts
+           WHERE id = NEW.account_id AND is_archived = 1
+         ) OR (
+           NEW.destination_account_id IS NOT NULL AND EXISTS (
+             SELECT 1 FROM accounts
+             WHERE id = NEW.destination_account_id AND is_archived = 1
+           )
+         )
+         BEGIN SELECT RAISE(ABORT, 'archived account'); END''',
+      '''CREATE TRIGGER IF NOT EXISTS ledger_require_active_accounts_delete
+         BEFORE DELETE ON ledger_entries
+         WHEN EXISTS (
+           SELECT 1 FROM accounts
+           WHERE id = OLD.account_id AND is_archived = 1
+         ) OR (
+           OLD.destination_account_id IS NOT NULL AND EXISTS (
+             SELECT 1 FROM accounts
+             WHERE id = OLD.destination_account_id AND is_archived = 1
+           )
+         )
+         BEGIN SELECT RAISE(ABORT, 'archived account'); END''',
     ];
     for (final statement in statements) {
       await customStatement(statement);

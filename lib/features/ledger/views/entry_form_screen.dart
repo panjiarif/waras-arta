@@ -154,13 +154,16 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
           title: Text(_isEditing ? 'Edit transaksi' : 'Catat transaksi'),
         ),
         body: snapshot.when(
-          data: (data) => data.accounts.isEmpty
-              ? const FormBody(
-                  child: FormMessage(
-                    'Tambahkan rekening terlebih dahulu melalui halaman utama.',
-                  ),
-                )
-              : _form(data.accounts, save),
+          data: (data) {
+            final accounts = _accountsForForm(data.accounts);
+            return accounts.isEmpty
+                ? const FormBody(
+                    child: FormMessage(
+                      'Belum ada rekening aktif. Tambahkan atau pulihkan rekening melalui tab Rekening.',
+                    ),
+                  )
+                : _form(accounts, save);
+          },
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (_, _) => FormBody(
             child: Column(
@@ -179,6 +182,21 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
         ),
       ),
     );
+  }
+
+  List<FinanceAccount> _accountsForForm(List<FinanceAccount> accounts) {
+    final retainedIds = _isEditing
+        ? {
+            widget.initialEntry!.accountId,
+            if (widget.initialEntry!.destinationAccountId != null)
+              widget.initialEntry!.destinationAccountId!,
+          }
+        : const <int>{};
+    return accounts
+        .where(
+          (account) => !account.isArchived || retainedIds.contains(account.id),
+        )
+        .toList(growable: false);
   }
 
   Widget _form(List<FinanceAccount> accounts, SaveState save) {
@@ -213,6 +231,19 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              if (_isEditing &&
+                  accounts.any(
+                    (account) =>
+                        account.isArchived &&
+                        (account.id == widget.initialEntry!.accountId ||
+                            account.id ==
+                                widget.initialEntry!.destinationAccountId),
+                  )) ...[
+                const SizedBox(height: 16),
+                const FormMessage(
+                  'Transaksi ini memakai rekening yang diarsipkan. Pulihkan rekening tersebut sebelum mengubah transaksi.',
+                ),
+              ],
               const SizedBox(height: 24),
               DropdownButtonFormField<EntryKind>(
                 key: const Key('entry-kind'),
@@ -266,8 +297,11 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                   for (final account in accounts)
                     DropdownMenuItem(
                       value: account.id,
+                      enabled: !account.isArchived,
                       child: Text(
-                        account.name,
+                        account.isArchived
+                            ? '${account.name} • Diarsipkan'
+                            : account.name,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -293,8 +327,11 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                     for (final account in destinations)
                       DropdownMenuItem(
                         value: account.id,
+                        enabled: !account.isArchived,
                         child: Text(
-                          account.name,
+                          account.isArchived
+                              ? '${account.name} • Diarsipkan'
+                              : account.name,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

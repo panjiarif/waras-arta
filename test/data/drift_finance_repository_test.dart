@@ -870,6 +870,345 @@ void main() {
     expect(snapshot.accounts.single.balance, 500);
   });
 
+  test('account detail and active list react to account updates', () async {
+    final id = await account('Bank utama', opening: 250);
+    final otherId = await account('Tunai');
+    final initial = await repository.getAccountDetails(id);
+    expect(initial, isNotNull);
+    expect(initial!.account.balance, 250);
+    expect(initial.account.isArchived, isFalse);
+    expect(initial.ledgerEntryCount, 1);
+    expect(initial.canDelete, isFalse);
+
+    final detailChanged = repository
+        .watchAccountDetails(id)
+        .firstWhere(
+          (details) =>
+              details?.account.name == 'Bank harian' &&
+              details?.account.type == AccountType.eWallet,
+        );
+    await repository.updateAccount(
+      id,
+      const AccountUpdateDraft(
+        name: '  Bank   harian ',
+        type: AccountType.eWallet,
+      ),
+    );
+    final changed = await detailChanged.timeout(const Duration(seconds: 5));
+    expect(changed?.account.id, id);
+    expect(changed?.account.balance, 250);
+    expect(changed?.createdAt, initial.createdAt);
+
+    final accounts = await repository.watchAccounts().first;
+    expect(accounts.map((item) => item.id), containsAll([id, otherId]));
+    expect(accounts.firstWhere((item) => item.id == id).name, 'Bank harian');
+    await expectLater(
+      repository.updateAccount(
+        otherId,
+        const AccountUpdateDraft(
+          name: ' BANK  HARIAN ',
+          type: AccountType.cash,
+        ),
+      ),
+      throwsA(validationError),
+    );
+    await expectLater(
+      repository.updateAccount(
+        id,
+        AccountUpdateDraft(name: 'x' * 81, type: AccountType.bank),
+      ),
+      throwsA(validationError),
+    );
+    expect(await repository.getAccountDetails(999), isNull);
+    expect(await repository.watchAccountDetails(0).first, isNull);
+  });
+
+  test(
+    'balance adjustment is a signed immutable ledger row and refreshes detail',
+    () async {
+      final id = await account('Bank', opening: 100);
+      await account('Tunai');
+      final detailChanged = repository
+          .watchAccountDetails(id)
+          .firstWhere(
+            (details) =>
+                details?.account.balance == 40 &&
+                details?.ledgerEntryCount == 2,
+          );
+
+      final adjustmentId = await repository.adjustAccountBalance(
+        id,
+        AccountBalanceAdjustmentDraft(
+          targetBalance: 40,
+          occurredAt: DateTime(2024, 1, 15),
+          note: '  koreksi   rekening  ',
+        ),
+      );
+      final changed = await detailChanged.timeout(const Duration(seconds: 5));
+      expect(changed?.account.balance, 40);
+      final adjustment = await repository.watchEntry(adjustmentId).first;
+      expect(adjustment?.kind, EntryKind.adjustment);
+      expect(adjustment?.amount, -60);
+      expect(adjustment?.note, 'koreksi   rekening');
+      expect(adjustment?.occurredAt, DateTime(2024, 1, 15));
+      final snapshot = await repository.loadMonth(january);
+      expect(snapshot.income, 0);
+      expect(snapshot.expense, 0);
+      expect(snapshot.accounts.firstWhere((item) => item.id == id).balance, 40);
+
+      await expectLater(
+        repository.adjustAccountBalance(
+          id,
+          AccountBalanceAdjustmentDraft(targetBalance: 40, occurredAt: january),
+        ),
+        throwsA(validationError),
+      );
+      for (final target in [maxAmount + 1, -maxAmount - 1]) {
+        await expectLater(
+          repository.adjustAccountBalance(
+            id,
+            AccountBalanceAdjustmentDraft(
+              targetBalance: target,
+              occurredAt: january,
+            ),
+          ),
+          throwsA(validationError),
+        );
+      }
+      await expectLater(
+        repository.adjustAccountBalance(
+          id,
+          AccountBalanceAdjustmentDraft(
+            targetBalance: 50,
+            occurredAt: DateTime.now().add(const Duration(days: 2)),
+          ),
+        ),
+        throwsA(validationError),
+      );
+      await expectLater(
+        repository.adjustAccountBalance(
+          id,
+          AccountBalanceAdjustmentDraft(
+            targetBalance: 50,
+            occurredAt: january,
+            note: 'x' * 501,
+          ),
+        ),
+        throwsA(validationError),
+      );
+
+      final maxId = await account('Batas', opening: maxAmount);
+      await expectLater(
+        repository.adjustAccountBalance(
+          maxId,
+          AccountBalanceAdjustmentDraft(
+            targetBalance: -maxAmount,
+            occurredAt: january,
+          ),
+        ),
+        throwsA(validationError),
+      );
+      expect((await repository.getAccountDetails(maxId))?.ledgerEntryCount, 1);
+      await expectLater(
+        db.customStatement(
+          '''
+          INSERT INTO ledger_entries
+            (kind, account_id, amount, category_id, note, occurred_day, created_at)
+          VALUES (3, ?, 0, NULL, '', 20240101, 0)
+        ''',
+          [id],
+        ),
+        throwsA(anything),
+      );
+    },
+  );
+
+  test('archive requires zero balance and another active account, but keeps history', () async {
+    final id = await account('Arsip', opening: 100);
+    final activeId = await account('Aktif');
+    await expectLater(
+      repository.setAccountArchived(id, true),
+      throwsA(validationError),
+    );
+    await repository.adjustAccountBalance(
+      id,
+      AccountBalanceAdjustmentDraft(targetBalance: 0, occurredAt: january),
+    );
+    await repository.setAccountArchived(id, true);
+
+    final active = await repository.watchAccounts().first;
+    expect(active.map((item) => item.id), [activeId]);
+    final all = await repository.watchAccounts(includeArchived: true).first;
+    expect(all, hasLength(2));
+    expect(all.firstWhere((item) => item.id == id).isArchived, isTrue);
+    final snapshot = await repository.loadMonth(january);
+    expect(snapshot.accounts, hasLength(2));
+    expect(
+      snapshot.accounts.firstWhere((item) => item.id == id).isArchived,
+      isTrue,
+    );
+    final details = await repository.getAccountDetails(id);
+    expect(details?.account.balance, 0);
+    expect(details?.account.isArchived, isTrue);
+    expect(details?.ledgerEntryCount, 2);
+
+    await expectLater(account(' ARSIP '), throwsA(validationError));
+    await expectLater(
+      repository.updateAccount(
+        activeId,
+        const AccountUpdateDraft(name: 'arsip', type: AccountType.cash),
+      ),
+      throwsA(validationError),
+    );
+    await expectLater(
+      repository.setAccountArchived(activeId, true),
+      throwsA(validationError),
+    );
+    await repository.updateAccount(
+      id,
+      const AccountUpdateDraft(name: 'Arsip lama', type: AccountType.cash),
+    );
+    expect(
+      (await repository.getAccountDetails(id))?.account.name,
+      'Arsip lama',
+    );
+    await repository.setAccountArchived(id, false);
+    expect((await repository.watchAccounts().first), hasLength(2));
+  });
+
+  test(
+    'archived source or destination blocks every ledger mutation until restore',
+    () async {
+      final archivedId = await account('Akan arsip');
+      final sourceId = await account('Sumber');
+      final otherId = await account('Lain');
+      final transferId = await repository.addEntry(
+        entry(
+          sourceId,
+          kind: EntryKind.transfer,
+          amount: 50,
+          destination: archivedId,
+        ),
+      );
+      final expenseId = await repository.addEntry(
+        entry(archivedId, kind: EntryKind.expense, amount: 50),
+      );
+      expect(
+        (await repository.getAccountDetails(archivedId))?.account.balance,
+        0,
+      );
+      await repository.setAccountArchived(archivedId, true);
+
+      final invalidAdds = [
+        entry(archivedId),
+        entry(archivedId, kind: EntryKind.transfer, destination: otherId),
+        entry(sourceId, kind: EntryKind.transfer, destination: archivedId),
+      ];
+      for (final draft in invalidAdds) {
+        await expectLater(repository.addEntry(draft), throwsA(validationError));
+      }
+      await expectLater(
+        repository.adjustAccountBalance(
+          archivedId,
+          AccountBalanceAdjustmentDraft(targetBalance: 10, occurredAt: january),
+        ),
+        throwsA(validationError),
+      );
+      for (final entryId in [expenseId, transferId]) {
+        await expectLater(
+          repository.updateEntry(entryId, entry(sourceId, amount: 25)),
+          throwsA(validationError),
+        );
+        await expectLater(
+          repository.deleteEntry(entryId),
+          throwsA(validationError),
+        );
+      }
+
+      await expectLater(
+        db.customStatement(
+          '''
+          INSERT INTO ledger_entries
+            (kind, account_id, amount, category_id, note, occurred_day, created_at)
+          VALUES (0, ?, 10, ?, '', 20240101, 0)
+        ''',
+          [archivedId, incomeCategoryId],
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          'UPDATE ledger_entries SET amount = 51 WHERE id = ?',
+          [transferId],
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement('DELETE FROM ledger_entries WHERE id = ?', [
+          expenseId,
+        ]),
+        throwsA(anything),
+      );
+      expect((await repository.loadMonth(january)).totalEntries, 2);
+
+      await repository.setAccountArchived(archivedId, false);
+      await repository.deleteEntry(expenseId);
+      await repository.deleteEntry(transferId);
+      expect((await repository.loadMonth(january)).totalEntries, 0);
+    },
+  );
+
+  test(
+    'permanent account deletion requires zero source and destination refs',
+    () async {
+      final emptyId = await account('Kosong');
+      final sourceId = await account('Sumber');
+      final destinationId = await account('Tujuan');
+      final deleted = repository
+          .watchAccountDetails(emptyId)
+          .firstWhere((details) => details == null);
+      expect((await repository.getAccountDetails(emptyId))?.canDelete, isTrue);
+      await repository.deleteAccount(emptyId);
+      expect(await deleted.timeout(const Duration(seconds: 5)), isNull);
+
+      await repository.addEntry(entry(sourceId));
+      await repository.addEntry(
+        entry(sourceId, kind: EntryKind.transfer, destination: destinationId),
+      );
+      final source = await repository.getAccountDetails(sourceId);
+      final destination = await repository.getAccountDetails(destinationId);
+      expect(source?.ledgerEntryCount, 2);
+      expect(destination?.ledgerEntryCount, 1);
+      expect(source?.canDelete, isFalse);
+      expect(destination?.canDelete, isFalse);
+      await expectLater(
+        repository.deleteAccount(sourceId),
+        throwsA(validationError),
+      );
+      await expectLater(
+        repository.deleteAccount(destinationId),
+        throwsA(validationError),
+      );
+      await expectLater(
+        db.customStatement('DELETE FROM accounts WHERE id = ?', [
+          destinationId,
+        ]),
+        throwsA(anything),
+      );
+      await expectLater(
+        repository.deleteAccount(999),
+        throwsA(validationError),
+      );
+      await expectLater(
+        repository.updateAccount(
+          999,
+          const AccountUpdateDraft(name: 'Hilang', type: AccountType.other),
+        ),
+        throwsA(validationError),
+      );
+    },
+  );
+
   test(
     'watchMonth refreshes for zero-balance accounts and transaction writes',
     () async {

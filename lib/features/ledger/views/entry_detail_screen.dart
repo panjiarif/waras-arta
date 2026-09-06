@@ -45,13 +45,24 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                   ? 'Rekening belum tersedia'
                   : 'Memuat rekening…'
             : 'Rekening tidak ditemukan');
-    final editable = entry.kind != EntryKind.adjustment;
-    final amountColor = entry.kind == EntryKind.expense
+    final usesArchivedAccount =
+        accounts?.any(
+          (account) =>
+              account.isArchived &&
+              (account.id == entry.accountId ||
+                  account.id == entry.destinationAccountId),
+        ) ??
+        false;
+    final editable = entry.kind != EntryKind.adjustment && !usesArchivedAccount;
+    final amountColor =
+        entry.kind == EntryKind.expense ||
+            (entry.kind == EntryKind.adjustment && entry.amount < 0)
         ? const Color(0xFF9D492B)
         : forest;
     final amountPrefix = switch (entry.kind) {
       EntryKind.income => '+ ',
       EntryKind.expense => '− ',
+      EntryKind.adjustment when entry.amount > 0 => '+ ',
       _ => '',
     };
 
@@ -147,9 +158,12 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                 ),
               ] else
                 _DetailRow(
-                  label: entry.kind == EntryKind.income
-                      ? 'Ke rekening'
-                      : 'Dari rekening',
+                  label: switch (entry.kind) {
+                    EntryKind.income => 'Ke rekening',
+                    EntryKind.expense => 'Dari rekening',
+                    EntryKind.adjustment => 'Rekening',
+                    EntryKind.transfer => 'Dari rekening',
+                  },
                   value: accountName(entry.accountId),
                 ),
               if (entry.parentCategoryName != null)
@@ -174,11 +188,20 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                   'Kategori transaksi ini telah diarsipkan. Riwayat tetap utuh dan kategori dapat dipulihkan dari Kelola kategori.',
                 ),
               ],
-              if (!editable) ...[
+              if (usesArchivedAccount) ...[
                 const SizedBox(height: 12),
                 const FormMessage(
-                  'Saldo awal menjadi dasar perhitungan rekening dan belum dapat diedit atau dihapus dari halaman ini.',
+                  'Transaksi ini memakai rekening yang diarsipkan. Pulihkan rekening tersebut sebelum mengedit atau menghapus transaksi.',
                 ),
+              ],
+              if (!editable) ...[
+                const SizedBox(height: 12),
+                if (entry.kind == EntryKind.adjustment)
+                  FormMessage(
+                    entry.note == 'Saldo awal'
+                        ? 'Saldo awal menjadi dasar perhitungan rekening dan tidak dapat diedit atau dihapus dari halaman transaksi.'
+                        : 'Penyesuaian saldo menjadi bagian jejak audit dan tidak dapat diedit atau dihapus dari halaman transaksi.',
+                  ),
               ],
               if (save.error != null) ...[
                 const SizedBox(height: 16),
@@ -275,10 +298,12 @@ class EntryEditScreen extends ConsumerWidget {
       data: (value) {
         if (value == null) return const _EntryStateScreen.notFound();
         if (value.kind == EntryKind.adjustment) {
-          return const _EntryStateScreen(
+          return _EntryStateScreen(
             title: 'Edit transaksi',
             icon: Icons.lock_outline,
-            message: 'Saldo awal belum dapat diedit dari halaman transaksi.',
+            message: value.note == 'Saldo awal'
+                ? 'Saldo awal tidak dapat diedit dari halaman transaksi.'
+                : 'Penyesuaian saldo tidak dapat diedit dari halaman transaksi.',
           );
         }
         return EntryFormScreen(

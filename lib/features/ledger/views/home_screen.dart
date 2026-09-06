@@ -7,6 +7,7 @@ import '../../../core/category_icons.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
 import '../view_models/ledger_view_model.dart';
+import 'account_widgets.dart';
 import 'form_widgets.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -18,6 +19,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _tab = 0;
+  bool _showArchivedAccounts = false;
 
   void _open(String route) {
     ref.read(financeActionsProvider.notifier).clearError();
@@ -29,7 +31,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final snapshot = ref.watch(financeSnapshotProvider);
     final accounts = snapshot.asData?.value.accounts;
     final ready = accounts != null;
-    final addAccount = _tab == 2 || (accounts?.isEmpty ?? true);
+    final hasActiveAccount = accounts?.any((account) => !account.isArchived);
+    final addAccount = _tab == 2 || hasActiveAccount != true;
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -121,6 +124,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _content(FinanceSnapshot data) {
+    final activeAccounts = data.accounts
+        .where((account) => !account.isArchived)
+        .toList(growable: false);
+    final visibleAccounts = _showArchivedAccounts
+        ? data.accounts
+        : activeAccounts;
     final intro = <Widget>[
       if (_tab == 0) ...[
         const Text(
@@ -133,7 +142,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        _BalanceCard(total: data.totalBalance, count: data.accounts.length),
+        _BalanceCard(total: data.totalBalance, count: activeAccounts.length),
         const SizedBox(height: 24),
       ] else ...[
         Text(
@@ -147,6 +156,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               : 'Saldo saat ini dari seluruh catatan.',
         ),
         const SizedBox(height: 24),
+        if (_tab == 2) ...[
+          SwitchListTile.adaptive(
+            key: const Key('show-archived-accounts'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Tampilkan rekening diarsipkan'),
+            subtitle: const Text('Riwayat dan nama rekening tetap tersimpan.'),
+            value: _showArchivedAccounts,
+            onChanged: (value) {
+              setState(() => _showArchivedAccounts = value);
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
       ],
       if (_tab != 2) ...[
         const _MonthSelector(),
@@ -162,26 +184,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const Text('Pada bulan yang dipilih'),
         ] else
           Text(
-            '${data.totalEntries} catatan • termasuk transfer dan saldo awal',
+            '${data.totalEntries} catatan • termasuk transfer dan penyesuaian saldo',
           ),
         const SizedBox(height: 16),
       ],
     ];
     final entries = _tab == 0 ? data.entries.take(5).toList() : data.entries;
-    final rowCount = _tab == 2 ? data.accounts.length : entries.length;
+    final rowCount = _tab == 2 ? visibleAccounts.length : entries.length;
     final names = {
       for (final account in data.accounts) account.id: account.name,
     };
     final footer = <Widget>[
       if (rowCount == 0)
         _EmptyCard(
-          title: data.accounts.isEmpty
+          title: _tab == 2
+              ? _showArchivedAccounts
+                    ? 'Belum ada rekening'
+                    : 'Belum ada rekening aktif'
+              : data.accounts.isEmpty
               ? 'Mulai dari satu rekening'
               : 'Belum ada catatan bulan ini',
-          description: data.accounts.isEmpty
+          description: _tab == 2
+              ? _showArchivedAccounts
+                    ? 'Tambahkan dompet, bank, atau e-wallet pertamamu.'
+                    : 'Tambahkan rekening baru atau tampilkan rekening yang pernah diarsipkan.'
+              : data.accounts.isEmpty
               ? 'Tambahkan dompet atau bank, lalu catat uang yang masuk dan keluar.'
               : 'Transaksi akan muncul di sini sesuai tanggal kejadiannya.',
-          icon: data.accounts.isEmpty ? Icons.wallet_outlined : Icons.edit_note,
+          icon: _tab == 2 || data.accounts.isEmpty
+              ? Icons.wallet_outlined
+              : Icons.edit_note,
         ),
       if (_tab == 0 && data.totalEntries > 5)
         TextButton(
@@ -213,7 +245,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: _tab == 2
-                ? _AccountCard(account: data.accounts[row])
+                ? _AccountCard(
+                    account: visibleAccounts[row],
+                    onTap: () => _open('/accounts/${visibleAccounts[row].id}'),
+                  )
                 : _EntryCard(entry: entries[row], names: names),
           );
         }
@@ -349,7 +384,7 @@ class _MonthlyTotals extends StatelessWidget {
       ),
       const SizedBox(height: 4),
       const Text(
-        'Tidak termasuk transfer dan saldo awal.',
+        'Tidak termasuk transfer dan penyesuaian saldo, termasuk saldo awal.',
         style: TextStyle(fontSize: 12),
       ),
     ],
@@ -394,52 +429,66 @@ class _Metric extends StatelessWidget {
 }
 
 class _AccountCard extends StatelessWidget {
-  const _AccountCard({required this.account});
+  const _AccountCard({required this.account, required this.onTap});
   final FinanceAccount account;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(switch (account.type) {
-            AccountType.cash => Icons.payments_outlined,
-            AccountType.bank => Icons.account_balance_outlined,
-            AccountType.eWallet => Icons.phone_android_outlined,
-            AccountType.other => Icons.savings_outlined,
-          }, color: forest),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  account.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 17,
-                  ),
+  Widget build(BuildContext context) => Opacity(
+    opacity: account.isArchived ? .65 : 1,
+    child: Card(
+      child: InkWell(
+        key: ValueKey('account-${account.id}'),
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(accountIconFor(account.type), color: forest),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            account.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 17,
+                            ),
+                          ),
+                        ),
+                        if (account.isArchived)
+                          const AccountStatusBadge(archived: true),
+                      ],
+                    ),
+                    Text(account.type.label),
+                    const SizedBox(height: 10),
+                    Text(
+                      formatRupiah(account.balance),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 22,
+                      ),
+                    ),
+                    if (account.balance < 0)
+                      const Text(
+                        'Saldo tercatat negatif. Periksa kelengkapan catatan.',
+                        style: TextStyle(color: Color(0xFF9D492B)),
+                      ),
+                  ],
                 ),
-                Text(account.type.label),
-                const SizedBox(height: 10),
-                Text(
-                  formatRupiah(account.balance),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 22,
-                  ),
-                ),
-                if (account.balance < 0)
-                  const Text(
-                    'Saldo tercatat negatif. Periksa kelengkapan catatan.',
-                    style: TextStyle(color: Color(0xFF9D492B)),
-                  ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right),
+            ],
           ),
-        ],
+        ),
       ),
     ),
   );
@@ -452,7 +501,9 @@ class _EntryCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final color = entry.kind == EntryKind.expense
+    final color =
+        entry.kind == EntryKind.expense ||
+            (entry.kind == EntryKind.adjustment && entry.amount < 0)
         ? const Color(0xFF9D492B)
         : forest;
     final route = entry.kind == EntryKind.transfer
@@ -461,6 +512,7 @@ class _EntryCard extends ConsumerWidget {
     final prefix = switch (entry.kind) {
       EntryKind.income => '+ ',
       EntryKind.expense => '− ',
+      EntryKind.adjustment when entry.amount > 0 => '+ ',
       _ => '',
     };
     final icon = entry.categoryIconKey != null

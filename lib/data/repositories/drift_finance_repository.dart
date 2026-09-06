@@ -43,6 +43,64 @@ class DriftFinanceRepository implements FinanceRepository {
   }
 
   @override
+  Stream<List<FinanceAccount>> watchAccounts({bool includeArchived = false}) {
+    return _db
+        .customSelect(
+          '''
+          SELECT a.id, a.name, a.type, a.is_archived,
+                 COALESCE(b.balance, 0) AS balance
+          FROM accounts AS a
+          LEFT JOIN (
+            SELECT account_id, SUM(delta) AS balance FROM (
+              SELECT account_id,
+                CASE WHEN kind IN (0, 3) THEN amount ELSE -amount END AS delta
+              FROM ledger_entries
+              UNION ALL
+              SELECT destination_account_id AS account_id, amount AS delta
+              FROM ledger_entries WHERE kind = 2
+            ) GROUP BY account_id
+          ) AS b ON b.account_id = a.id
+          WHERE ? = 1 OR a.is_archived = 0
+          ORDER BY a.normalized_name, a.id
+          ''',
+          variables: [Variable.withInt(includeArchived ? 1 : 0)],
+          readsFrom: {_db.accounts, _db.ledgerEntries},
+        )
+        .watch()
+        .map((rows) => List.unmodifiable(rows.map(_accountFromQueryRow)));
+  }
+
+  @override
+  Stream<AccountDetails?> watchAccountDetails(int id) {
+    if (id < 1) return Stream.value(null);
+    return _db
+        .customSelect(
+          'SELECT COUNT(*) AS change_marker FROM accounts',
+          readsFrom: {_db.accounts, _db.ledgerEntries},
+        )
+        .watchSingle()
+        .asyncMap((_) => getAccountDetails(id));
+  }
+
+  @override
+  Future<AccountDetails?> getAccountDetails(int id) {
+    if (id < 1) return Future.value(null);
+    return _db.transaction(() async {
+      final row = await (_db.select(
+        _db.accounts,
+      )..where((account) => account.id.equals(id))).getSingleOrNull();
+      if (row == null) return null;
+      final balance = await _loadAccountBalance(id);
+      final ledgerEntryCount = await _ledgerReferenceCount(id);
+      return AccountDetails(
+        account: _toAccount(row, balance),
+        createdAt: row.createdAt,
+        ledgerEntryCount: ledgerEntryCount,
+      );
+    });
+  }
+
+  @override
   Stream<FinanceEntry?> watchEntry(int id) {
     if (id < 1) return Stream.value(null);
     final parent = _db.alias(_db.categories, 'parent_category');
@@ -86,7 +144,8 @@ class DriftFinanceRepository implements FinanceRepository {
     // A read transaction keeps the balances, summary, and list consistent.
     return _db.transaction(() async {
       final accountRows = await _db.customSelect('''
-        SELECT a.id, a.name, a.type, COALESCE(b.balance, 0) AS balance
+        SELECT a.id, a.name, a.type, a.is_archived,
+               COALESCE(b.balance, 0) AS balance
         FROM accounts a
         LEFT JOIN (
           SELECT account_id, SUM(delta) AS balance FROM (
@@ -138,6 +197,7 @@ class DriftFinanceRepository implements FinanceRepository {
                 name: row.read<String>('name'),
                 type: AccountType.values[row.read<int>('type')],
                 balance: row.read<int>('balance'),
+                isArchived: row.read<int>('is_archived') != 0,
               ),
             )
             .toList(),
@@ -159,27 +219,13 @@ class DriftFinanceRepository implements FinanceRepository {
 
   @override
   Future<int> createAccount(AccountDraft draft) async {
-    final name = draft.name.trim().replaceAll(RegExp(r'\s+'), ' ');
-    if (name.isEmpty || name.length > 80) {
-      throw const FinanceValidationException(
-        'Nama rekening wajib diisi dan maksimal 80 karakter.',
-      );
-    }
+    final name = _normalizeAccountName(draft.name);
     _validateAmount(draft.openingBalance, allowZero: true);
     _validateDate(draft.openedAt);
     final normalizedName = name.toLowerCase();
 
     return _db.transaction(() async {
-      final existing =
-          await (_db.select(_db.accounts)..where(
-                (account) => account.normalizedName.equals(normalizedName),
-              ))
-              .getSingleOrNull();
-      if (existing != null) {
-        throw const FinanceValidationException(
-          'Nama rekening sudah digunakan. Pilih nama lain.',
-        );
-      }
+      await _ensureUniqueAccountName(normalizedName: normalizedName);
       final now = DateTime.now();
       final accountId = await _db
           .into(_db.accounts)
@@ -210,6 +256,118 @@ class DriftFinanceRepository implements FinanceRepository {
   }
 
   @override
+  Future<void> updateAccount(int id, AccountUpdateDraft draft) async {
+    _validateAccountId(id);
+    final name = _normalizeAccountName(draft.name);
+    final normalizedName = name.toLowerCase();
+    await _db.transaction(() async {
+      await _requireAccount(id);
+      await _ensureUniqueAccountName(
+        normalizedName: normalizedName,
+        exceptId: id,
+      );
+      final affected =
+          await (_db.update(
+            _db.accounts,
+          )..where((account) => account.id.equals(id))).write(
+            AccountsCompanion(
+              name: Value(name),
+              normalizedName: Value(normalizedName),
+              type: Value(draft.type.index),
+            ),
+          );
+      if (affected != 1) _throwAccountNotFound();
+    });
+  }
+
+  @override
+  Future<void> setAccountArchived(int id, bool archived) async {
+    _validateAccountId(id);
+    await _db.transaction(() async {
+      final account = await _requireAccount(id);
+      if (account.isArchived == archived) return;
+      if (archived) {
+        final balance = await _loadAccountBalance(id);
+        if (balance != 0) {
+          throw const FinanceValidationException(
+            'Saldo rekening harus Rp0 sebelum diarsipkan.',
+          );
+        }
+        final activeCount = await _activeAccountCount();
+        if (activeCount <= 1) {
+          throw const FinanceValidationException(
+            'Sisakan minimal satu rekening aktif.',
+          );
+        }
+      }
+      final affected =
+          await (_db.update(_db.accounts)..where((row) => row.id.equals(id)))
+              .write(AccountsCompanion(isArchived: Value(archived)));
+      if (affected != 1) _throwAccountNotFound();
+    });
+  }
+
+  @override
+  Future<void> deleteAccount(int id) async {
+    _validateAccountId(id);
+    await _db.transaction(() async {
+      await _requireAccount(id);
+      if (await _ledgerReferenceCount(id) != 0) {
+        throw const FinanceValidationException(
+          'Rekening yang memiliki riwayat transaksi tidak dapat dihapus.',
+        );
+      }
+      final affected = await (_db.delete(
+        _db.accounts,
+      )..where((account) => account.id.equals(id))).go();
+      if (affected != 1) _throwAccountNotFound();
+    });
+  }
+
+  @override
+  Future<int> adjustAccountBalance(
+    int id,
+    AccountBalanceAdjustmentDraft draft,
+  ) async {
+    _validateAccountId(id);
+    _validateTargetBalance(draft.targetBalance);
+    _validateDate(draft.occurredAt);
+    final trimmedNote = draft.note.trim();
+    final note = trimmedNote.isEmpty ? 'Penyesuaian saldo' : trimmedNote;
+    if (note.length > 500) {
+      throw const FinanceValidationException('Catatan maksimal 500 karakter.');
+    }
+
+    return _db.transaction(() async {
+      await _requireAccount(id, requireActive: true);
+      final currentBalance = await _loadAccountBalance(id);
+      final delta = draft.targetBalance - currentBalance;
+      if (delta == 0) {
+        throw const FinanceValidationException(
+          'Saldo sudah sesuai, tidak ada penyesuaian.',
+        );
+      }
+      if (delta.abs() > maxAmount) {
+        throw const FinanceValidationException(
+          'Selisih penyesuaian saldo terlalu besar.',
+        );
+      }
+      return _db
+          .into(_db.ledgerEntries)
+          .insert(
+            LedgerEntriesCompanion.insert(
+              kind: EntryKind.adjustment.index,
+              accountId: id,
+              amount: delta,
+              note: Value(note),
+              occurredDay: _dayKey(draft.occurredAt),
+              createdAt: DateTime.now(),
+            ),
+          );
+    });
+  }
+
+  @override
   Future<int> addEntry(EntryDraft draft) async {
     final normalized = _validateAndNormalizeEntry(draft);
 
@@ -230,9 +388,10 @@ class DriftFinanceRepository implements FinanceRepository {
 
     await _db.transaction(() async {
       final existing = await _requireEntry(id);
+      await _requireEntryAccountsActive(existing);
       if (existing.kind == EntryKind.adjustment.index) {
         throw const FinanceValidationException(
-          'Saldo awal tidak dapat diubah dari riwayat transaksi.',
+          'Penyesuaian saldo tidak dapat diubah dari riwayat transaksi.',
         );
       }
       await _requireAccounts(normalized);
@@ -264,9 +423,10 @@ class DriftFinanceRepository implements FinanceRepository {
     _validateEntryId(id);
     await _db.transaction(() async {
       final existing = await _requireEntry(id);
+      await _requireEntryAccountsActive(existing);
       if (existing.kind == EntryKind.adjustment.index) {
         throw const FinanceValidationException(
-          'Saldo awal tidak dapat dihapus dari riwayat transaksi.',
+          'Penyesuaian saldo tidak dapat dihapus dari riwayat transaksi.',
         );
       }
       final affected = await (_db.delete(
@@ -442,7 +602,7 @@ class DriftFinanceRepository implements FinanceRepository {
   static EntryDraft _validateAndNormalizeEntry(EntryDraft draft) {
     if (draft.kind == EntryKind.adjustment) {
       throw const FinanceValidationException(
-        'Saldo awal hanya dibuat saat menambahkan rekening.',
+        'Penyesuaian saldo hanya dibuat melalui pengelolaan rekening.',
       );
     }
     _validateAmount(draft.amount);
@@ -487,9 +647,16 @@ class DriftFinanceRepository implements FinanceRepository {
   }
 
   Future<void> _requireAccounts(EntryDraft draft) async {
-    await _requireAccount(draft.accountId);
+    await _requireAccount(draft.accountId, requireActive: true);
     if (draft.destinationAccountId != null) {
-      await _requireAccount(draft.destinationAccountId!);
+      await _requireAccount(draft.destinationAccountId!, requireActive: true);
+    }
+  }
+
+  Future<void> _requireEntryAccountsActive(LedgerRow entry) async {
+    await _requireAccount(entry.accountId, requireActive: true);
+    if (entry.destinationAccountId != null) {
+      await _requireAccount(entry.destinationAccountId!, requireActive: true);
     }
   }
 
@@ -632,13 +799,107 @@ class DriftFinanceRepository implements FinanceRepository {
     }
   }
 
-  Future<void> _requireAccount(int id) async {
+  Future<AccountRow> _requireAccount(
+    int id, {
+    bool requireActive = false,
+  }) async {
     final account = await (_db.select(
       _db.accounts,
     )..where((account) => account.id.equals(id))).getSingleOrNull();
     if (account == null) {
-      throw const FinanceValidationException('Rekening tidak ditemukan.');
+      _throwAccountNotFound();
     }
+    if (requireActive && account.isArchived) {
+      throw const FinanceValidationException(
+        'Rekening telah diarsipkan. Aktifkan kembali rekening terlebih dahulu.',
+      );
+    }
+    return account;
+  }
+
+  Future<void> _ensureUniqueAccountName({
+    required String normalizedName,
+    int? exceptId,
+  }) async {
+    final query = _db.select(_db.accounts)
+      ..where((account) {
+        Expression<bool> condition = account.normalizedName.equals(
+          normalizedName,
+        );
+        if (exceptId != null) {
+          condition = condition & account.id.equals(exceptId).not();
+        }
+        return condition;
+      });
+    if (await query.getSingleOrNull() != null) {
+      throw const FinanceValidationException(
+        'Nama rekening sudah digunakan. Pilih nama lain.',
+      );
+    }
+  }
+
+  Future<int> _loadAccountBalance(int id) async {
+    final result = await _db
+        .customSelect(
+          '''
+          SELECT COALESCE(SUM(delta), 0) AS balance
+          FROM (
+            SELECT CASE WHEN kind IN (0, 3) THEN amount ELSE -amount END AS delta
+            FROM ledger_entries WHERE account_id = ?
+            UNION ALL
+            SELECT amount AS delta FROM ledger_entries
+            WHERE kind = 2 AND destination_account_id = ?
+          )
+          ''',
+          variables: [Variable.withInt(id), Variable.withInt(id)],
+        )
+        .getSingle();
+    return result.read<int>('balance');
+  }
+
+  Future<int> _ledgerReferenceCount(int id) async {
+    final result = await _db
+        .customSelect(
+          '''
+          SELECT COUNT(*) AS amount FROM ledger_entries
+          WHERE account_id = ? OR destination_account_id = ?
+          ''',
+          variables: [Variable.withInt(id), Variable.withInt(id)],
+        )
+        .getSingle();
+    return result.read<int>('amount');
+  }
+
+  Future<int> _activeAccountCount() async {
+    final result = await _db
+        .customSelect(
+          'SELECT COUNT(*) AS amount FROM accounts WHERE is_archived = 0',
+        )
+        .getSingle();
+    return result.read<int>('amount');
+  }
+
+  static String _normalizeAccountName(String value) {
+    final name = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (name.isEmpty || name.length > 80) {
+      throw const FinanceValidationException(
+        'Nama rekening wajib diisi dan maksimal 80 karakter.',
+      );
+    }
+    return name;
+  }
+
+  static void _validateTargetBalance(int balance) {
+    if (balance < -maxAmount || balance > maxAmount) {
+      throw const FinanceValidationException(
+        'Target saldo harus antara -Rp999.999.999.999 dan '
+        'Rp999.999.999.999.',
+      );
+    }
+  }
+
+  static void _validateAccountId(int id) {
+    if (id < 1) _throwAccountNotFound();
   }
 
   static void _validateAmount(int amount, {bool allowZero = false}) {
@@ -667,6 +928,9 @@ class DriftFinanceRepository implements FinanceRepository {
   static Never _throwEntryNotFound() =>
       throw const FinanceValidationException('Transaksi tidak ditemukan.');
 
+  static Never _throwAccountNotFound() =>
+      throw const FinanceValidationException('Rekening tidak ditemukan.');
+
   static LedgerEntriesCompanion _insertCompanion(
     EntryDraft draft, {
     required DateTime createdAt,
@@ -683,6 +947,23 @@ class DriftFinanceRepository implements FinanceRepository {
 
   static int _dayKey(DateTime date) =>
       date.year * 10000 + date.month * 100 + date.day;
+
+  static FinanceAccount _accountFromQueryRow(QueryRow row) => FinanceAccount(
+    id: row.read<int>('id'),
+    name: row.read<String>('name'),
+    type: AccountType.values[row.read<int>('type')],
+    balance: row.read<int>('balance'),
+    isArchived: row.read<int>('is_archived') != 0,
+  );
+
+  static FinanceAccount _toAccount(AccountRow row, int balance) =>
+      FinanceAccount(
+        id: row.id,
+        name: row.name,
+        type: AccountType.values[row.type],
+        balance: balance,
+        isArchived: row.isArchived,
+      );
 
   static FinanceCategory _toCategory(CategoryRow row) => FinanceCategory(
     id: row.id,

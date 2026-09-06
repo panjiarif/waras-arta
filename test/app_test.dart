@@ -50,6 +50,174 @@ void main() {
     },
   );
 
+  testWidgets('account detail edits name and type without changing balance', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.text('Rekening').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('account-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detail rekening'), findsOneWidget);
+    expect(find.text('Rp 100.000'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('edit-account')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('account-edit-name')),
+      'Bank Harian',
+    );
+    await tester.tap(find.byKey(const Key('account-edit-type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bank').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('save-account-edit')));
+    await tester.tap(find.byKey(const Key('save-account-edit')));
+    await tester.pumpAndSettle();
+
+    expect(repository.updatedAccountId, 1);
+    expect(repository.updatedAccount?.name, 'Bank Harian');
+    expect(repository.updatedAccount?.type, AccountType.bank);
+    expect(find.text('Bank Harian'), findsOneWidget);
+    expect(find.text('Rp 100.000'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('balance adjustment records a negative audited delta', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    expect(
+      find.text(
+        'Tidak termasuk transfer dan penyesuaian saldo, termasuk saldo awal.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Rekening').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('account-1')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('open-balance-adjustment')),
+    );
+    await tester.tap(find.byKey(const Key('open-balance-adjustment')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('target-account-balance')),
+      '60000',
+    );
+    await tester.pump();
+    expect(find.text('Penyesuaian mengurangi Rp 40.000.'), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const Key('save-balance-adjustment')),
+    );
+    await tester.tap(find.byKey(const Key('save-balance-adjustment')));
+    await tester.pumpAndSettle();
+
+    expect(repository.adjustedAccountId, 1);
+    expect(repository.savedAdjustment?.targetBalance, 60000);
+    expect(repository.entries.last.kind, EntryKind.adjustment);
+    expect(repository.entries.last.amount, -40000);
+    expect(find.text('Rp 60.000'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('archived account is hidden then can be shown and restored', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.text('Rekening').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('account-2')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('toggle-account-archive')));
+    await tester.tap(find.byKey(const Key('toggle-account-archive')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-archive-account')));
+    await tester.pumpAndSettle();
+    expect(
+      repository.accounts.singleWhere((item) => item.id == 2).isArchived,
+      isTrue,
+    );
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('account-2')), findsNothing);
+    await tester.tap(find.byKey(const Key('show-archived-accounts')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('account-2')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('account-2')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('toggle-account-archive')));
+    await tester.tap(find.byKey(const Key('toggle-account-archive')));
+    await tester.pumpAndSettle();
+    expect(
+      repository.accounts.singleWhere((item) => item.id == 2).isArchived,
+      isFalse,
+    );
+    expect(find.text('Aktif'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('last active account stays active and shows archive error', (
+    tester,
+  ) async {
+    final repository = _UiRepository();
+    repository.accounts.add(
+      const FinanceAccount(
+        id: 1,
+        name: 'Tunai',
+        type: AccountType.cash,
+        balance: 0,
+      ),
+    );
+    await pumpApp(tester, repository);
+    await tester.tap(find.text('Rekening').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('account-1')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('toggle-account-archive')));
+    await tester.tap(find.byKey(const Key('toggle-account-archive')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-archive-account')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Sisakan setidaknya satu rekening aktif.'),
+      findsOneWidget,
+    );
+    expect(repository.accounts.single.isArchived, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('unused account can be permanently deleted after confirmation', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.text('Rekening').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('account-2')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('delete-account')));
+    await tester.tap(find.byKey(const Key('delete-account')));
+    await tester.pumpAndSettle();
+    expect(find.text('Hapus Bank?'), findsOneWidget);
+    expect(repository.deletedAccountId, isNull);
+    await tester.tap(find.byKey(const Key('confirm-delete-account')));
+    await tester.pumpAndSettle();
+
+    expect(repository.deletedAccountId, 2);
+    expect(find.byKey(const ValueKey('account-2')), findsNothing);
+    expect(find.text('Rekening telah dihapus.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('expense form validates zero then saves integer amount', (
     tester,
   ) async {
@@ -304,6 +472,11 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('Rekening').last);
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('account-1')),
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('Dompet'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.tap(find.byKey(const Key('primary-action')));
@@ -442,12 +615,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Detail transaksi'), findsOneWidget);
+    expect(find.text('Rekening'), findsOneWidget);
+    expect(find.text('Dari rekening'), findsNothing);
     expect(find.byKey(const Key('edit-entry')), findsNothing);
     expect(find.byKey(const Key('delete-entry')), findsNothing);
     expect(
-      find.textContaining('belum dapat diedit atau dihapus'),
+      find.textContaining('tidak dapat diedit atau dihapus'),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('negative adjustment detail uses a neutral account label', (
+    tester,
+  ) async {
+    final repository = _UiRepository(
+      withAccounts: true,
+      entry: FinanceEntry(
+        id: 10,
+        kind: EntryKind.adjustment,
+        accountId: 1,
+        amount: -40000,
+        note: 'Koreksi setelah cek mutasi',
+        occurredAt: DateTime(2024, 8, 2),
+        createdAt: DateTime(2024, 8, 2),
+      ),
+    );
+    await pumpApp(tester, repository);
+    await tester.tap(find.text('Riwayat').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('entry-10')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('entry-detail-amount'))).data,
+      '-Rp 40.000',
+    );
+    expect(find.text('Rekening'), findsOneWidget);
+    expect(find.text('Dari rekening'), findsNothing);
+    expect(find.byKey(const Key('edit-entry')), findsNothing);
+    expect(find.byKey(const Key('delete-entry')), findsNothing);
+    expect(find.textContaining('bagian jejak audit'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -654,11 +862,57 @@ class _UiRepository implements FinanceRepository {
   int updateCount = 0;
   int? deletedEntryId;
   int deleteCount = 0;
+  int? updatedAccountId;
+  AccountUpdateDraft? updatedAccount;
+  int? adjustedAccountId;
+  AccountBalanceAdjustmentDraft? savedAdjustment;
+  int? archivedAccountId;
+  int? deletedAccountId;
   Future<void> Function(int, EntryDraft)? onUpdateEntry;
   Future<void> Function(int)? onDeleteEntry;
   final _changes = StreamController<void>.broadcast(sync: true);
 
   Future<void> dispose() => _changes.close();
+
+  @override
+  Stream<List<FinanceAccount>> watchAccounts({
+    bool includeArchived = false,
+  }) async* {
+    if (failRead) throw StateError('Read failure');
+    List<FinanceAccount> visible() => accounts
+        .where((account) => includeArchived || !account.isArchived)
+        .toList(growable: false);
+    yield visible();
+    await for (final _ in _changes.stream) {
+      yield visible();
+    }
+  }
+
+  @override
+  Stream<AccountDetails?> watchAccountDetails(int id) async* {
+    if (failRead) throw StateError('Read failure');
+    yield await getAccountDetails(id);
+    await for (final _ in _changes.stream) {
+      yield await getAccountDetails(id);
+    }
+  }
+
+  @override
+  Future<AccountDetails?> getAccountDetails(int id) async {
+    final account = accounts.where((item) => item.id == id).firstOrNull;
+    if (account == null) return null;
+    var count = entries
+        .where(
+          (entry) => entry.accountId == id || entry.destinationAccountId == id,
+        )
+        .length;
+    if (count == 0 && account.balance != 0) count = 1;
+    return AccountDetails(
+      account: account,
+      createdAt: DateTime(2024, 1, 1),
+      ledgerEntryCount: count,
+    );
+  }
 
   @override
   Stream<List<CategoryGroup>> watchCategoryTree(
@@ -850,6 +1104,120 @@ class _UiRepository implements FinanceRepository {
   }
 
   @override
+  Future<void> updateAccount(int id, AccountUpdateDraft draft) async {
+    final index = accounts.indexWhere((account) => account.id == id);
+    if (index < 0) {
+      throw const FinanceValidationException('Rekening tidak ditemukan.');
+    }
+    final normalized = _normalizeUiAccountName(draft.name);
+    if (normalized.isEmpty) {
+      throw const FinanceValidationException('Nama rekening wajib diisi.');
+    }
+    if (accounts.any(
+      (account) =>
+          account.id != id &&
+          _normalizeUiAccountName(account.name) == normalized,
+    )) {
+      throw const FinanceValidationException('Nama rekening sudah digunakan.');
+    }
+    updatedAccountId = id;
+    updatedAccount = draft;
+    accounts[index] = _copyUiAccount(
+      accounts[index],
+      name: draft.name.trim(),
+      type: draft.type,
+    );
+    _changes.add(null);
+  }
+
+  @override
+  Future<void> setAccountArchived(int id, bool archived) async {
+    final index = accounts.indexWhere((account) => account.id == id);
+    if (index < 0) {
+      throw const FinanceValidationException('Rekening tidak ditemukan.');
+    }
+    final account = accounts[index];
+    if (archived) {
+      if (account.balance != 0) {
+        throw const FinanceValidationException(
+          'Saldo rekening harus Rp 0 sebelum diarsipkan.',
+        );
+      }
+      if (accounts.where((item) => !item.isArchived).length <= 1) {
+        throw const FinanceValidationException(
+          'Sisakan setidaknya satu rekening aktif.',
+        );
+      }
+    }
+    archivedAccountId = id;
+    accounts[index] = _copyUiAccount(account, isArchived: archived);
+    _changes.add(null);
+  }
+
+  @override
+  Future<void> deleteAccount(int id) async {
+    final index = accounts.indexWhere((account) => account.id == id);
+    if (index < 0) {
+      throw const FinanceValidationException('Rekening tidak ditemukan.');
+    }
+    final details = await getAccountDetails(id);
+    if (details == null || !details.canDelete) {
+      throw const FinanceValidationException(
+        'Rekening yang sudah memiliki riwayat tidak dapat dihapus.',
+      );
+    }
+    deletedAccountId = id;
+    accounts.removeAt(index);
+    _changes.add(null);
+  }
+
+  @override
+  Future<int> adjustAccountBalance(
+    int id,
+    AccountBalanceAdjustmentDraft draft,
+  ) async {
+    final index = accounts.indexWhere((account) => account.id == id);
+    if (index < 0) {
+      throw const FinanceValidationException('Rekening tidak ditemukan.');
+    }
+    final account = accounts[index];
+    if (account.isArchived) {
+      throw const FinanceValidationException(
+        'Pulihkan rekening sebelum menyesuaikan saldo.',
+      );
+    }
+    final delta = draft.targetBalance - account.balance;
+    if (delta == 0) {
+      throw const FinanceValidationException(
+        'Saldo baru masih sama dengan saldo saat ini.',
+      );
+    }
+    adjustedAccountId = id;
+    savedAdjustment = draft;
+    accounts[index] = _copyUiAccount(account, balance: draft.targetBalance);
+    final entryId =
+        entries.fold<int>(0, (max, item) {
+          return item.id > max ? item.id : max;
+        }) +
+        1;
+    entries.add(
+      FinanceEntry(
+        id: entryId,
+        kind: EntryKind.adjustment,
+        accountId: id,
+        amount: delta,
+        note: draft.note.trim().isEmpty
+            ? 'Penyesuaian saldo'
+            : draft.note.trim(),
+        occurredAt: draft.occurredAt,
+        createdAt: DateTime(2024, 1, 1),
+      ),
+    );
+    _changes.add(null);
+    return entryId;
+  }
+
+  @override
   Future<int> addEntry(EntryDraft draft) async {
     savedEntry = draft;
     return 1;
@@ -988,6 +1356,23 @@ FinanceCategory _copyUiCategory(
   createdAt: category.createdAt,
   updatedAt: DateTime(2024, 1, 2),
 );
+
+FinanceAccount _copyUiAccount(
+  FinanceAccount account, {
+  String? name,
+  AccountType? type,
+  int? balance,
+  bool? isArchived,
+}) => FinanceAccount(
+  id: account.id,
+  name: name ?? account.name,
+  type: type ?? account.type,
+  balance: balance ?? account.balance,
+  isArchived: isArchived ?? account.isArchived,
+);
+
+String _normalizeUiAccountName(String value) =>
+    value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
 extension<T> on Stream<T> {
   Stream<T> startWith(T value) async* {

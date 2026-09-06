@@ -278,6 +278,31 @@ class FakeFinanceRepository implements FinanceRepository {
   }
 
   @override
+  Stream<List<FinanceAccount>> watchAccounts({bool includeArchived = false}) =>
+      Stream.value(const []);
+
+  @override
+  Stream<AccountDetails?> watchAccountDetails(int id) => Stream.value(null);
+
+  @override
+  Future<AccountDetails?> getAccountDetails(int id) async => null;
+
+  @override
+  Future<void> updateAccount(int id, AccountUpdateDraft draft) async {}
+
+  @override
+  Future<void> setAccountArchived(int id, bool archived) async {}
+
+  @override
+  Future<void> deleteAccount(int id) async {}
+
+  @override
+  Future<int> adjustAccountBalance(
+    int id,
+    AccountBalanceAdjustmentDraft draft,
+  ) async => 1;
+
+  @override
   Future<int> addEntry(EntryDraft draft) async {
     entries.add(draft);
     return onAddEntry == null ? 1 : await onAddEntry!(draft);

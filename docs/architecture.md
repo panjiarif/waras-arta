@@ -21,7 +21,7 @@ View -> ViewModel -> FinanceRepository -> Drift / SQLite
 ```
 
 - **View:** widget Material 3 berbahasa Indonesia, input form, tampilan loading/error, dan navigasi.
-- **ViewModel:** pilihan bulan, batas jumlah riwayat, pemuatan data, operasi transaksi, serta aksi edit, koreksi saldo, arsip/pulihkan, dan hapus rekening. Tidak menyimpan `BuildContext` atau mengakses SQL secara langsung.
+- **ViewModel:** pilihan bulan riwayat, batas jumlah riwayat, bulan/tanggal kalender, pemuatan data, operasi transaksi, serta aksi edit, koreksi saldo, arsip/pulihkan, dan hapus rekening. Tidak menyimpan `BuildContext` atau mengakses SQL secara langsung.
 - **Domain:** model immutable, jenis rekening/transaksi/kategori, draft input, dan kontrak repository. Belum ada lapisan use case terpisah.
 - **Repository:** validasi aturan keuangan, operasi database, dan pemetaan hasil query ke model domain.
 - **Database:** tabel, constraint, indeks, dan koneksi persisten. SQLite adalah sumber data utama, bukan cache tampilan.
@@ -47,6 +47,9 @@ lib/
 │   └── repositories/
 │       └── drift_finance_repository.dart
 └── features/
+    ├── calendar/
+    │   ├── view_models/calendar_view_model.dart
+    │   └── views/calendar_view.dart
     ├── categories/
     │   ├── view_models/category_view_model.dart
     │   └── views/
@@ -70,7 +73,9 @@ lib/
             └── home_screen.dart
 ```
 
-Fitur rekening dan transaksi dikelompokkan sebagai satu irisan `ledger` untuk tahap awal. Pecah menjadi fitur terpisah ketika tanggung jawabnya bertambah, bukan dengan menambahkan direktori kosong sejak awal. `go_router` menangani rute layar; [Riverpod](https://riverpod.dev/docs/introduction/getting_started) menghubungkan repository dan ViewModel agar dependensi bisa diganti saat pengujian.
+Fitur rekening dan transaksi dikelompokkan sebagai satu irisan `ledger` untuk tahap awal. Kalender menjadi irisan tersendiri, tetapi memakai model ledger dan rute detail/form transaksi yang sama. Pecah menjadi fitur terpisah ketika tanggung jawabnya bertambah, bukan dengan menambahkan direktori kosong sejak awal. `go_router` menangani rute layar; [Riverpod](https://riverpod.dev/docs/introduction/getting_started) menghubungkan repository dan ViewModel agar dependensi bisa diganti saat pengujian.
+
+Navigasi utama HP menggunakan empat tujuan `NavigationBar`: Ikhtisar, Riwayat, Kalender, dan Rekening. Kalender tidak membuka tumpukan rute baru ketika tanggal dipilih; detail transaksi dan form pencatatan tetap memakai rute ledger yang sudah ada.
 
 ## Model saldo dan transaksi
 
@@ -120,19 +125,21 @@ Kategori dibatasi tepat dua tingkat. Baris induk adalah kelompok, sedangkan tran
 
 `occurredAt` adalah tanggal kejadian yang dipilih pengguna. Alpha menerima tanggal 1 Januari 2000 sampai hari ini, belum transaksi terjadwal di masa depan. Di database tanggal ini disimpan sebagai bilangan `YYYYMMDD` (`occurredDay`), bukan timestamp yang dikonversi zona waktu. `createdAt` mencatat waktu entri dibuat dan tidak menentukan periode keuangan.
 
-Ringkasan bulanan dan riwayat menggunakan tanggal kejadian. Saldo rekening dan saldo total tetap **sepanjang waktu**, tidak berubah menjadi saldo historis ketika pengguna berpindah bulan. Transaksi bertanggal lampau langsung memengaruhi saldo saat ini dan ringkasan bulan lampau. Pencatatan tanggal lampau tersedia melalui pemilih tanggal; tampilan kalender grid belum ada.
+Ringkasan bulanan, riwayat, dan kalender menggunakan tanggal kejadian. Saldo rekening dan saldo total tetap **sepanjang waktu**, tidak berubah menjadi saldo historis ketika pengguna berpindah bulan. Transaksi bertanggal lampau langsung memengaruhi saldo saat ini dan ringkasan bulan lampau.
+
+Kalender menampilkan grid bulanan ringan dari Senin sampai Minggu. Navigasi bulan dibatasi Januari 2000 sampai bulan berjalan; tanggal setelah hari ini pada bulan berjalan terlihat nonaktif. Titik aktivitas membedakan pemasukan, pengeluaran, dan aktivitas lain berupa transfer atau penyesuaian. Ketika tanggal dipilih, layar menampilkan total pemasukan/pengeluaran, jumlah semua jenis entri, dan daftar lengkap pemasukan, pengeluaran, transfer, serta penyesuaian. Entri dapat diketuk menuju detail. Tombol tambah di tab ini membuka form transaksi dengan tanggal sipil yang dipilih sebagai nilai awal.
 
 ## Penyimpanan, performa, dan keamanan
 
 Koneksi `drift_flutter` menyimpan database SQLite di direktori dukungan aplikasi Android. Pekerjaan database native dijalankan melalui isolate yang dikelola Drift. Pemisahan ini menjaga operasi SQL sinkron tidak berjalan pada isolate UI; lihat [dokumentasi isolate Drift](https://drift.simonbinder.eu/isolates/).
 
-Ringkasan dihitung melalui agregasi database, dan riwayat dimuat bertahap dengan awal 50 entri. Indeks tanggal/ID dan rekening mendukung pengambilan data. Ini adalah keputusan desain, bukan klaim bahwa benchmark pada data besar atau HP referensi sudah lulus.
+Ringkasan dihitung melalui agregasi database, dan riwayat dimuat bertahap dengan awal 50 entri. Agregasi kalender dilakukan langsung di SQLite dengan pengelompokan `occurredDay`, sehingga penanda dan total kalender mencakup seluruh transaksi bulan tersebut dan tidak bergantung pada batas 50 entri riwayat. Daftar tanggal terpilih juga membaca seluruh entri untuk satu tanggal. Indeks `ledger_entries_occurred_day_id` yang sudah ada mendukung kedua query; kalender tidak memerlukan tabel atau indeks baru. Ini adalah keputusan desain, bukan klaim bahwa benchmark pada data besar atau HP referensi sudah lulus.
 
 Alpha belum menambahkan enkripsi database, PIN, atau biometrik. Penyimpanan privat Android bukan pengganti backup ataupun enkripsi aplikasi. Tidak ada sinkronisasi cloud atau backup/restore buatan aplikasi. Jangan mengandalkan salinan otomatis sistem untuk pemulihan; uninstall, hapus data, kerusakan, atau kehilangan HP dapat menghilangkan data.
 
 ## Skema dan pengembangan berikutnya
 
-Skema database saat ini versi **3**. Snapshot v1, v2, dan v3 disimpan di `drift_schemas/app_database/`. Migrasi v1 ke v2 membuat kategori dua tingkat, memetakan setiap kategori teks lama ke subkategori `Umum`, lalu membangun ulang ledger dengan foreign key. Migrasi v2 ke v3 menambahkan status arsip rekening dan membangun ulang constraint nominal ledger agar penyesuaian dapat menyimpan delta bertanda, sementara pemasukan, pengeluaran, serta transfer tetap wajib positif. Langkah migrasi dijalankan berurutan untuk instalasi yang berpindah langsung dari v1 ke v3.
+Skema database saat ini tetap versi **3**. Kalender memakai `occurredDay`, ledger, serta indeks yang telah tersedia sehingga tidak memerlukan kenaikan versi skema. Snapshot v1, v2, dan v3 disimpan di `drift_schemas/app_database/`. Migrasi v1 ke v2 membuat kategori dua tingkat, memetakan setiap kategori teks lama ke subkategori `Umum`, lalu membangun ulang ledger dengan foreign key. Migrasi v2 ke v3 menambahkan status arsip rekening dan membangun ulang constraint nominal ledger agar penyesuaian dapat menyimpan delta bertanda, sementara pemasukan, pengeluaran, serta transfer tetap wajib positif. Langkah migrasi dijalankan berurutan untuk instalasi yang berpindah langsung dari v1 ke v3.
 
 Uji migrasi memverifikasi jalur v1 ke v2, v2 ke v3, dan v1 ke v3 beserta struktur schema, identitas, nominal, rekening, tanggal, catatan, saldo, dan ringkasan.
 
@@ -143,4 +150,4 @@ Sebelum menaikkan `schemaVersion` berikutnya:
 3. Uji upgrade menggunakan data representatif, termasuk transfer dan tanggal lampau.
 4. Verifikasi saldo dan ringkasan sebelum/sesudah upgrade.
 
-Backup lengkap yang berversi, enkripsi backup berbasis kata sandi, dan restore atomik masih rencana produk. Kalender grid adalah irisan fitur berikutnya; fondasi rekening dan ID subkategori stabil kini dapat dipakai untuk menampilkan transaksi per tanggal tanpa mengubah model inti lagi. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.
+Kalender grid kini memakai fondasi rekening, ledger, dan ID subkategori tanpa mengubah model inti. Backup lengkap yang berversi, enkripsi backup berbasis kata sandi, dan restore atomik menjadi fondasi kritis v0.1 berikutnya. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.

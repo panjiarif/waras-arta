@@ -160,10 +160,14 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 
 ### 10. Kalender
 
-- Menampilkan transaksi per tanggal.
-- Memudahkan pencatatan transaksi yang sudah terlewat.
-- Menampilkan ringkasan pemasukan dan pengeluaran harian.
-- Membuka daftar transaksi saat tanggal dipilih.
+- Menambah navigasi bawah utama menjadi empat tujuan untuk penggunaan di HP.
+- Menampilkan grid bulanan ringan dengan urutan Senin sampai Minggu, mulai Januari 2000 hingga bulan berjalan.
+- Menonaktifkan tanggal setelah hari ini karena versi awal belum mendukung transaksi masa depan.
+- Memberi penanda terpisah untuk pemasukan, pengeluaran, dan aktivitas lain berupa transfer atau penyesuaian.
+- Menampilkan total pemasukan/pengeluaran harian serta jumlah dan daftar lengkap keempat jenis transaksi ketika tanggal dipilih.
+- Membuka detail ketika transaksi pada daftar harian diketuk.
+- Memudahkan pencatatan transaksi lampau dengan mengisi tanggal awal form dari tanggal kalender yang dipilih.
+- Menghitung ringkasan dari seluruh ledger bulan/tanggal terkait, terpisah dari pagination riwayat yang dimulai dari 50 entri.
 
 ### 11. Backup dan Restore
 
@@ -286,4 +290,6 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Rekening arsip tidak tersedia untuk transaksi baru. Transaksi lama tetap utuh, sedangkan edit/hapusnya menunggu rekening dipulihkan.
 - Hapus rekening permanen hanya berlaku jika tidak ada referensi ledger dan tidak menghapus transaksi secara berantai.
 - Migrasi schema v2 ke v3 menambahkan siklus arsip rekening dan dukungan penyesuaian saldo bertanda tanpa mengubah arus kas lama.
-- Setelah fondasi kategori dan kelola rekening, kalender grid adalah irisan implementasi berikutnya.
+- Kalender memakai `occurredDay` dan indeks ledger yang sudah ada sehingga schema database tetap versi 3.
+- Kalender dibatasi Januari 2000 sampai hari ini, menggunakan pekan Senin–Minggu, dan menyertakan seluruh jenis transaksi pada daftar harian.
+- Setelah kalender, backup/restore merupakan fondasi kritis v0.1 berikutnya sebelum aplikasi dipercaya sebagai satu-satunya catatan keuangan.

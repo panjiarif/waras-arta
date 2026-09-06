@@ -17,7 +17,9 @@ Yang tersedia:
 - Mengelola kategori pemasukan/pengeluaran dalam hierarki dua tingkat: kelompok dan subkategori.
 - Mengubah nama serta ikon Material kategori, lalu mengarsipkannya tanpa memutus riwayat lama.
 - Transfer satu transaksi antar-rekening sendiri, tidak dihitung sebagai pemasukan/pengeluaran.
-- Pencatatan tanggal lampau melalui pemilih tanggal.
+- Kalender bulanan Senin–Minggu dengan penanda pemasukan, pengeluaran, serta aktivitas lain per tanggal.
+- Memilih tanggal menampilkan total harian dan seluruh pemasukan, pengeluaran, transfer, serta penyesuaian pada hari tersebut.
+- Pencatatan tanggal lampau melalui kalender atau pemilih tanggal; tombol tambah pada tab kalender otomatis memakai tanggal yang dipilih.
 - Ikhtisar saldo seluruh rekening dan ringkasan bulanan.
 - Riwayat bulanan yang dimuat bertahap mulai 50 entri.
 - Detail transaksi beserta nama rekening, tanggal kejadian, catatan, dan waktu pencatatan.
@@ -28,7 +30,7 @@ Yang tersedia:
 
 Rekening arsip disembunyikan secara default, tetap dapat ditampilkan dan dipulihkan, serta tidak dapat dipilih untuk transaksi baru. Entri penyesuaian, termasuk saldo awal, bersifat tetap agar jejak perubahan saldo tidak ditulis ulang.
 
-Belum tersedia: gambar kategori unggahan pengguna, kalender grid, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
+Belum tersedia: gambar kategori unggahan pengguna, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
 
 **Gunakan data percobaan atau pertahankan catatan utama di tempat lain.** Alpha belum memiliki backup/restore maupun enkripsi database khusus aplikasi. Penyimpanan privat Android bukan jaminan pemulihan. Uninstall, hapus data, atau kerusakan/kehilangan HP dapat menghilangkan catatan. Jangan menjadikan alpha satu-satunya catatan keuangan.
 

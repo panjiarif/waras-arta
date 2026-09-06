@@ -75,6 +75,17 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 7. Coba arsipkan satu-satunya rekening aktif yang tersisa. Aplikasi harus menolak tindakan tersebut.
 8. Buat rekening baru bersaldo nol tanpa riwayat lalu hapus permanen setelah konfirmasi. Buat rekening lain yang sudah memiliki ledger dan pastikan hapus permanennya tidak tersedia; tidak boleh ada transaksi yang ikut terhapus.
 
+### Skenario kalender
+
+1. Buka tab Kalender. Pastikan bulan berjalan dan hari ini terpilih, header tersusun Sen–Min, tombol bulan berikutnya nonaktif, serta tanggal setelah hari ini tidak dapat dipilih.
+2. Bergerak ke bulan-bulan sebelumnya. Pastikan pilihan tanggal tetap valid pada bulan yang lebih pendek dan navigasi berhenti pada Januari 2000.
+3. Pada satu tanggal lampau, buat masing-masing satu pemasukan, pengeluaran, transfer, dan penyesuaian. Pastikan grid memberi penanda pemasukan, pengeluaran, dan aktivitas lain pada tanggal tersebut.
+4. Pilih tanggal tadi. Pastikan total harian hanya menghitung pemasukan/pengeluaran, sedangkan hitungan catatan, transfer, dan penyesuaian mencakup keempat entri. Semua entri harus muncul pada daftar tanggal terpilih.
+5. Ketuk setiap jenis entri dari daftar kalender dan pastikan detail transaksi yang benar terbuka. Kembali ke kalender tanpa kehilangan bulan/tanggal yang dipilih.
+6. Pilih tanggal lampau lain lalu tekan tombol **Catat transaksi**. Pastikan tanggal awal form sama dengan tanggal kalender yang dipilih dan tetap dapat diubah melalui pemilih tanggal.
+7. Buat lebih dari 50 entri dalam satu bulan dengan beberapa entri pada satu tanggal. Pastikan penanda, total harian, dan daftar tanggal terpilih mencakup semuanya walaupun riwayat bulanan belum dimuat lanjut.
+8. Edit tanggal atau nominal sebuah transaksi, kemudian hapus transaksi percobaan. Pastikan penanda, total, dan daftar pada tanggal lama maupun baru bereaksi tanpa membuka ulang aplikasi.
+
 ### Input, navigasi, dan ketahanan tampilan
 
 - [ ] Instalasi baru menampilkan keadaan kosong yang jelas dan alur tambah rekening dapat dibuka.
@@ -132,10 +143,9 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 
 ## Urutan kerja setelah alpha
 
-1. Jalankan checklist transaksi dan kelola rekening pada HP referensi, lalu perbaiki ketidaksesuaian saldo/tampilan.
-2. Implementasikan kalender grid menggunakan `occurredDay` dan ID subkategori yang sudah stabil.
-3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah.
-4. Implementasikan backup/restore lengkap dan uji pemulihan pada perangkat/instalasi terpisah menggunakan data percobaan.
-5. Lanjutkan kebutuhan v0.1 lainnya.
+1. Jalankan checklist transaksi, kelola rekening, dan kalender pada HP referensi, lalu perbaiki ketidaksesuaian saldo/tampilan.
+2. Implementasikan backup/restore lengkap dan uji pemulihan pada perangkat/instalasi terpisah menggunakan data percobaan.
+3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; kalender saat ini tetap memakai schema v3.
+4. Lanjutkan kebutuhan v0.1 lainnya setelah jalur pemulihan data terbukti bekerja.
 
 Selama backup/restore belum tersedia, jangan menjadikan alpha satu-satunya catatan keuangan.

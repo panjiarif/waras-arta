@@ -16,9 +16,12 @@ Yang tersedia:
 - Pencatatan tanggal lampau melalui pemilih tanggal.
 - Ikhtisar saldo seluruh rekening dan ringkasan bulanan.
 - Riwayat bulanan yang dimuat bertahap mulai 50 entri.
+- Detail transaksi beserta nama rekening, tanggal kejadian, catatan, dan waktu pencatatan.
+- Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
+- Hapus permanen transaksi biasa melalui dialog konfirmasi.
 - Penyimpanan persisten lokal menggunakan Drift/SQLite.
 
-Belum tersedia: edit/hapus/arsip, pengelolaan kategori, kalender grid, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
+Belum tersedia: edit saldo awal, arsip rekening, pengelolaan kategori, kalender grid, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
 
 **Gunakan data percobaan atau pertahankan catatan utama di tempat lain.** Alpha belum memiliki backup/restore maupun enkripsi database khusus aplikasi. Penyimpanan privat Android bukan jaminan pemulihan. Uninstall, hapus data, atau kerusakan/kehilangan HP dapat menghilangkan catatan. Jangan menjadikan alpha satu-satunya catatan keuangan.
 

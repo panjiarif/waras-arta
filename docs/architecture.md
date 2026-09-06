@@ -21,7 +21,7 @@ View -> ViewModel -> FinanceRepository -> Drift / SQLite
 ```
 
 - **View:** widget Material 3 berbahasa Indonesia, input form, tampilan loading/error, dan navigasi.
-- **ViewModel:** pilihan bulan, batas jumlah riwayat, pemuatan data, dan operasi simpan. Tidak menyimpan `BuildContext` atau mengakses SQL secara langsung.
+- **ViewModel:** pilihan bulan, batas jumlah riwayat, pemuatan data, serta operasi tambah, edit, dan hapus. Tidak menyimpan `BuildContext` atau mengakses SQL secara langsung.
 - **Domain:** model immutable, jenis rekening/transaksi, kategori awal, draft input, dan kontrak repository. Belum ada lapisan use case terpisah.
 - **Repository:** validasi aturan keuangan, operasi database, dan pemetaan hasil query ke model domain.
 - **Database:** tabel, constraint, indeks, dan koneksi persisten. SQLite adalah sumber data utama, bukan cache tampilan.
@@ -50,6 +50,7 @@ lib/
         └── views/
             ├── home_screen.dart
             ├── account_form_screen.dart
+            ├── entry_detail_screen.dart
             ├── entry_form_screen.dart
             └── form_widgets.dart
 ```
@@ -75,7 +76,9 @@ Aturan alpha:
 - Form penyesuaian saldo umum belum tersedia. Entri penyesuaian pada tahap ini khusus saldo awal nonnegatif.
 - Kategori pemasukan dan pengeluaran menggunakan pilihan tetap dari domain; belum ada CRUD kategori. Transfer dan saldo awal tidak memiliki kategori.
 - Saldo negatif akibat pengeluaran atau transfer diperbolehkan untuk pencatatan manual; aplikasi bukan sistem otorisasi pembayaran bank.
-- Edit, hapus, dan arsip belum tersedia. Penambahan fitur tersebut kelak harus mempertahankan konsistensi ledger dan ringkasan.
+- Transaksi biasa dapat dilihat, diedit, dan dihapus permanen setelah konfirmasi. Edit mempertahankan `id` serta `createdAt`; nilai lama belum memiliki audit trail atau undo.
+- Edit atau hapus transaksi menghitung ulang saldo sepanjang waktu dan ringkasan bulan terkait. Transaksi dapat berpindah jenis, rekening, atau bulan selama hasil akhirnya memenuhi seluruh validasi ledger.
+- Entri saldo awal dilindungi dari edit/hapus pada alur transaksi. Pengarsipan rekening belum tersedia.
 
 ## Tanggal dan periode
 

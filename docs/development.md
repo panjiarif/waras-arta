@@ -46,7 +46,7 @@ Jangan menyimpulkan performa release berdasarkan debug mode. Build release saat 
 
 ## Checklist manual alpha
 
-Gunakan data percobaan. Alpha belum memiliki backup/restore, edit, atau hapus transaksi. Checklist ini adalah langkah verifikasi yang harus dijalankan, bukan laporan bahwa semua pengujian sudah lulus.
+Gunakan data percobaan. Alpha belum memiliki backup/restore, sehingga penghapusan permanen hanya boleh diuji pada data yang dapat dibuat ulang. Checklist ini adalah langkah verifikasi yang harus dijalankan, bukan laporan bahwa semua pengujian sudah lulus.
 
 ### Skenario perhitungan
 
@@ -59,6 +59,9 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 5. Catat pengeluaran Rp50.000 dari Bank Uji pada bulan sebelumnya. Saldo saat ini menjadi Bank Rp3.700.000 dan total Rp4.050.000. Ringkasan bulan uji tetap sama; pengeluaran Rp50.000 hanya masuk ringkasan bulan sebelumnya.
 6. Berpindah ke bulan sebelumnya. Saldo total tetap Rp4.050.000 karena kartu saldo bukan laporan saldo historis.
 7. Tutup aplikasi sepenuhnya lalu buka lagi. Rekening, transaksi, dan hasil perhitungan harus tetap sama. Jangan uninstall atau hapus data untuk tes buka ulang ini.
+8. Buka detail pengeluaran Rp100.000, ubah menjadi Rp125.000, lalu pastikan Bank, pengeluaran bulanan, dan selisih berubah tepat Rp25.000.
+9. Ubah tanggal pengeluaran tersebut ke bulan sebelumnya. Pastikan transaksi dan pengeluaran berpindah periode, sedangkan saldo saat ini tidak berubah lagi hanya karena perpindahan tanggal.
+10. Hapus transfer Rp150.000 setelah membaca dialog konfirmasi. Bank harus bertambah Rp150.000, Tunai berkurang Rp150.000, total saldo tetap, dan hanya satu baris transfer yang hilang.
 
 ### Input, navigasi, dan ketahanan tampilan
 
@@ -72,6 +75,11 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 - [ ] Riwayat dengan lebih dari 50 entri dapat dimuat lanjut tanpa duplikasi atau kehilangan urutan.
 - [ ] Coba lebar layar HP kecil, keyboard terbuka, dan ukuran font sistem diperbesar. Form serta tombol tetap dapat dijangkau tanpa overflow.
 - [ ] Pindah layar/bulan setelah menyimpan memperbarui rekening dan ringkasan yang terkait.
+- [ ] Detail transaksi menampilkan rekening asal/tujuan, kategori, tanggal kejadian, catatan, dan waktu pencatatan yang benar.
+- [ ] Form edit terisi dengan nilai lama; simpan berulang tidak menghasilkan operasi ganda dan `createdAt` tidak berubah.
+- [ ] Menekan Back setelah mengubah form meminta konfirmasi; memilih tetap tidak membuang input dan memilih buang tidak menyimpan perubahan.
+- [ ] Tombol hapus selalu meminta konfirmasi; Batal tidak mengubah data dan kegagalan hapus tidak menutup halaman.
+- [ ] Saldo awal dapat dibuka sebagai detail tetapi tidak menawarkan edit atau hapus.
 - [ ] Kondisi error repository diuji dengan fake/injeksi kegagalan di pengujian otomatis; jangan sengaja merusak database pribadi untuk mengetes pesan error.
 
 ## Riwayat commit yang rapi

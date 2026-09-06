@@ -1,3 +1,48 @@
-# waras_arta
+# Waras Arta
 
-A new Flutter project.
+> Catat, atur, tetap waras.
+
+Aplikasi keuangan pribadi berbasis Flutter dengan pendekatan local-first. Target pertama adalah Android, dengan antarmuka bahasa Indonesia dan mata uang rupiah.
+
+## Status: alpha pertama
+
+Ini adalah irisan awal menuju versi 0.1 pada [product brief](docs/product-brief.md), **belum MVP lengkap**.
+
+Yang tersedia:
+
+- Membuat rekening tunai, bank, e-wallet, atau lainnya dengan saldo awal yang dicatat sebagai penyesuaian ledger.
+- Mencatat pemasukan dan pengeluaran dengan kategori bawaan, tanggal kejadian, dan catatan.
+- Transfer satu transaksi antar-rekening sendiri, tidak dihitung sebagai pemasukan/pengeluaran.
+- Pencatatan tanggal lampau melalui pemilih tanggal.
+- Ikhtisar saldo seluruh rekening dan ringkasan bulanan.
+- Riwayat bulanan yang dimuat bertahap mulai 50 entri.
+- Penyimpanan persisten lokal menggunakan Drift/SQLite.
+
+Belum tersedia: edit/hapus/arsip, pengelolaan kategori, kalender grid, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
+
+**Gunakan data percobaan atau pertahankan catatan utama di tempat lain.** Alpha belum memiliki backup/restore maupun enkripsi database khusus aplikasi. Penyimpanan privat Android bukan jaminan pemulihan. Uninstall, hapus data, atau kerusakan/kehilangan HP dapat menghilangkan catatan. Jangan menjadikan alpha satu-satunya catatan keuangan.
+
+## Mulai mengembangkan
+
+Siapkan Flutter, JDK 17, Android SDK, dan HP dengan USB debugging. Dari root repository:
+
+```bash
+flutter pub get
+dart run build_runner build
+flutter analyze
+flutter test
+flutter devices
+flutter run -d DEVICE_ID
+```
+
+Ganti `DEVICE_ID` dengan ID HP. Proyek ini belum menargetkan runtime web atau desktop. Lihat [panduan pengembangan](docs/development.md) untuk checklist manual dan alur commit.
+
+## Fondasi teknis
+
+Flutter/Dart, Material 3, MVVM dengan Riverpod, repository, Drift/SQLite dengan background isolate, dan `go_router`. Saldo berasal dari ledger, nominal menggunakan bilangan bulat rupiah, serta periode transaksi berdasarkan tanggal kejadian.
+
+- [Product brief dan ruang lingkup versi](docs/product-brief.md)
+- [Arsitektur dan aturan data](docs/architecture.md)
+- [Pengembangan, verifikasi, dan commit](docs/development.md)
+
+Package Dart: `waras_arta`. Application ID Android saat ini: `io.github.panjiarif.waras_arta`; nama tampilan: **Waras Arta**.

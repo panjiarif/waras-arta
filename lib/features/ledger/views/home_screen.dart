@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/category_icons.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
 import '../view_models/ledger_view_model.dart';
@@ -45,6 +46,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            key: const Key('manage-categories'),
+            tooltip: 'Kelola kategori',
+            onPressed: () => context.push('/categories'),
+            icon: const Icon(Icons.category_outlined),
+          ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -454,6 +463,14 @@ class _EntryCard extends ConsumerWidget {
       EntryKind.expense => '− ',
       _ => '',
     };
+    final icon = entry.categoryIconKey != null
+        ? categoryIconFor(entry.categoryIconKey!)
+        : switch (entry.kind) {
+            EntryKind.income => Icons.south_west,
+            EntryKind.expense => Icons.north_east,
+            EntryKind.transfer => Icons.swap_horiz,
+            EntryKind.adjustment => Icons.savings_outlined,
+          };
     return Card(
       child: InkWell(
         key: ValueKey('entry-${entry.id}'),
@@ -467,19 +484,14 @@ class _EntryCard extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(switch (entry.kind) {
-                EntryKind.income => Icons.south_west,
-                EntryKind.expense => Icons.north_east,
-                EntryKind.transfer => Icons.swap_horiz,
-                EntryKind.adjustment => Icons.savings_outlined,
-              }, color: color),
+              Icon(icon, color: color),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.category ?? entry.kind.label,
+                      entry.categoryName ?? entry.kind.label,
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
@@ -488,9 +500,19 @@ class _EntryCard extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(route, style: const TextStyle(fontSize: 13)),
                     Text(
-                      '${entry.kind.label} • ${formatDate(entry.occurredAt)}',
+                      [
+                        if (entry.parentCategoryName != null)
+                          entry.parentCategoryName!,
+                        entry.kind.label,
+                        formatDate(entry.occurredAt),
+                      ].join(' • '),
                       style: const TextStyle(fontSize: 12),
                     ),
+                    if (entry.categoryArchived)
+                      const Text(
+                        'Kategori diarsipkan',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     if (entry.note.isNotEmpty &&
                         entry.note != 'Saldo awal') ...[
                       const SizedBox(height: 4),

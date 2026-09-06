@@ -10,12 +10,57 @@ class DriftFinanceRepository implements FinanceRepository {
   final AppDatabase _db;
 
   @override
+  Stream<List<CategoryGroup>> watchCategoryTree(
+    CategoryKind kind, {
+    bool includeArchived = false,
+  }) {
+    final query = _db.select(_db.categories)
+      ..where((category) {
+        final sameKind = category.kind.equals(kind.index);
+        return includeArchived
+            ? sameKind
+            : sameKind & category.isArchived.equals(false);
+      })
+      ..orderBy([
+        (category) => OrderingTerm.asc(category.sortOrder),
+        (category) => OrderingTerm.asc(category.normalizedName),
+        (category) => OrderingTerm.asc(category.id),
+      ]);
+    return query.watch().map((rows) {
+      final parents = rows.where((row) => row.parentId == null);
+      return List.unmodifiable(
+        parents.map(
+          (parent) => CategoryGroup(
+            parent: _toCategory(parent),
+            children: rows
+                .where((row) => row.parentId == parent.id)
+                .map(_toCategory)
+                .toList(),
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
   Stream<FinanceEntry?> watchEntry(int id) {
     if (id < 1) return Stream.value(null);
-    final query = _db.select(_db.ledgerEntries)
-      ..where((entry) => entry.id.equals(id));
+    final parent = _db.alias(_db.categories, 'parent_category');
+    final query = _db.select(_db.ledgerEntries).join([
+      leftOuterJoin(
+        _db.categories,
+        _db.categories.id.equalsExp(_db.ledgerEntries.categoryId),
+      ),
+      leftOuterJoin(parent, parent.id.equalsExp(_db.categories.parentId)),
+    ])..where(_db.ledgerEntries.id.equals(id));
     return query.watchSingleOrNull().map(
-      (row) => row == null ? null : _toEntry(row),
+      (row) => row == null
+          ? null
+          : _toEntry(
+              row.readTable(_db.ledgerEntries),
+              category: row.readTableOrNull(_db.categories),
+              parent: row.readTableOrNull(parent),
+            ),
     );
   }
 
@@ -23,7 +68,7 @@ class DriftFinanceRepository implements FinanceRepository {
   Stream<FinanceSnapshot> watchMonth(DateTime month, {int limit = 50}) => _db
       .customSelect(
         'SELECT COUNT(*) AS entry_count FROM ledger_entries',
-        readsFrom: {_db.accounts, _db.ledgerEntries},
+        readsFrom: {_db.accounts, _db.categories, _db.ledgerEntries},
       )
       .watch()
       .asyncMap((_) => loadMonth(month, limit: limit));
@@ -65,19 +110,25 @@ class DriftFinanceRepository implements FinanceRepository {
             variables: [Variable.withInt(start), Variable.withInt(end)],
           )
           .getSingle();
-      final rows =
-          await (_db.select(_db.ledgerEntries)
-                ..where(
-                  (entry) =>
-                      entry.occurredDay.isBiggerOrEqualValue(start) &
-                      entry.occurredDay.isSmallerThanValue(end),
-                )
-                ..orderBy([
-                  (entry) => OrderingTerm.desc(entry.occurredDay),
-                  (entry) => OrderingTerm.desc(entry.id),
-                ])
-                ..limit(limit))
-              .get();
+      final parent = _db.alias(_db.categories, 'parent_category');
+      final entryQuery = _db.select(_db.ledgerEntries).join([
+        leftOuterJoin(
+          _db.categories,
+          _db.categories.id.equalsExp(_db.ledgerEntries.categoryId),
+        ),
+        leftOuterJoin(parent, parent.id.equalsExp(_db.categories.parentId)),
+      ]);
+      entryQuery
+        ..where(
+          _db.ledgerEntries.occurredDay.isBiggerOrEqualValue(start) &
+              _db.ledgerEntries.occurredDay.isSmallerThanValue(end),
+        )
+        ..orderBy([
+          OrderingTerm.desc(_db.ledgerEntries.occurredDay),
+          OrderingTerm.desc(_db.ledgerEntries.id),
+        ])
+        ..limit(limit);
+      final rows = await entryQuery.get();
 
       return FinanceSnapshot(
         accounts: accountRows
@@ -90,7 +141,15 @@ class DriftFinanceRepository implements FinanceRepository {
               ),
             )
             .toList(),
-        entries: rows.map(_toEntry).toList(),
+        entries: rows
+            .map(
+              (row) => _toEntry(
+                row.readTable(_db.ledgerEntries),
+                category: row.readTableOrNull(_db.categories),
+                parent: row.readTableOrNull(parent),
+              ),
+            )
+            .toList(),
         income: totals.read<int>('income'),
         expense: totals.read<int>('expense'),
         totalEntries: totals.read<int>('total_entries'),
@@ -156,6 +215,7 @@ class DriftFinanceRepository implements FinanceRepository {
 
     return _db.transaction(() async {
       await _requireAccounts(normalized);
+      await _requireUsableCategory(normalized);
       // A transfer is one insert: it cannot leave a half-completed debit/credit.
       return _db
           .into(_db.ledgerEntries)
@@ -176,6 +236,11 @@ class DriftFinanceRepository implements FinanceRepository {
         );
       }
       await _requireAccounts(normalized);
+      await _requireUsableCategory(
+        normalized,
+        existingCategoryId: existing.categoryId,
+        existingKind: existing.kind,
+      );
       final affected =
           await (_db.update(
             _db.ledgerEntries,
@@ -185,7 +250,7 @@ class DriftFinanceRepository implements FinanceRepository {
               accountId: Value(normalized.accountId),
               destinationAccountId: Value(normalized.destinationAccountId),
               amount: Value(normalized.amount),
-              category: Value(normalized.category),
+              categoryId: Value(normalized.categoryId),
               note: Value(normalized.note),
               occurredDay: Value(_dayKey(normalized.occurredAt)),
             ),
@@ -211,6 +276,169 @@ class DriftFinanceRepository implements FinanceRepository {
     });
   }
 
+  @override
+  Future<int> createCategoryGroup(CategoryGroupDraft draft) async {
+    final parent = _validateCategoryFields(
+      name: draft.parentName,
+      iconKey: draft.parentIconKey,
+      sortOrder: draft.parentSortOrder,
+    );
+    final child = _validateCategoryFields(
+      name: draft.firstChildName,
+      iconKey: draft.firstChildIconKey,
+      sortOrder: draft.firstChildSortOrder,
+    );
+    return _db.transaction(() async {
+      await _ensureUniqueCategoryName(
+        kind: draft.kind,
+        parentId: null,
+        normalizedName: parent.normalizedName,
+      );
+      final now = DateTime.now();
+      final parentId = await _db
+          .into(_db.categories)
+          .insert(
+            CategoriesCompanion.insert(
+              kind: draft.kind.index,
+              name: parent.name,
+              normalizedName: parent.normalizedName,
+              iconKey: parent.iconKey,
+              sortOrder: Value(parent.sortOrder),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+      await _db
+          .into(_db.categories)
+          .insert(
+            CategoriesCompanion.insert(
+              parentId: Value(parentId),
+              kind: draft.kind.index,
+              name: child.name,
+              normalizedName: child.normalizedName,
+              iconKey: child.iconKey,
+              sortOrder: Value(child.sortOrder),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+      return parentId;
+    });
+  }
+
+  @override
+  Future<int> createSubcategory(CategoryDraft draft) async {
+    final parentId = draft.parentId;
+    if (parentId == null) {
+      throw const FinanceValidationException('Pilih kelompok kategori.');
+    }
+    final values = _validateCategoryDraft(draft);
+    return _db.transaction(() async {
+      final parent = await _requireCategory(parentId);
+      if (parent.parentId != null) {
+        throw const FinanceValidationException(
+          'Subkategori hanya dapat dibuat di bawah kelompok utama.',
+        );
+      }
+      if (parent.isArchived) {
+        throw const FinanceValidationException(
+          'Aktifkan kelompok kategori sebelum menambah subkategori.',
+        );
+      }
+      final kind = CategoryKind.values[parent.kind];
+      await _ensureUniqueCategoryName(
+        kind: kind,
+        parentId: parentId,
+        normalizedName: values.normalizedName,
+      );
+      final now = DateTime.now();
+      return _db
+          .into(_db.categories)
+          .insert(
+            CategoriesCompanion.insert(
+              parentId: Value(parentId),
+              kind: parent.kind,
+              name: values.name,
+              normalizedName: values.normalizedName,
+              iconKey: values.iconKey,
+              sortOrder: Value(values.sortOrder),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+    });
+  }
+
+  @override
+  Future<void> updateCategory(int categoryId, CategoryDraft draft) async {
+    _validateCategoryId(categoryId);
+    final values = _validateCategoryDraft(draft);
+    await _db.transaction(() async {
+      final existing = await _requireCategory(categoryId);
+      if (existing.parentId != draft.parentId) {
+        throw const FinanceValidationException(
+          'Kelompok kategori tidak dapat dipindahkan.',
+        );
+      }
+      await _ensureUniqueCategoryName(
+        kind: CategoryKind.values[existing.kind],
+        parentId: existing.parentId,
+        normalizedName: values.normalizedName,
+        exceptId: categoryId,
+      );
+      await (_db.update(
+        _db.categories,
+      )..where((category) => category.id.equals(categoryId))).write(
+        CategoriesCompanion(
+          name: Value(values.name),
+          normalizedName: Value(values.normalizedName),
+          iconKey: Value(values.iconKey),
+          sortOrder: Value(values.sortOrder),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> setCategoryArchived(int categoryId, bool archived) async {
+    _validateCategoryId(categoryId);
+    await _db.transaction(() async {
+      final category = await _requireCategory(categoryId);
+      if (category.isArchived == archived) return;
+      if (archived) {
+        final effective = await _effectiveLeafCount(category.kind);
+        final removed = await _effectiveLeavesRemoved(category);
+        if (effective - removed < 1) {
+          throw const FinanceValidationException(
+            'Sisakan minimal satu subkategori aktif untuk jenis transaksi ini.',
+          );
+        }
+      } else if (category.parentId == null) {
+        final activeChildren =
+            await (_db.select(_db.categories)..where(
+                  (child) =>
+                      child.parentId.equals(category.id) &
+                      child.isArchived.equals(false),
+                ))
+                .get();
+        if (activeChildren.isEmpty) {
+          throw const FinanceValidationException(
+            'Aktifkan minimal satu subkategori terlebih dahulu.',
+          );
+        }
+      }
+      await (_db.update(
+        _db.categories,
+      )..where((row) => row.id.equals(categoryId))).write(
+        CategoriesCompanion(
+          isArchived: Value(archived),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+    });
+  }
+
   static EntryDraft _validateAndNormalizeEntry(EntryDraft draft) {
     if (draft.kind == EntryKind.adjustment) {
       throw const FinanceValidationException(
@@ -223,7 +451,7 @@ class DriftFinanceRepository implements FinanceRepository {
     if (note.length > 500) {
       throw const FinanceValidationException('Catatan maksimal 500 karakter.');
     }
-    final category = draft.category?.trim();
+    final categoryId = draft.categoryId;
     if (draft.kind == EntryKind.transfer) {
       if (draft.destinationAccountId == null ||
           draft.destinationAccountId == draft.accountId) {
@@ -231,7 +459,7 @@ class DriftFinanceRepository implements FinanceRepository {
           'Transfer membutuhkan dua rekening yang berbeda.',
         );
       }
-      if (category != null) {
+      if (categoryId != null) {
         throw const FinanceValidationException(
           'Transfer tidak memiliki kategori.',
         );
@@ -242,11 +470,8 @@ class DriftFinanceRepository implements FinanceRepository {
           'Rekening tujuan hanya berlaku untuk transfer.',
         );
       }
-      final categories = draft.kind == EntryKind.income
-          ? incomeCategories
-          : expenseCategories;
-      if (!categories.contains(category)) {
-        throw const FinanceValidationException('Pilih kategori yang sesuai.');
+      if (categoryId == null) {
+        throw const FinanceValidationException('Pilih subkategori.');
       }
     }
 
@@ -255,7 +480,7 @@ class DriftFinanceRepository implements FinanceRepository {
       accountId: draft.accountId,
       destinationAccountId: draft.destinationAccountId,
       amount: draft.amount,
-      category: category,
+      categoryId: categoryId,
       note: note,
       occurredAt: draft.occurredAt,
     );
@@ -268,12 +493,143 @@ class DriftFinanceRepository implements FinanceRepository {
     }
   }
 
+  Future<void> _requireUsableCategory(
+    EntryDraft draft, {
+    int? existingCategoryId,
+    int? existingKind,
+  }) async {
+    final categoryId = draft.categoryId;
+    if (categoryId == null) return;
+    final category = await _requireCategory(categoryId);
+    if (category.parentId == null || category.kind != draft.kind.index) {
+      throw const FinanceValidationException(
+        'Subkategori tidak sesuai dengan jenis transaksi.',
+      );
+    }
+    final parent = await _requireCategory(category.parentId!);
+    final unchangedArchivedCategory =
+        existingCategoryId == categoryId && existingKind == draft.kind.index;
+    if ((category.isArchived || parent.isArchived) &&
+        !unchangedArchivedCategory) {
+      throw const FinanceValidationException(
+        'Subkategori telah diarsipkan. Pilih subkategori aktif.',
+      );
+    }
+  }
+
   Future<LedgerRow> _requireEntry(int id) async {
     final entry = await (_db.select(
       _db.ledgerEntries,
     )..where((entry) => entry.id.equals(id))).getSingleOrNull();
     if (entry == null) _throwEntryNotFound();
     return entry;
+  }
+
+  Future<CategoryRow> _requireCategory(int id) async {
+    final category = await (_db.select(
+      _db.categories,
+    )..where((row) => row.id.equals(id))).getSingleOrNull();
+    if (category == null) {
+      throw const FinanceValidationException('Kategori tidak ditemukan.');
+    }
+    return category;
+  }
+
+  Future<int> _effectiveLeafCount(int kind) async {
+    final result = await _db
+        .customSelect(
+          '''SELECT COUNT(*) AS amount
+         FROM categories AS child
+         JOIN categories AS parent ON parent.id = child.parent_id
+         WHERE child.kind = ? AND child.is_archived = 0
+           AND parent.is_archived = 0''',
+          variables: [Variable.withInt(kind)],
+          readsFrom: {_db.categories},
+        )
+        .getSingle();
+    return result.read<int>('amount');
+  }
+
+  Future<int> _effectiveLeavesRemoved(CategoryRow category) async {
+    if (category.isArchived) return 0;
+    if (category.parentId != null) {
+      final parent = await _requireCategory(category.parentId!);
+      return parent.isArchived ? 0 : 1;
+    }
+    final result = await _db
+        .customSelect(
+          '''SELECT COUNT(*) AS amount FROM categories
+         WHERE parent_id = ? AND is_archived = 0''',
+          variables: [Variable.withInt(category.id)],
+          readsFrom: {_db.categories},
+        )
+        .getSingle();
+    return result.read<int>('amount');
+  }
+
+  Future<void> _ensureUniqueCategoryName({
+    required CategoryKind kind,
+    required int? parentId,
+    required String normalizedName,
+    int? exceptId,
+  }) async {
+    final query = _db.select(_db.categories)
+      ..where((category) {
+        Expression<bool> condition =
+            category.kind.equals(kind.index) &
+            category.normalizedName.equals(normalizedName) &
+            (parentId == null
+                ? category.parentId.isNull()
+                : category.parentId.equals(parentId));
+        if (exceptId != null) {
+          condition = condition & category.id.equals(exceptId).not();
+        }
+        return condition;
+      });
+    if (await query.getSingleOrNull() != null) {
+      throw const FinanceValidationException(
+        'Nama kategori sudah digunakan pada kelompok ini.',
+      );
+    }
+  }
+
+  static ({String name, String normalizedName, String iconKey, int sortOrder})
+  _validateCategoryDraft(CategoryDraft draft) => _validateCategoryFields(
+    name: draft.name,
+    iconKey: draft.iconKey,
+    sortOrder: draft.sortOrder,
+  );
+
+  static ({String name, String normalizedName, String iconKey, int sortOrder})
+  _validateCategoryFields({
+    required String name,
+    required String iconKey,
+    required int sortOrder,
+  }) {
+    final cleanedName = name.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (cleanedName.isEmpty || cleanedName.length > 80) {
+      throw const FinanceValidationException(
+        'Nama kategori wajib diisi dan maksimal 80 karakter.',
+      );
+    }
+    if (!categoryIconKeys.contains(iconKey)) {
+      throw const FinanceValidationException('Ikon kategori tidak valid.');
+    }
+    if (sortOrder < 0 || sortOrder > 1000000) {
+      throw const FinanceValidationException('Urutan kategori tidak valid.');
+    }
+    return (
+      name: cleanedName,
+      normalizedName: cleanedName.toLowerCase(),
+      iconKey: iconKey,
+      sortOrder: sortOrder,
+    );
+  }
+
+  static void _validateCategoryId(int id) {
+    if (id < 1) {
+      throw const FinanceValidationException('Kategori tidak ditemukan.');
+    }
   }
 
   Future<void> _requireAccount(int id) async {
@@ -319,7 +675,7 @@ class DriftFinanceRepository implements FinanceRepository {
     accountId: draft.accountId,
     destinationAccountId: Value(draft.destinationAccountId),
     amount: draft.amount,
-    category: Value(draft.category),
+    categoryId: Value(draft.categoryId),
     note: Value(draft.note),
     occurredDay: _dayKey(draft.occurredAt),
     createdAt: createdAt,
@@ -328,13 +684,35 @@ class DriftFinanceRepository implements FinanceRepository {
   static int _dayKey(DateTime date) =>
       date.year * 10000 + date.month * 100 + date.day;
 
-  static FinanceEntry _toEntry(LedgerRow row) => FinanceEntry(
+  static FinanceCategory _toCategory(CategoryRow row) => FinanceCategory(
+    id: row.id,
+    parentId: row.parentId,
+    kind: CategoryKind.values[row.kind],
+    name: row.name,
+    iconKey: row.iconKey,
+    isArchived: row.isArchived,
+    sortOrder: row.sortOrder,
+    systemKey: row.systemKey,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  );
+
+  static FinanceEntry _toEntry(
+    LedgerRow row, {
+    CategoryRow? category,
+    CategoryRow? parent,
+  }) => FinanceEntry(
     id: row.id,
     kind: EntryKind.values[row.kind],
     accountId: row.accountId,
     destinationAccountId: row.destinationAccountId,
     amount: row.amount,
-    category: row.category,
+    categoryId: row.categoryId,
+    categoryName: category?.name,
+    parentCategoryName: parent?.name,
+    categoryIconKey: category?.iconKey,
+    categoryArchived:
+        category?.isArchived == true || parent?.isArchived == true,
     note: row.note,
     occurredAt: DateTime(
       row.occurredDay ~/ 10000,

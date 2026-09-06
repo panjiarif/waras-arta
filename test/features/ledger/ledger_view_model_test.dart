@@ -231,7 +231,7 @@ EntryDraft expenseDraft() => EntryDraft(
   kind: EntryKind.expense,
   accountId: 1,
   amount: 15000,
-  category: 'Makan & minum',
+  categoryId: 10,
   occurredAt: DateTime(2024, 8, 17),
 );
 
@@ -252,6 +252,24 @@ class FakeFinanceRepository implements FinanceRepository {
   Future<int> Function(EntryDraft)? onAddEntry;
   DateTime? lastMonth;
   int? lastLimit;
+
+  @override
+  Stream<List<CategoryGroup>> watchCategoryTree(
+    CategoryKind kind, {
+    bool includeArchived = false,
+  }) => Stream.value(const []);
+
+  @override
+  Future<int> createCategoryGroup(CategoryGroupDraft draft) async => 1;
+
+  @override
+  Future<int> createSubcategory(CategoryDraft draft) async => 1;
+
+  @override
+  Future<void> updateCategory(int categoryId, CategoryDraft draft) async {}
+
+  @override
+  Future<void> setCategoryArchived(int categoryId, bool archived) async {}
 
   @override
   Future<int> createAccount(AccountDraft draft) async {

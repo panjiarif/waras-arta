@@ -22,16 +22,114 @@ extension EntryKindLabel on EntryKind {
   };
 }
 
-const incomeCategories = ['Gaji', 'Usaha', 'Hadiah', 'Lainnya'];
-const expenseCategories = [
-  'Makan & minum',
-  'Transportasi',
-  'Belanja',
-  'Tagihan',
-  'Kesehatan',
-  'Hiburan',
-  'Lainnya',
+enum CategoryKind { income, expense }
+
+extension CategoryKindLabel on CategoryKind {
+  String get label => switch (this) {
+    CategoryKind.income => 'Pemasukan',
+    CategoryKind.expense => 'Pengeluaran',
+  };
+}
+
+/// Stable semantic keys. The UI maps these to Material icons.
+const categoryIconKeys = [
+  'payments',
+  'work',
+  'storefront',
+  'redeem',
+  'restaurant',
+  'directions_car',
+  'shopping_bag',
+  'receipt_long',
+  'medical_services',
+  'movie',
+  'subscriptions',
+  'home',
+  'school',
+  'flight',
+  'savings',
+  'family_restroom',
+  'pets',
+  'checkroom',
+  'local_grocery_store',
+  'sports_esports',
+  'volunteer_activism',
+  'account_balance',
+  'category',
+  'more_horiz',
 ];
+
+class FinanceCategory {
+  const FinanceCategory({
+    required this.id,
+    required this.parentId,
+    required this.kind,
+    required this.name,
+    required this.iconKey,
+    required this.isArchived,
+    required this.sortOrder,
+    required this.systemKey,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final int id;
+  final int? parentId;
+  final CategoryKind kind;
+  final String name;
+  final String iconKey;
+  final bool isArchived;
+  final int sortOrder;
+  final String? systemKey;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  bool get isGroup => parentId == null;
+  bool get isBuiltIn => systemKey != null;
+}
+
+class CategoryGroup {
+  CategoryGroup({required this.parent, required List<FinanceCategory> children})
+    : children = List.unmodifiable(children);
+
+  final FinanceCategory parent;
+  final List<FinanceCategory> children;
+}
+
+class CategoryGroupDraft {
+  const CategoryGroupDraft({
+    required this.kind,
+    required this.parentName,
+    required this.parentIconKey,
+    required this.firstChildName,
+    required this.firstChildIconKey,
+    this.parentSortOrder = 0,
+    this.firstChildSortOrder = 0,
+  });
+
+  final CategoryKind kind;
+  final String parentName;
+  final String parentIconKey;
+  final String firstChildName;
+  final String firstChildIconKey;
+  final int parentSortOrder;
+  final int firstChildSortOrder;
+}
+
+class CategoryDraft {
+  const CategoryDraft({
+    required this.parentId,
+    required this.name,
+    required this.iconKey,
+    this.sortOrder = 0,
+  });
+
+  /// Null identifies a root group. Updating cannot change this value.
+  final int? parentId;
+  final String name;
+  final String iconKey;
+  final int sortOrder;
+}
 
 class FinanceAccount {
   const FinanceAccount({
@@ -54,7 +152,11 @@ class FinanceEntry {
     required this.accountId,
     this.destinationAccountId,
     required this.amount,
-    this.category,
+    this.categoryId,
+    this.categoryName,
+    this.parentCategoryName,
+    this.categoryIconKey,
+    this.categoryArchived = false,
     required this.note,
     required this.occurredAt,
     required this.createdAt,
@@ -65,7 +167,11 @@ class FinanceEntry {
   final int accountId;
   final int? destinationAccountId;
   final int amount;
-  final String? category;
+  final int? categoryId;
+  final String? categoryName;
+  final String? parentCategoryName;
+  final String? categoryIconKey;
+  final bool categoryArchived;
   final String note;
 
   /// A civil date (year/month/day), independent of entry creation time.
@@ -115,7 +221,7 @@ class EntryDraft {
     required this.accountId,
     this.destinationAccountId,
     required this.amount,
-    this.category,
+    this.categoryId,
     this.note = '',
     required this.occurredAt,
   });
@@ -124,7 +230,7 @@ class EntryDraft {
   final int accountId;
   final int? destinationAccountId;
   final int amount;
-  final String? category;
+  final int? categoryId;
   final String note;
   final DateTime occurredAt;
 }

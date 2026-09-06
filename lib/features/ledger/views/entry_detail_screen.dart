@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/category_icons.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
 import '../view_models/ledger_view_model.dart';
@@ -86,11 +87,16 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(_entryIcon(entry.kind), color: amountColor),
+                          Icon(
+                            entry.categoryIconKey == null
+                                ? _entryIcon(entry.kind)
+                                : categoryIconFor(entry.categoryIconKey!),
+                            color: amountColor,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              entry.category ?? entry.kind.label,
+                              entry.categoryName ?? entry.kind.label,
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
@@ -146,8 +152,10 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                       : 'Dari rekening',
                   value: accountName(entry.accountId),
                 ),
-              if (entry.category != null)
-                _DetailRow(label: 'Kategori', value: entry.category!),
+              if (entry.parentCategoryName != null)
+                _DetailRow(label: 'Kelompok', value: entry.parentCategoryName!),
+              if (entry.categoryName != null)
+                _DetailRow(label: 'Subkategori', value: entry.categoryName!),
               _DetailRow(
                 label: 'Tanggal kejadian',
                 value: formatDate(entry.occurredAt),
@@ -160,6 +168,12 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                 label: 'Dicatat pada',
                 value: formatDateTime(entry.createdAt),
               ),
+              if (entry.categoryArchived) ...[
+                const SizedBox(height: 12),
+                const FormMessage(
+                  'Kategori transaksi ini telah diarsipkan. Riwayat tetap utuh dan kategori dapat dipulihkan dari Kelola kategori.',
+                ),
+              ],
               if (!editable) ...[
                 const SizedBox(height: 12),
                 const FormMessage(

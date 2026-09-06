@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
+import '../../categories/view_models/category_view_model.dart';
 import '../view_models/ledger_view_model.dart';
+import 'category_selection_field.dart';
 import 'form_widgets.dart';
 
 class EntryFormScreen extends ConsumerStatefulWidget {
@@ -23,7 +25,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
   late EntryKind _kind;
   late int? _accountId;
   late int? _destinationId;
-  late String _category;
+  late int? _categoryId;
   late DateTime _date;
   bool _dirty = false;
   bool _allowPop = false;
@@ -40,11 +42,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
     _kind = entry?.kind ?? EntryKind.expense;
     _accountId = entry?.accountId;
     _destinationId = entry?.destinationAccountId;
-    _category =
-        entry?.category ??
-        (_kind == EntryKind.income
-            ? incomeCategories.first
-            : expenseCategories.first);
+    _categoryId = entry?.categoryId;
     _date = entry?.occurredAt ?? dateOnly(DateTime.now());
     _amount.addListener(_markDirty);
     _note.addListener(_markDirty);
@@ -76,7 +74,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
       accountId: account,
       destinationAccountId: destination,
       amount: parseRupiah(_amount.text)!,
-      category: _kind == EntryKind.transfer ? null : _category,
+      categoryId: _kind == EntryKind.transfer ? null : _categoryId,
       note: _note.text,
       occurredAt: _date,
     );
@@ -190,9 +188,14 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
         .toList();
     final transfer = _kind == EntryKind.transfer;
     final canTransfer = !transfer || destinations.isNotEmpty;
-    final categories = _kind == EntryKind.income
-        ? incomeCategories
-        : expenseCategories;
+    final categoryKind = _kind == EntryKind.income
+        ? CategoryKind.income
+        : CategoryKind.expense;
+    final categoryQuery = (kind: categoryKind, includeArchived: true);
+    final categoryTree = transfer
+        ? null
+        : ref.watch(categoryTreeProvider(categoryQuery));
+    final categoriesReady = transfer || categoryTree!.hasValue;
     return FormBody(
       child: AbsorbPointer(
         absorbing: save.isSaving,
@@ -225,15 +228,11 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                     DropdownMenuItem(value: kind, child: Text(kind.label)),
                 ],
                 onChanged: (value) {
-                  if (value != null) {
+                  if (value != null && value != _kind) {
                     setState(() {
                       _kind = value;
                       _dirty = true;
-                      _category =
-                          (value == EntryKind.income
-                                  ? incomeCategories
-                                  : expenseCategories)
-                              .first;
+                      _categoryId = null;
                     });
                   }
                 },
@@ -316,22 +315,81 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                 ),
                 const SizedBox(height: 20),
               ] else ...[
-                DropdownButtonFormField<String>(
-                  key: ValueKey('category-${_kind.name}'),
-                  initialValue: _category,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Kategori'),
-                  items: [
-                    for (final category in categories)
-                      DropdownMenuItem(value: category, child: Text(category)),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _category = value;
-                        _dirty = true;
-                      });
-                    }
+                categoryTree!.when(
+                  loading: () => const InputDecorator(
+                    decoration: InputDecoration(labelText: 'Subkategori'),
+                    child: Row(
+                      children: [
+                        SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Text('Memuat kategori…'),
+                      ],
+                    ),
+                  ),
+                  error: (_, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const FormMessage(
+                        'Kategori belum dapat dimuat.',
+                        isError: true,
+                      ),
+                      TextButton.icon(
+                        onPressed: () =>
+                            ref.invalidate(categoryTreeProvider(categoryQuery)),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Coba lagi'),
+                      ),
+                    ],
+                  ),
+                  data: (groups) {
+                    final hasActiveLeaf = groups.any(
+                      (group) =>
+                          !group.parent.isArchived &&
+                          group.children.any((child) => !child.isArchived),
+                    );
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        CategorySelectionField(
+                          groups: groups,
+                          value: _categoryId,
+                          allowArchivedValue:
+                              _isEditing &&
+                              widget.initialEntry!.kind == _kind &&
+                              widget.initialEntry!.categoryId == _categoryId,
+                          onChanged: (value) {
+                            setState(() {
+                              _categoryId = value;
+                              _dirty = true;
+                            });
+                          },
+                          onManage: () {
+                            ref
+                                .read(categoryActionsProvider.notifier)
+                                .clearError();
+                            context.push(
+                              '/categories?kind=${categoryKind.name}',
+                            );
+                          },
+                        ),
+                        if (!hasActiveLeaf) ...[
+                          const SizedBox(height: 8),
+                          const FormMessage(
+                            'Belum ada subkategori aktif untuk jenis transaksi ini.',
+                          ),
+                          TextButton.icon(
+                            onPressed: () => context.push(
+                              '/categories?kind=${categoryKind.name}',
+                            ),
+                            icon: const Icon(Icons.tune),
+                            label: const Text('Kelola kategori'),
+                          ),
+                        ],
+                      ],
+                    );
                   },
                 ),
                 const SizedBox(height: 20),
@@ -368,7 +426,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
               const SizedBox(height: 20),
               FilledButton(
                 key: const Key('save-entry'),
-                onPressed: save.isSaving || !canTransfer
+                onPressed: save.isSaving || !canTransfer || !categoriesReady
                     ? null
                     : () => _save(accounts),
                 child: Text(

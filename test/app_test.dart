@@ -9,6 +9,7 @@ import 'package:waras_arta/app/app.dart';
 import 'package:waras_arta/domain/finance.dart';
 import 'package:waras_arta/domain/finance_repository.dart';
 import 'package:waras_arta/features/ledger/view_models/ledger_view_model.dart';
+import 'package:waras_arta/features/ledger/views/category_selection_field.dart';
 
 void main() {
   setUpAll(() => initializeDateFormatting('id_ID'));
@@ -64,11 +65,17 @@ void main() {
     expect(find.text('Nominal harus lebih besar dari nol.'), findsOneWidget);
     await tester.ensureVisible(find.byKey(const Key('entry-amount')));
     await tester.enterText(find.byKey(const Key('entry-amount')), '12500');
+    await tester.ensureVisible(find.byKey(const Key('entry-category')));
+    await tester.tap(find.byKey(const Key('entry-category')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('entry-category-option-10')));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('save-entry')));
     await tester.tap(find.byKey(const Key('save-entry')));
     await tester.pumpAndSettle();
     expect(repository.savedEntry?.kind, EntryKind.expense);
     expect(repository.savedEntry?.amount, 12500);
+    expect(repository.savedEntry?.categoryId, 10);
     expect(repository.savedEntry?.destinationAccountId, isNull);
     expect(tester.takeException(), isNull);
   });
@@ -91,7 +98,196 @@ void main() {
     expect(repository.savedEntry?.kind, EntryKind.transfer);
     expect(repository.savedEntry?.accountId, 1);
     expect(repository.savedEntry?.destinationAccountId, 2);
-    expect(repository.savedEntry?.category, isNull);
+    expect(repository.savedEntry?.categoryId, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('category picker selects leaves and kind changes clear it', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('primary-action')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('entry-category')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('entry-category-option-9')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('entry-category-option-10')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('entry-category-option-10')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<CategorySelectionField>(find.byType(CategorySelectionField))
+          .value,
+      10,
+    );
+
+    await tester.tap(find.byKey(const Key('entry-kind')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pemasukan').last);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<CategorySelectionField>(find.byType(CategorySelectionField))
+          .value,
+      isNull,
+    );
+    expect(repository.savedEntry, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('empty category field keeps label above its placeholder', (
+    tester,
+  ) async {
+    await pumpApp(tester, _UiRepository(withAccounts: true));
+    await tester.tap(find.byKey(const Key('primary-action')));
+    await tester.pumpAndSettle();
+
+    final categoryField = find.byKey(const Key('entry-category'));
+    final label = find.descendant(
+      of: categoryField,
+      matching: find.text('Subkategori'),
+    );
+    final placeholder = find.descendant(
+      of: categoryField,
+      matching: find.text('Pilih subkategori'),
+    );
+    expect(label, findsOneWidget);
+    expect(placeholder, findsOneWidget);
+    expect(
+      tester.getRect(label).overlaps(tester.getRect(placeholder)),
+      isFalse,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('category management creates a customizable two-level group', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('manage-categories')));
+    await tester.pumpAndSettle();
+    expect(find.text('Kelola kategori'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('add-category-group')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('category-parent-name')),
+      'Rumah',
+    );
+    await tester.enterText(
+      find.byKey(const Key('category-first-child-name')),
+      'Listrik',
+    );
+    await tester.ensureVisible(find.byKey(const Key('category-parent-icon')));
+    await tester.tap(find.byKey(const Key('category-parent-icon')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('category-icon-home')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('save-category-group')));
+    await tester.tap(find.byKey(const Key('save-category-group')));
+    await tester.pumpAndSettle();
+
+    final group = repository.categoryGroups.singleWhere(
+      (item) => item.parent.name == 'Rumah',
+    );
+    expect(group.parent.iconKey, 'home');
+    expect(group.children.single.name, 'Listrik');
+    await tester.scrollUntilVisible(
+      find.text('Rumah'),
+      400,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Rumah'), findsOneWidget);
+    expect(find.text('Listrik'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('new category kind stays selected after the group is saved', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('manage-categories')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-category-group')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Pemasukan').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('category-parent-name')),
+      'Pendapatan pasif',
+    );
+    await tester.enterText(
+      find.byKey(const Key('category-first-child-name')),
+      'Bunga tabungan',
+    );
+    await tester.ensureVisible(find.byKey(const Key('save-category-group')));
+    await tester.tap(find.byKey(const Key('save-category-group')));
+    await tester.pumpAndSettle();
+
+    final group = repository.categoryGroups.singleWhere(
+      (item) => item.parent.name == 'Pendapatan pasif',
+    );
+    expect(group.parent.kind, CategoryKind.income);
+    final kindSelector = tester.widget<SegmentedButton<CategoryKind>>(
+      find.byType(SegmentedButton<CategoryKind>),
+    );
+    expect(kindSelector.selected, {CategoryKind.income});
+    await tester.scrollUntilVisible(
+      find.text('Pendapatan pasif'),
+      400,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Pendapatan pasif'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Bunga tabungan'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Bunga tabungan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('back from a dirty category form confirms before discarding', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('manage-categories')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-category-group')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('category-parent-name')),
+      'Belum disimpan',
+    );
+    await tester.pump();
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Buang perubahan kategori?'), findsOneWidget);
+    await tester.tap(find.text('Tetap di sini'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tambah kelompok'), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('discard-category-changes')));
+    await tester.pumpAndSettle();
+    expect(find.text('Kelola kategori'), findsOneWidget);
+    expect(
+      repository.categoryGroups.any(
+        (item) => item.parent.name == 'Belum disimpan',
+      ),
+      isFalse,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -133,7 +329,10 @@ void main() {
       kind: EntryKind.expense,
       accountId: 1,
       amount: 12500,
-      category: 'Makan & minum',
+      categoryId: 10,
+      categoryName: 'Umum',
+      parentCategoryName: 'Makan & minum',
+      categoryIconKey: 'restaurant',
       note: 'Makan siang',
       occurredAt: DateTime(2024, 8, 17),
       createdAt: DateTime(2024, 8, 17, 12, 30),
@@ -168,7 +367,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.updatedEntryId, 7);
     expect(repository.updatedEntry?.amount, 15000);
-    expect(repository.updatedEntry?.category, 'Makan & minum');
+    expect(repository.updatedEntry?.categoryId, 10);
     expect(repository.updateCount, 1);
     expect(
       tester.widget<Text>(find.byKey(const Key('entry-detail-amount'))).data,
@@ -187,7 +386,10 @@ void main() {
         kind: EntryKind.income,
         accountId: 1,
         amount: 50000,
-        category: 'Gaji',
+        categoryId: 2,
+        categoryName: 'Umum',
+        parentCategoryName: 'Gaji',
+        categoryIconKey: 'work',
         note: '',
         occurredAt: DateTime(2024, 8, 18),
         createdAt: DateTime(2024, 8, 18, 9),
@@ -228,7 +430,6 @@ void main() {
         kind: EntryKind.adjustment,
         accountId: 1,
         amount: 100000,
-        category: null,
         note: 'Saldo awal',
         occurredAt: DateTime(2024, 8, 1),
         createdAt: DateTime(2024, 8, 1),
@@ -274,7 +475,10 @@ void main() {
         kind: EntryKind.income,
         accountId: 1,
         amount: 1000,
-        category: 'Hadiah',
+        categoryId: 6,
+        categoryName: 'Umum',
+        parentCategoryName: 'Hadiah',
+        categoryIconKey: 'redeem',
         note: '',
         occurredAt: DateTime(2024, 8, 23),
         createdAt: DateTime(2024, 8, 23),
@@ -305,7 +509,10 @@ void main() {
         kind: EntryKind.expense,
         accountId: 1,
         amount: 10000,
-        category: 'Belanja',
+        categoryId: 14,
+        categoryName: 'Umum',
+        parentCategoryName: 'Belanja',
+        categoryIconKey: 'shopping_bag',
         note: '',
         occurredAt: DateTime(2024, 8, 20),
         createdAt: DateTime(2024, 8, 20),
@@ -339,7 +546,10 @@ void main() {
         kind: EntryKind.income,
         accountId: 1,
         amount: 75000,
-        category: 'Usaha',
+        categoryId: 4,
+        categoryName: 'Umum',
+        parentCategoryName: 'Usaha',
+        categoryIconKey: 'storefront',
         note: '',
         occurredAt: DateTime(2024, 8, 21),
         createdAt: DateTime(2024, 8, 21),
@@ -377,7 +587,10 @@ void main() {
         kind: EntryKind.expense,
         accountId: 1,
         amount: 8000,
-        category: 'Transportasi',
+        categoryId: 12,
+        categoryName: 'Umum',
+        parentCategoryName: 'Transportasi',
+        categoryIconKey: 'directions_car',
         note: '',
         occurredAt: DateTime(2024, 8, 22),
         createdAt: DateTime(2024, 8, 22),
@@ -433,6 +646,7 @@ class _UiRepository implements FinanceRepository {
   final bool failRead;
   final accounts = <FinanceAccount>[];
   final entries = <FinanceEntry>[];
+  final categoryGroups = _defaultCategoryGroups();
   AccountDraft? savedAccount;
   EntryDraft? savedEntry;
   int? updatedEntryId;
@@ -445,6 +659,180 @@ class _UiRepository implements FinanceRepository {
   final _changes = StreamController<void>.broadcast(sync: true);
 
   Future<void> dispose() => _changes.close();
+
+  @override
+  Stream<List<CategoryGroup>> watchCategoryTree(
+    CategoryKind kind, {
+    bool includeArchived = false,
+  }) async* {
+    yield _visibleCategoryGroups(kind, includeArchived: includeArchived);
+    await for (final _ in _changes.stream) {
+      yield _visibleCategoryGroups(kind, includeArchived: includeArchived);
+    }
+  }
+
+  List<CategoryGroup> _visibleCategoryGroups(
+    CategoryKind kind, {
+    required bool includeArchived,
+  }) => [
+    for (final group in categoryGroups)
+      if (group.parent.kind == kind &&
+          (includeArchived || !group.parent.isArchived))
+        CategoryGroup(
+          parent: group.parent,
+          children: [
+            for (final child in group.children)
+              if (includeArchived || !child.isArchived) child,
+          ],
+        ),
+  ];
+
+  @override
+  Future<int> createCategoryGroup(CategoryGroupDraft draft) async {
+    final parentId = _nextCategoryId;
+    final childId = parentId + 1;
+    final now = DateTime(2024, 1, 1);
+    final parent = FinanceCategory(
+      id: parentId,
+      parentId: null,
+      kind: draft.kind,
+      name: draft.parentName.trim(),
+      iconKey: draft.parentIconKey,
+      isArchived: false,
+      sortOrder: draft.parentSortOrder,
+      systemKey: null,
+      createdAt: now,
+      updatedAt: now,
+    );
+    final child = FinanceCategory(
+      id: childId,
+      parentId: parentId,
+      kind: draft.kind,
+      name: draft.firstChildName.trim(),
+      iconKey: draft.firstChildIconKey,
+      isArchived: false,
+      sortOrder: draft.firstChildSortOrder,
+      systemKey: null,
+      createdAt: now,
+      updatedAt: now,
+    );
+    categoryGroups.add(CategoryGroup(parent: parent, children: [child]));
+    _changes.add(null);
+    return parentId;
+  }
+
+  @override
+  Future<int> createSubcategory(CategoryDraft draft) async {
+    final parentId = draft.parentId;
+    final groupIndex = categoryGroups.indexWhere(
+      (group) => group.parent.id == parentId,
+    );
+    if (groupIndex < 0) {
+      throw const FinanceValidationException('Kategori tidak ditemukan.');
+    }
+    final group = categoryGroups[groupIndex];
+    final id = _nextCategoryId;
+    final child = FinanceCategory(
+      id: id,
+      parentId: parentId,
+      kind: group.parent.kind,
+      name: draft.name.trim(),
+      iconKey: draft.iconKey,
+      isArchived: false,
+      sortOrder: draft.sortOrder,
+      systemKey: null,
+      createdAt: DateTime(2024, 1, 1),
+      updatedAt: DateTime(2024, 1, 1),
+    );
+    categoryGroups[groupIndex] = CategoryGroup(
+      parent: group.parent,
+      children: [...group.children, child],
+    );
+    _changes.add(null);
+    return id;
+  }
+
+  @override
+  Future<void> updateCategory(int categoryId, CategoryDraft draft) async {
+    for (var index = 0; index < categoryGroups.length; index++) {
+      final group = categoryGroups[index];
+      if (group.parent.id == categoryId) {
+        categoryGroups[index] = CategoryGroup(
+          parent: _copyUiCategory(
+            group.parent,
+            name: draft.name.trim(),
+            iconKey: draft.iconKey,
+            sortOrder: draft.sortOrder,
+          ),
+          children: group.children,
+        );
+        _changes.add(null);
+        return;
+      }
+      final childIndex = group.children.indexWhere(
+        (child) => child.id == categoryId,
+      );
+      if (childIndex >= 0) {
+        final children = [...group.children];
+        children[childIndex] = _copyUiCategory(
+          children[childIndex],
+          name: draft.name.trim(),
+          iconKey: draft.iconKey,
+          sortOrder: draft.sortOrder,
+        );
+        categoryGroups[index] = CategoryGroup(
+          parent: group.parent,
+          children: children,
+        );
+        _changes.add(null);
+        return;
+      }
+    }
+    throw const FinanceValidationException('Kategori tidak ditemukan.');
+  }
+
+  @override
+  Future<void> setCategoryArchived(int categoryId, bool archived) async {
+    for (var index = 0; index < categoryGroups.length; index++) {
+      final group = categoryGroups[index];
+      if (group.parent.id == categoryId) {
+        categoryGroups[index] = CategoryGroup(
+          parent: _copyUiCategory(group.parent, isArchived: archived),
+          children: group.children,
+        );
+        _changes.add(null);
+        return;
+      }
+      final childIndex = group.children.indexWhere(
+        (child) => child.id == categoryId,
+      );
+      if (childIndex >= 0) {
+        final children = [...group.children];
+        children[childIndex] = _copyUiCategory(
+          children[childIndex],
+          isArchived: archived,
+        );
+        categoryGroups[index] = CategoryGroup(
+          parent: group.parent,
+          children: children,
+        );
+        _changes.add(null);
+        return;
+      }
+    }
+    throw const FinanceValidationException('Kategori tidak ditemukan.');
+  }
+
+  int get _nextCategoryId {
+    var largest = 0;
+    for (final group in categoryGroups) {
+      if (group.parent.id > largest) largest = group.parent.id;
+      for (final child in group.children) {
+        if (child.id > largest) largest = child.id;
+      }
+    }
+    return largest + 1;
+  }
 
   @override
   Future<int> createAccount(AccountDraft draft) async {
@@ -489,7 +877,11 @@ class _UiRepository implements FinanceRepository {
       accountId: draft.accountId,
       destinationAccountId: draft.destinationAccountId,
       amount: draft.amount,
-      category: draft.category,
+      categoryId: draft.categoryId,
+      categoryName: previous.categoryName,
+      parentCategoryName: previous.parentCategoryName,
+      categoryIconKey: previous.categoryIconKey,
+      categoryArchived: previous.categoryArchived,
       note: draft.note,
       occurredAt: draft.occurredAt,
       createdAt: previous.createdAt,
@@ -525,6 +917,77 @@ class _UiRepository implements FinanceRepository {
     }
   }
 }
+
+List<CategoryGroup> _defaultCategoryGroups() => [
+  _uiGroup(1, 2, CategoryKind.income, 'Gaji', 'work'),
+  _uiGroup(3, 4, CategoryKind.income, 'Usaha', 'storefront'),
+  _uiGroup(5, 6, CategoryKind.income, 'Hadiah', 'redeem'),
+  _uiGroup(7, 8, CategoryKind.income, 'Lainnya', 'more_horiz'),
+  _uiGroup(9, 10, CategoryKind.expense, 'Makan & minum', 'restaurant'),
+  _uiGroup(11, 12, CategoryKind.expense, 'Transportasi', 'directions_car'),
+  _uiGroup(13, 14, CategoryKind.expense, 'Belanja', 'shopping_bag'),
+  _uiGroup(15, 16, CategoryKind.expense, 'Tagihan', 'receipt_long'),
+  _uiGroup(17, 18, CategoryKind.expense, 'Kesehatan', 'medical_services'),
+  _uiGroup(19, 20, CategoryKind.expense, 'Hiburan', 'movie'),
+  _uiGroup(21, 22, CategoryKind.expense, 'Lainnya', 'more_horiz'),
+];
+
+CategoryGroup _uiGroup(
+  int parentId,
+  int childId,
+  CategoryKind kind,
+  String name,
+  String iconKey,
+) {
+  final date = DateTime(2024, 1, 1);
+  return CategoryGroup(
+    parent: FinanceCategory(
+      id: parentId,
+      parentId: null,
+      kind: kind,
+      name: name,
+      iconKey: iconKey,
+      isArchived: false,
+      sortOrder: parentId,
+      systemKey: 'test.parent.$parentId',
+      createdAt: date,
+      updatedAt: date,
+    ),
+    children: [
+      FinanceCategory(
+        id: childId,
+        parentId: parentId,
+        kind: kind,
+        name: 'Umum',
+        iconKey: iconKey,
+        isArchived: false,
+        sortOrder: 0,
+        systemKey: 'test.child.$childId',
+        createdAt: date,
+        updatedAt: date,
+      ),
+    ],
+  );
+}
+
+FinanceCategory _copyUiCategory(
+  FinanceCategory category, {
+  String? name,
+  String? iconKey,
+  bool? isArchived,
+  int? sortOrder,
+}) => FinanceCategory(
+  id: category.id,
+  parentId: category.parentId,
+  kind: category.kind,
+  name: name ?? category.name,
+  iconKey: iconKey ?? category.iconKey,
+  isArchived: isArchived ?? category.isArchived,
+  sortOrder: sortOrder ?? category.sortOrder,
+  systemKey: category.systemKey,
+  createdAt: category.createdAt,
+  updatedAt: DateTime(2024, 1, 2),
+);
 
 extension<T> on Stream<T> {
   Stream<T> startWith(T value) async* {

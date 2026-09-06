@@ -8,6 +8,8 @@ import 'package:waras_arta/data/repositories/drift_finance_repository.dart';
 import 'package:waras_arta/domain/finance.dart';
 
 void main() {
+  const incomeCategoryId = 2;
+  const expenseCategoryId = 10;
   late AppDatabase db;
   var sharedDatabaseClosed = false;
   late DriftFinanceRepository repository;
@@ -31,18 +33,18 @@ void main() {
     int amount = 100,
     int? destination,
     DateTime? date,
-    String? category,
+    int? categoryId,
   }) => EntryDraft(
     kind: kind,
     accountId: accountId,
     destinationAccountId: destination,
     amount: amount,
-    category:
-        category ??
+    categoryId:
+        categoryId ??
         (kind == EntryKind.income
-            ? 'Gaji'
+            ? incomeCategoryId
             : kind == EntryKind.expense
-            ? 'Belanja'
+            ? expenseCategoryId
             : null),
     occurredAt: date ?? january,
   );
@@ -229,19 +231,357 @@ void main() {
     },
   );
 
-  test('all domain categories are accepted by schema version one', () async {
+  test('fresh schema seeds two-level built-in category trees', () async {
     final id = await account('Bank');
-    for (final category in incomeCategories) {
-      await repository.addEntry(entry(id, category: category));
+    final income = await repository
+        .watchCategoryTree(CategoryKind.income)
+        .first;
+    final expense = await repository
+        .watchCategoryTree(CategoryKind.expense)
+        .first;
+    expect(income, hasLength(4));
+    expect(expense, hasLength(7));
+    expect(income.every((group) => group.children.length == 1), isTrue);
+    expect(expense.every((group) => group.children.length == 1), isTrue);
+    expect(
+      income
+          .expand((group) => group.children)
+          .every((child) => child.name == 'Umum'),
+      isTrue,
+    );
+    expect(
+      expense
+          .expand((group) => group.children)
+          .every((child) => child.name == 'Umum'),
+      isTrue,
+    );
+    for (final child in income.expand((group) => group.children)) {
+      await repository.addEntry(entry(id, categoryId: child.id));
     }
-    for (final category in expenseCategories) {
+    for (final child in expense.expand((group) => group.children)) {
       await repository.addEntry(
-        entry(id, kind: EntryKind.expense, category: category),
+        entry(id, kind: EntryKind.expense, categoryId: child.id),
       );
     }
     final snapshot = await repository.loadMonth(january);
-    expect(snapshot.income, 100 * incomeCategories.length);
-    expect(snapshot.expense, 100 * expenseCategories.length);
+    expect(snapshot.income, 100 * income.length);
+    expect(snapshot.expense, 100 * expense.length);
+    expect(
+      snapshot.entries.every((item) => item.categoryName == 'Umum'),
+      isTrue,
+    );
+    expect(
+      snapshot.entries.every((item) => item.parentCategoryName != null),
+      isTrue,
+    );
+  });
+
+  test('category group creation is atomic and normalizes names', () async {
+    final changed = repository
+        .watchCategoryTree(CategoryKind.expense)
+        .firstWhere(
+          (groups) => groups.any((group) => group.parent.name == 'Rumah'),
+        );
+    final parentId = await repository.createCategoryGroup(
+      const CategoryGroupDraft(
+        kind: CategoryKind.expense,
+        parentName: '  Rumah  ',
+        parentIconKey: 'home',
+        firstChildName: '  Umum   rumah ',
+        firstChildIconKey: 'receipt_long',
+      ),
+    );
+    final tree = await changed.timeout(const Duration(seconds: 5));
+    final group = tree.singleWhere((item) => item.parent.id == parentId);
+    expect(group.parent.name, 'Rumah');
+    expect(group.parent.kind, CategoryKind.expense);
+    expect(group.children.single.name, 'Umum rumah');
+    expect(group.children.single.parentId, parentId);
+
+    await expectLater(
+      repository.createCategoryGroup(
+        const CategoryGroupDraft(
+          kind: CategoryKind.expense,
+          parentName: ' rumah ',
+          parentIconKey: 'category',
+          firstChildName: 'Umum',
+          firstChildIconKey: 'category',
+        ),
+      ),
+      throwsA(validationError),
+    );
+    await expectLater(
+      repository.createCategoryGroup(
+        const CategoryGroupDraft(
+          kind: CategoryKind.income,
+          parentName: 'Tidak jadi',
+          parentIconKey: 'work',
+          firstChildName: 'Umum',
+          firstChildIconKey: 'not-an-icon',
+        ),
+      ),
+      throwsA(validationError),
+    );
+    final income = await repository
+        .watchCategoryTree(CategoryKind.income)
+        .first;
+    expect(income.any((item) => item.parent.name == 'Tidak jadi'), isFalse);
+
+    await db.customStatement('''
+      CREATE TRIGGER reject_test_child BEFORE INSERT ON categories
+      WHEN NEW.parent_id IS NOT NULL AND NEW.name = 'Gagal'
+      BEGIN SELECT RAISE(ABORT, 'test child failed'); END
+    ''');
+    await expectLater(
+      repository.createCategoryGroup(
+        const CategoryGroupDraft(
+          kind: CategoryKind.income,
+          parentName: 'Harus rollback',
+          parentIconKey: 'payments',
+          firstChildName: 'Gagal',
+          firstChildIconKey: 'payments',
+        ),
+      ),
+      throwsA(anything),
+    );
+    final afterRollback = await repository
+        .watchCategoryTree(CategoryKind.income)
+        .first;
+    expect(
+      afterRollback.any((item) => item.parent.name == 'Harus rollback'),
+      isFalse,
+    );
+  });
+
+  test(
+    'subcategory CRUD keeps structure and transaction labels reactive',
+    () async {
+      final accountId = await account('Bank');
+      final parentId = await repository.createCategoryGroup(
+        const CategoryGroupDraft(
+          kind: CategoryKind.expense,
+          parentName: 'Rumah',
+          parentIconKey: 'home',
+          firstChildName: 'Umum',
+          firstChildIconKey: 'home',
+        ),
+      );
+      final childId = await repository.createSubcategory(
+        CategoryDraft(
+          parentId: parentId,
+          name: 'Listrik',
+          iconKey: 'receipt_long',
+          sortOrder: 2,
+        ),
+      );
+      final entryId = await repository.addEntry(
+        entry(accountId, kind: EntryKind.expense, categoryId: childId),
+      );
+      final renamed = repository
+          .watchEntry(entryId)
+          .firstWhere(
+            (item) =>
+                item?.categoryName == 'Listrik PLN' &&
+                item?.parentCategoryName == 'Kebutuhan rumah' &&
+                item?.categoryIconKey == 'payments',
+          );
+
+      await repository.updateCategory(
+        parentId,
+        const CategoryDraft(
+          parentId: null,
+          name: 'Kebutuhan rumah',
+          iconKey: 'home',
+          sortOrder: 3,
+        ),
+      );
+      await repository.updateCategory(
+        childId,
+        CategoryDraft(
+          parentId: parentId,
+          name: '  Listrik   PLN ',
+          iconKey: 'payments',
+          sortOrder: 4,
+        ),
+      );
+
+      final detail = await renamed.timeout(const Duration(seconds: 5));
+      expect(detail?.categoryId, childId);
+      expect(detail?.categoryArchived, isFalse);
+      final snapshot = await repository.loadMonth(january);
+      expect(snapshot.entries.single.categoryName, 'Listrik PLN');
+      expect(snapshot.entries.single.parentCategoryName, 'Kebutuhan rumah');
+
+      await expectLater(
+        repository.createSubcategory(
+          CategoryDraft(
+            parentId: parentId,
+            name: ' listrik   pln ',
+            iconKey: 'category',
+          ),
+        ),
+        throwsA(validationError),
+      );
+      await expectLater(
+        repository.createSubcategory(
+          CategoryDraft(
+            parentId: childId,
+            name: 'Level tiga',
+            iconKey: 'category',
+          ),
+        ),
+        throwsA(validationError),
+      );
+      await expectLater(
+        repository.updateCategory(
+          childId,
+          const CategoryDraft(
+            parentId: 9,
+            name: 'Dipindah',
+            iconKey: 'category',
+          ),
+        ),
+        throwsA(validationError),
+      );
+    },
+  );
+
+  test(
+    'archiving preserves labels and blocks new use of inactive leaves',
+    () async {
+      final accountId = await account('Bank');
+      final entryId = await repository.addEntry(entry(accountId));
+      final archivedDetail = repository
+          .watchEntry(entryId)
+          .firstWhere((item) => item?.categoryArchived == true);
+      final archivedMonth = repository
+          .watchMonth(january)
+          .firstWhere((snapshot) => snapshot.entries.single.categoryArchived);
+
+      await repository.setCategoryArchived(incomeCategoryId, true);
+
+      expect(
+        (await archivedDetail.timeout(const Duration(seconds: 5)))
+            ?.categoryName,
+        'Umum',
+      );
+      expect(
+        (await archivedMonth.timeout(const Duration(seconds: 5)))
+            .entries
+            .single
+            .parentCategoryName,
+        'Gaji',
+      );
+      await expectLater(
+        repository.addEntry(entry(accountId)),
+        throwsA(validationError),
+      );
+      await repository.updateEntry(
+        entryId,
+        entry(accountId, amount: 125, categoryId: incomeCategoryId),
+      );
+      expect((await repository.watchEntry(entryId).first)?.amount, 125);
+
+      final activeTree = await repository
+          .watchCategoryTree(CategoryKind.income)
+          .first;
+      expect(
+        activeTree.singleWhere((group) => group.parent.name == 'Gaji').children,
+        isEmpty,
+      );
+      final fullTree = await repository
+          .watchCategoryTree(CategoryKind.income, includeArchived: true)
+          .first;
+      expect(
+        fullTree
+            .singleWhere((group) => group.parent.name == 'Gaji')
+            .children
+            .single
+            .isArchived,
+        isTrue,
+      );
+    },
+  );
+
+  test('archive guard retains one effective leaf for each kind', () async {
+    final income = await repository
+        .watchCategoryTree(CategoryKind.income)
+        .first;
+    for (final group in income.take(income.length - 1)) {
+      await repository.setCategoryArchived(group.parent.id, true);
+    }
+    final last = income.last;
+    await expectLater(
+      repository.setCategoryArchived(last.parent.id, true),
+      throwsA(validationError),
+    );
+    await expectLater(
+      repository.setCategoryArchived(last.children.single.id, true),
+      throwsA(validationError),
+    );
+
+    await repository.setCategoryArchived(income.first.children.single.id, true);
+    await expectLater(
+      repository.setCategoryArchived(income.first.parent.id, false),
+      throwsA(validationError),
+    );
+    await repository.setCategoryArchived(
+      income.first.children.single.id,
+      false,
+    );
+    await repository.setCategoryArchived(income.first.parent.id, false);
+    final active = await repository
+        .watchCategoryTree(CategoryKind.income)
+        .first;
+    expect(active.expand((group) => group.children), isNotEmpty);
+  });
+
+  test('database enforces category depth, kind, and sibling uniqueness', () async {
+    Future<void> insertCategory({
+      required int? parentId,
+      required int kind,
+      required String name,
+    }) => db.customStatement(
+      'INSERT INTO categories '
+      '(parent_id, kind, name, normalized_name, icon_key, is_archived, '
+      'sort_order, system_key, created_at, updated_at) '
+      'VALUES (?, ?, ?, ?, ?, 0, 0, NULL, 0, 0)',
+      [parentId, kind, name, name.toLowerCase(), 'category'],
+    );
+
+    await expectLater(
+      insertCategory(parentId: incomeCategoryId, kind: 0, name: 'Level 3'),
+      throwsA(anything),
+    );
+    await expectLater(
+      insertCategory(parentId: 1, kind: 1, name: 'Wrong kind'),
+      throwsA(anything),
+    );
+    await expectLater(
+      insertCategory(parentId: null, kind: 0, name: 'gaji'),
+      throwsA(anything),
+    );
+    await expectLater(
+      insertCategory(parentId: 1, kind: 0, name: 'umum'),
+      throwsA(anything),
+    );
+    await expectLater(
+      db.customStatement('UPDATE categories SET parent_id = 3 WHERE id = ?', [
+        incomeCategoryId,
+      ]),
+      throwsA(anything),
+    );
+
+    final accountId = await account('Bank');
+    await expectLater(
+      db.customStatement(
+        'INSERT INTO ledger_entries '
+        '(kind, account_id, destination_account_id, amount, category_id, note, '
+        'occurred_day, created_at) VALUES (0, ?, NULL, 10, 1, ?, 20240101, 0)',
+        [accountId, 'root is not a leaf'],
+      ),
+      throwsA(anything),
+    );
   });
 
   test('amount bounds reject zero, negative, and overflow entries', () async {
@@ -287,13 +627,13 @@ void main() {
           id,
           kind: EntryKind.transfer,
           destination: destination,
-          category: 'Gaji',
+          categoryId: incomeCategoryId,
         ),
         entry(999),
         entry(id, destination: destination),
         entry(id, kind: EntryKind.adjustment),
-        entry(id, category: 'Belanja'),
-        entry(id, kind: EntryKind.expense, category: 'Gaji'),
+        entry(id, categoryId: expenseCategoryId),
+        entry(id, kind: EntryKind.expense, categoryId: incomeCategoryId),
       ];
       for (final draft in invalid) {
         await expectLater(repository.addEntry(draft), throwsA(validationError));
@@ -345,26 +685,26 @@ void main() {
         int kind = 2,
         int? destination,
         int amount = 10,
-        String? category,
+        int? categoryId,
       }) => db.customStatement(
         'INSERT INTO ledger_entries '
-        '(kind, account_id, destination_account_id, amount, category, note, occurred_day, created_at) '
+        '(kind, account_id, destination_account_id, amount, category_id, note, occurred_day, created_at) '
         "VALUES (?, ?, ?, ?, ?, '', 20240101, 0)",
-        [kind, id, destination, amount, category],
+        [kind, id, destination, amount, categoryId],
       );
       await expectLater(insert(destination: 999), throwsA(anything));
       await expectLater(insert(destination: id), throwsA(anything));
       await expectLater(insert(), throwsA(anything));
       await expectLater(
-        insert(kind: 0, category: 'Gaji', amount: 0),
+        insert(kind: 0, categoryId: incomeCategoryId, amount: 0),
         throwsA(anything),
       );
       await expectLater(
-        insert(kind: 0, category: 'Gaji', amount: maxAmount + 1),
+        insert(kind: 0, categoryId: incomeCategoryId, amount: maxAmount + 1),
         throwsA(anything),
       );
       await expectLater(
-        insert(kind: 0, category: 'Belanja'),
+        insert(kind: 0, categoryId: expenseCategoryId),
         throwsA(anything),
       );
       await expectLater(insert(kind: 0), throwsA(anything));
@@ -425,7 +765,7 @@ void main() {
       expect(changed!.id, id);
       expect(changed.createdAt, before!.createdAt);
       expect(changed.destinationAccountId, destination);
-      expect(changed.category, isNull);
+      expect(changed.categoryId, isNull);
       expect(changed.note, 'pindah tunai');
       expect(changed.occurredAt, DateTime(2024, 2, 2));
       expect(jan.totalBalance, 1000);
@@ -480,7 +820,7 @@ void main() {
       final invalidDrafts = [
         entry(source, kind: EntryKind.transfer, amount: 250, destination: 999),
         entry(source, kind: EntryKind.expense, amount: 0),
-        entry(source, kind: EntryKind.expense, category: 'Gaji'),
+        entry(source, kind: EntryKind.expense, categoryId: incomeCategoryId),
         entry(
           source,
           kind: EntryKind.expense,

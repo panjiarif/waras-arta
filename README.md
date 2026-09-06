@@ -11,6 +11,8 @@ Ini adalah irisan awal menuju versi 0.1 pada [product brief](docs/product-brief.
 Yang tersedia:
 
 - Membuat rekening tunai, bank, e-wallet, atau lainnya dengan saldo awal yang dicatat sebagai penyesuaian ledger.
+- Membuka detail rekening, mengubah nama/jenis, serta mengoreksi saldo melalui entri penyesuaian bertanda yang dapat ditelusuri dan tidak masuk ringkasan arus kas.
+- Mengarsipkan rekening bersaldo nol, memulihkannya, atau menghapus permanen rekening yang tidak memiliki referensi ledger tanpa menghapus riwayat secara berantai.
 - Mencatat pemasukan dan pengeluaran dengan subkategori, tanggal kejadian, dan catatan.
 - Mengelola kategori pemasukan/pengeluaran dalam hierarki dua tingkat: kelompok dan subkategori.
 - Mengubah nama serta ikon Material kategori, lalu mengarsipkannya tanpa memutus riwayat lama.
@@ -22,9 +24,11 @@ Yang tersedia:
 - Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
 - Hapus permanen transaksi biasa melalui dialog konfirmasi.
 - Penyimpanan persisten lokal menggunakan Drift/SQLite.
-- Migrasi schema v1 ke v2 yang mengubah kategori teks lama menjadi referensi subkategori tanpa mengubah transaksi dan saldo.
+- Migrasi schema bertahap v1 ke v2 dan v2 ke v3 yang menjaga transaksi serta saldo lama ketika kategori dan siklus rekening berevolusi.
 
-Belum tersedia: gambar kategori unggahan pengguna, edit saldo awal, arsip rekening, kalender grid, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
+Rekening arsip disembunyikan secara default, tetap dapat ditampilkan dan dipulihkan, serta tidak dapat dipilih untuk transaksi baru. Entri penyesuaian, termasuk saldo awal, bersifat tetap agar jejak perubahan saldo tidak ditulis ulang.
+
+Belum tersedia: gambar kategori unggahan pengguna, kalender grid, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
 
 **Gunakan data percobaan atau pertahankan catatan utama di tempat lain.** Alpha belum memiliki backup/restore maupun enkripsi database khusus aplikasi. Penyimpanan privat Android bukan jaminan pemulihan. Uninstall, hapus data, atau kerusakan/kehilangan HP dapat menghilangkan catatan. Jangan menjadikan alpha satu-satunya catatan keuangan.
 

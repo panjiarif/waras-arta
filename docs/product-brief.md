@@ -119,8 +119,10 @@ Transfer mengurangi saldo rekening asal dan menambah saldo rekening tujuan, teta
 
 - Mendukung rekening bank, dompet tunai, e-wallet, dan tempat penyimpanan uang lainnya.
 - Menampilkan saldo setiap rekening dan saldo total.
-- Mendukung pengarsipan rekening yang tidak lagi digunakan.
-- Perubahan saldo manual dicatat sebagai transaksi penyesuaian agar dapat ditelusuri, bukan mengubah saldo secara diam-diam.
+- Menampilkan detail rekening serta memungkinkan nama dan jenisnya diubah tanpa memutus riwayat.
+- Perubahan saldo manual dicatat sebagai transaksi penyesuaian bertanda agar dapat ditelusuri, bukan mengubah saldo secara diam-diam. Penyesuaian tidak dihitung sebagai pemasukan atau pengeluaran.
+- Rekening hanya dapat diarsipkan ketika saldonya nol dan bukan satu-satunya rekening aktif. Rekening arsip disembunyikan secara default, tidak tersedia untuk transaksi baru, dan dapat dipulihkan.
+- Hapus permanen hanya berlaku untuk rekening yang tidak memiliki referensi ledger. Transaksi tidak pernah ikut dihapus secara berantai.
 
 ### 6. Anggaran
 
@@ -182,8 +184,11 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 4. Saldo tidak boleh diedit tanpa catatan; koreksi dibuat sebagai transaksi penyesuaian.
 5. Perhitungan periode menggunakan tanggal kejadian (`occurredAt`), bukan waktu data dibuat (`createdAt`).
 6. Nilai rupiah disimpan sebagai bilangan bulat untuk menghindari kesalahan pembulatan floating-point.
-7. Rekening dan kategori yang sudah digunakan sebaiknya diarsipkan, bukan dihapus permanen.
-8. Perubahan transaksi lama harus menghitung ulang rekening, anggaran, dan ringkasan terkait secara konsisten.
+7. Rekening bersaldo nol dapat diarsipkan selama masih ada rekening aktif lain; rekening arsip tidak dapat dipakai untuk transaksi baru.
+8. Kategori yang sudah digunakan diarsipkan, bukan dihapus, agar referensi transaksi lama tetap utuh.
+9. Perubahan transaksi lama harus menghitung ulang rekening, anggaran, dan ringkasan terkait secara konsisten.
+10. Transaksi lama yang menyentuh rekening arsip tetap dapat dilihat, tetapi hanya dapat diedit atau dihapus setelah rekening dipulihkan.
+11. Rekening hanya dapat dihapus permanen jika tidak memiliki referensi ledger sebagai sumber maupun tujuan; penghapusan tidak pernah melakukan cascade ke transaksi.
 
 ## Ruang Lingkup Versi
 
@@ -262,7 +267,6 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Apakah transaksi berulang perlu dimajukan ke versi 0.2?
 - Apakah hanya rupiah yang didukung pada versi awal?
 - Apakah alokasi tujuan keuangan perlu dibatasi agar tidak melebihi saldo rekening?
-- Kebijakan penghapusan permanen dan masa penyimpanan data yang diarsipkan.
 
 ## Keputusan yang Sudah Disepakati
 
@@ -277,3 +281,9 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Transaksi pemasukan/pengeluaran menyimpan ID subkategori, bukan nama kategori.
 - Hierarki kategori dibatasi dua tingkat agar kalender, anggaran, diagram, dan filter memiliki fondasi yang konsisten.
 - Kategori bawaan lama menjadi kelompok dengan subkategori `Umum` saat migrasi schema v1 ke v2.
+- Koreksi saldo disimpan sebagai penyesuaian ledger bertanda dan tidak masuk ringkasan pemasukan/pengeluaran; entri penyesuaian tidak dapat diedit atau dihapus.
+- Rekening hanya dapat diarsipkan pada saldo nol, bukan ketika menjadi satu-satunya rekening aktif, dan dapat dipulihkan kapan saja.
+- Rekening arsip tidak tersedia untuk transaksi baru. Transaksi lama tetap utuh, sedangkan edit/hapusnya menunggu rekening dipulihkan.
+- Hapus rekening permanen hanya berlaku jika tidak ada referensi ledger dan tidak menghapus transaksi secara berantai.
+- Migrasi schema v2 ke v3 menambahkan siklus arsip rekening dan dukungan penyesuaian saldo bertanda tanpa mengubah arus kas lama.
+- Setelah fondasi kategori dan kelola rekening, kalender grid adalah irisan implementasi berikutnya.

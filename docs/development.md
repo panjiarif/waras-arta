@@ -20,7 +20,7 @@ flutter run -d DEVICE_ID
 
 Ganti `DEVICE_ID` dengan ID HP pada `flutter devices`. Buka kunci HP dan izinkan USB debugging/instalasi bila diminta. Build pertama dapat mengunduh dependensi Android. Peringatan Visual Studio tidak perlu diselesaikan jika hanya membangun Android.
 
-`app_database.g.dart` dihasilkan dari deklarasi Drift dan ikut di-commit bersama sumbernya. Jangan mengedit berkas tersebut secara manual; jalankan ulang `build_runner` ketika deklarasi tabel berubah. Pertahankan `pubspec.lock` di Git karena repository ini adalah aplikasi, agar versi dependency yang dipakai bersama tetap tercatat.
+`app_database.g.dart` dan `app_database.steps.dart` dihasilkan dari deklarasi serta langkah migrasi Drift dan ikut di-commit bersama sumbernya. Jangan mengedit berkas tersebut secara manual; jalankan ulang `build_runner` ketika deklarasi tabel atau migrasi berubah. Pertahankan snapshot schema di `drift_schemas/app_database/` dan `pubspec.lock` di Git agar perubahan database serta versi dependency yang dipakai bersama tetap tercatat.
 
 ## Pemeriksaan sebelum commit
 
@@ -64,10 +64,22 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 9. Ubah tanggal pengeluaran tersebut ke bulan sebelumnya. Pastikan transaksi dan pengeluaran berpindah periode, sedangkan saldo saat ini tidak berubah lagi hanya karena perpindahan tanggal.
 10. Hapus transfer Rp150.000 setelah membaca dialog konfirmasi. Bank harus bertambah Rp150.000, Tunai berkurang Rp150.000, total saldo tetap, dan hanya satu baris transfer yang hilang.
 
+### Skenario kelola rekening
+
+1. Buka detail Bank Uji, ubah nama dan jenisnya, lalu pastikan saldo serta seluruh riwayat tetap terhubung ke rekening yang sama.
+2. Koreksi saldo Bank Uji ke angka yang lebih rendah. Pastikan riwayat menampilkan satu penyesuaian negatif sebesar selisihnya, saldo mencapai target, dan pemasukan/pengeluaran bulanan tidak berubah.
+3. Koreksi kembali ke angka yang lebih tinggi. Pastikan penyesuaian positif baru dibuat; entri penyesuaian lama tidak menyediakan edit atau hapus.
+4. Coba arsipkan rekening yang saldonya tidak nol. Aplikasi harus menolak dan mengarahkan pengguna untuk menolkan saldo terlebih dahulu.
+5. Buat dua rekening aktif untuk pengujian, nolkan salah satunya, lalu arsipkan. Rekening harus hilang dari daftar default, muncul ketika rekening arsip ditampilkan, dan tidak tersedia pada form transaksi atau penyesuaian baru.
+6. Buka transaksi lama yang menyentuh rekening arsip. Detail tetap terbaca, tetapi edit dan hapus tidak tersedia sampai rekening dipulihkan. Setelah dipulihkan, rekening kembali aktif beserta riwayatnya.
+7. Coba arsipkan satu-satunya rekening aktif yang tersisa. Aplikasi harus menolak tindakan tersebut.
+8. Buat rekening baru bersaldo nol tanpa riwayat lalu hapus permanen setelah konfirmasi. Buat rekening lain yang sudah memiliki ledger dan pastikan hapus permanennya tidak tersedia; tidak boleh ada transaksi yang ikut terhapus.
+
 ### Input, navigasi, dan ketahanan tampilan
 
 - [ ] Instalasi baru menampilkan keadaan kosong yang jelas dan alur tambah rekening dapat dibuka.
 - [ ] Nama rekening kosong/duplikat, nominal tidak valid, dan pilihan wajib yang kosong ditolak dengan pesan yang bisa dipahami.
+- [ ] Nama rekening tetap dianggap duplikat tanpa membedakan huruf besar/kecil, termasuk jika nama yang sama dimiliki rekening arsip.
 - [ ] Transfer ke rekening yang sama tidak dapat disimpan; alur transfer dengan kurang dari dua rekening memberi arahan yang jelas.
 - [ ] Form pemasukan hanya menawarkan kategori pemasukan dan form pengeluaran hanya kategori pengeluaran.
 - [ ] Form transaksi hanya dapat memilih subkategori; baris kelompok tidak dapat dipilih.
@@ -99,6 +111,7 @@ Contoh pengelompokan pekerjaan fondasi ini:
 build: add local finance dependencies and Android metadata
 feat(data): persist accounts and ledger with balance tests
 feat(ledger): add account and transaction flows with UI tests
+feat(accounts): add safe account management
 docs: document alpha architecture and development workflow
 ```
 
@@ -119,7 +132,7 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 
 ## Urutan kerja setelah alpha
 
-1. Jalankan checklist manual pada HP referensi dan perbaiki ketidaksesuaian saldo/tampilan.
+1. Jalankan checklist transaksi dan kelola rekening pada HP referensi, lalu perbaiki ketidaksesuaian saldo/tampilan.
 2. Implementasikan kalender grid menggunakan `occurredDay` dan ID subkategori yang sudah stabil.
 3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah.
 4. Implementasikan backup/restore lengkap dan uji pemulihan pada perangkat/instalasi terpisah menggunakan data percobaan.

@@ -21,7 +21,7 @@ View -> ViewModel -> FinanceRepository -> Drift / SQLite
 ```
 
 - **View:** widget Material 3 berbahasa Indonesia, input form, tampilan loading/error, dan navigasi.
-- **ViewModel:** pilihan bulan, batas jumlah riwayat, pemuatan data, serta operasi tambah, edit, dan hapus. Tidak menyimpan `BuildContext` atau mengakses SQL secara langsung.
+- **ViewModel:** pilihan bulan, batas jumlah riwayat, pemuatan data, operasi transaksi, serta aksi edit, koreksi saldo, arsip/pulihkan, dan hapus rekening. Tidak menyimpan `BuildContext` atau mengakses SQL secara langsung.
 - **Domain:** model immutable, jenis rekening/transaksi/kategori, draft input, dan kontrak repository. Belum ada lapisan use case terpisah.
 - **Repository:** validasi aturan keuangan, operasi database, dan pemetaan hasil query ke model domain.
 - **Database:** tabel, constraint, indeks, dan koneksi persisten. SQLite adalah sumber data utama, bukan cache tampilan.
@@ -42,7 +42,8 @@ lib/
 ├── data/
 │   ├── database/
 │   │   ├── app_database.dart
-│   │   └── app_database.g.dart
+│   │   ├── app_database.g.dart
+│   │   └── app_database.steps.dart
 │   └── repositories/
 │       └── drift_finance_repository.dart
 └── features/
@@ -53,14 +54,20 @@ lib/
     │       ├── category_list_screen.dart
     │       └── category_widgets.dart
     └── ledger/
-        ├── view_models/ledger_view_model.dart
+        ├── view_models/
+        │   ├── account_view_model.dart
+        │   └── ledger_view_model.dart
         └── views/
-            ├── home_screen.dart
+            ├── account_adjustment_screen.dart
+            ├── account_detail_screen.dart
+            ├── account_edit_screen.dart
             ├── account_form_screen.dart
+            ├── account_widgets.dart
             ├── category_selection_field.dart
             ├── entry_detail_screen.dart
             ├── entry_form_screen.dart
-            └── form_widgets.dart
+            ├── form_widgets.dart
+            └── home_screen.dart
 ```
 
 Fitur rekening dan transaksi dikelompokkan sebagai satu irisan `ledger` untuk tahap awal. Pecah menjadi fitur terpisah ketika tanggung jawabnya bertambah, bukan dengan menambahkan direktori kosong sejak awal. `go_router` menangani rute layar; [Riverpod](https://riverpod.dev/docs/introduction/getting_started) menghubungkan repository dan ViewModel agar dependensi bisa diganti saat pengujian.
@@ -74,19 +81,28 @@ Database menyimpan rekening dan ledger. Rekening tidak memiliki saldo yang diedi
 | Pemasukan | Menambah rekening yang dipilih | Menambah pemasukan |
 | Pengeluaran | Mengurangi rekening yang dipilih | Menambah pengeluaran |
 | Transfer | Mengurangi asal, menambah tujuan | Tidak dihitung |
-| Penyesuaian saldo awal | Menambah rekening baru | Tidak dihitung |
+| Penyesuaian saldo | Menambah atau mengurangi rekening sesuai delta bertanda | Tidak dihitung |
 
 Aturan alpha:
 
 - Nilai uang disimpan sebagai `int` rupiah, bukan `double`. Nominal transaksi harus positif dan dalam batas validasi aplikasi.
 - Transfer disimpan sebagai **satu baris**, bukan sepasang pemasukan/pengeluaran. Asal dan tujuan harus berbeda dan keduanya harus ada.
 - Membuat rekening dengan saldo awal positif juga membuat entri penyesuaian dalam satu transaksi database. Saldo awal nol tidak memerlukan entri bernilai nol.
-- Form penyesuaian saldo umum belum tersedia. Entri penyesuaian pada tahap ini khusus saldo awal nonnegatif.
+- Koreksi saldo menerima target saldo aktual. Repository membandingkannya dengan saldo ledger saat ini, lalu menyimpan selisih nonnol sebagai entri penyesuaian positif atau negatif. Mengubah angka saldo rekening secara langsung tidak diperbolehkan.
+- Penyesuaian tidak dihitung sebagai pemasukan/pengeluaran dan tidak memakai kategori. Seluruh entri penyesuaian, termasuk saldo awal, tidak dapat diedit atau dihapus agar jejak koreksi tetap utuh.
 - Pemasukan dan pengeluaran wajib menunjuk satu subkategori. Transfer dan saldo awal tidak memiliki kategori.
 - Saldo negatif akibat pengeluaran atau transfer diperbolehkan untuk pencatatan manual; aplikasi bukan sistem otorisasi pembayaran bank.
 - Transaksi biasa dapat dilihat, diedit, dan dihapus permanen setelah konfirmasi. Edit mempertahankan `id` serta `createdAt`; nilai lama belum memiliki audit trail atau undo.
 - Edit atau hapus transaksi menghitung ulang saldo sepanjang waktu dan ringkasan bulan terkait. Transaksi dapat berpindah jenis, rekening, atau bulan selama hasil akhirnya memenuhi seluruh validasi ledger.
-- Entri saldo awal dilindungi dari edit/hapus pada alur transaksi. Pengarsipan rekening belum tersedia.
+- Entri lama yang menyentuh rekening arsip tetap dapat dilihat, tetapi tidak dapat diedit atau dihapus sampai rekening tersebut dipulihkan. Aturan ini menjaga rekening yang sudah diarsipkan tetap bersaldo nol.
+
+## Siklus rekening
+
+- Nama dan jenis rekening dapat diubah tanpa mengganti ID, saldo, atau relasi riwayatnya. Nama harus unik tanpa membedakan huruf besar/kecil, termasuk terhadap rekening arsip.
+- Rekening hanya dapat diarsipkan ketika saldo ledger tepat nol dan setidaknya satu rekening aktif lain tetap tersedia.
+- Rekening arsip disembunyikan dari daftar utama secara default, dapat ditampilkan melalui filter, dan selalu dapat dipulihkan.
+- Rekening arsip tidak tersedia sebagai sumber maupun tujuan transaksi atau penyesuaian baru.
+- Hapus permanen hanya tersedia untuk rekening yang tidak memiliki referensi sebagai sumber maupun tujuan dalam ledger. Tidak ada penghapusan transaksi secara berantai; rekening yang memiliki riwayat harus dipertahankan dan, bila sudah selesai digunakan, diarsipkan.
 
 ## Kategori dan subkategori
 
@@ -116,7 +132,9 @@ Alpha belum menambahkan enkripsi database, PIN, atau biometrik. Penyimpanan priv
 
 ## Skema dan pengembangan berikutnya
 
-Skema database saat ini versi **2**. Snapshot v1 dan v2 disimpan di `drift_schemas/app_database/`. Migrasi v1 ke v2 membuat kategori dua tingkat, memetakan setiap kategori teks lama ke subkategori `Umum`, lalu membangun ulang ledger dengan foreign key. Uji migrasi memverifikasi struktur schema sekaligus identitas, nominal, rekening, tanggal, catatan, saldo, dan ringkasan.
+Skema database saat ini versi **3**. Snapshot v1, v2, dan v3 disimpan di `drift_schemas/app_database/`. Migrasi v1 ke v2 membuat kategori dua tingkat, memetakan setiap kategori teks lama ke subkategori `Umum`, lalu membangun ulang ledger dengan foreign key. Migrasi v2 ke v3 menambahkan status arsip rekening dan membangun ulang constraint nominal ledger agar penyesuaian dapat menyimpan delta bertanda, sementara pemasukan, pengeluaran, serta transfer tetap wajib positif. Langkah migrasi dijalankan berurutan untuk instalasi yang berpindah langsung dari v1 ke v3.
+
+Uji migrasi memverifikasi jalur v1 ke v2, v2 ke v3, dan v1 ke v3 beserta struktur schema, identitas, nominal, rekening, tanggal, catatan, saldo, dan ringkasan.
 
 Sebelum menaikkan `schemaVersion` berikutnya:
 
@@ -125,4 +143,4 @@ Sebelum menaikkan `schemaVersion` berikutnya:
 3. Uji upgrade menggunakan data representatif, termasuk transfer dan tanggal lampau.
 4. Verifikasi saldo dan ringkasan sebelum/sesudah upgrade.
 
-Backup lengkap yang berversi, enkripsi backup berbasis kata sandi, dan restore atomik masih rencana produk. Kalender grid adalah irisan fitur berikutnya yang kini dapat bergantung pada ID subkategori stabil. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.
+Backup lengkap yang berversi, enkripsi backup berbasis kata sandi, dan restore atomik masih rencana produk. Kalender grid adalah irisan fitur berikutnya; fondasi rekening dan ID subkategori stabil kini dapat dipakai untuk menampilkan transaksi per tanggal tanpa mengubah model inti lagi. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.

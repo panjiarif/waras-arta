@@ -4,7 +4,7 @@
 
 Dokumen ini menjelaskan fondasi alpha pertama, bukan seluruh fitur target pada [product brief](product-brief.md). Target runtime pertama adalah Android. Mata uang yang didukung saat ini hanya rupiah tanpa pecahan.
 
-Identitas Android yang dipertahankan dari proyek awal adalah `io.github.panjiarif.waras_arta`. Identitas `io.github.panjiarif.warasarta` pada product brief masih berupa rencana; implementasi ini tidak menggantinya. Nama tampilan adalah **Waras Arta**. Mengganti application ID harus menjadi keputusan tersendiri karena Android akan memperlakukannya sebagai aplikasi berbeda.
+Identitas Android yang dipertahankan dari proyek awal adalah `io.github.panjiarif.waras_arta`. Nama tampilan adalah **Waras Arta**. Mengganti application ID harus menjadi keputusan tersendiri karena Android akan memperlakukannya sebagai aplikasi berbeda.
 
 ## Pembagian tanggung jawab
 
@@ -22,7 +22,7 @@ View -> ViewModel -> FinanceRepository -> Drift / SQLite
 
 - **View:** widget Material 3 berbahasa Indonesia, input form, tampilan loading/error, dan navigasi.
 - **ViewModel:** pilihan bulan, batas jumlah riwayat, pemuatan data, serta operasi tambah, edit, dan hapus. Tidak menyimpan `BuildContext` atau mengakses SQL secara langsung.
-- **Domain:** model immutable, jenis rekening/transaksi, kategori awal, draft input, dan kontrak repository. Belum ada lapisan use case terpisah.
+- **Domain:** model immutable, jenis rekening/transaksi/kategori, draft input, dan kontrak repository. Belum ada lapisan use case terpisah.
 - **Repository:** validasi aturan keuangan, operasi database, dan pemetaan hasil query ke model domain.
 - **Database:** tabel, constraint, indeks, dan koneksi persisten. SQLite adalah sumber data utama, bukan cache tampilan.
 
@@ -34,6 +34,7 @@ lib/
 │   ├── router.dart
 │   └── theme.dart
 ├── core/
+│   ├── category_icons.dart
 │   └── formatters.dart
 ├── domain/
 │   ├── finance.dart
@@ -45,11 +46,18 @@ lib/
 │   └── repositories/
 │       └── drift_finance_repository.dart
 └── features/
+    ├── categories/
+    │   ├── view_models/category_view_model.dart
+    │   └── views/
+    │       ├── category_form_screen.dart
+    │       ├── category_list_screen.dart
+    │       └── category_widgets.dart
     └── ledger/
         ├── view_models/ledger_view_model.dart
         └── views/
             ├── home_screen.dart
             ├── account_form_screen.dart
+            ├── category_selection_field.dart
             ├── entry_detail_screen.dart
             ├── entry_form_screen.dart
             └── form_widgets.dart
@@ -74,11 +82,23 @@ Aturan alpha:
 - Transfer disimpan sebagai **satu baris**, bukan sepasang pemasukan/pengeluaran. Asal dan tujuan harus berbeda dan keduanya harus ada.
 - Membuat rekening dengan saldo awal positif juga membuat entri penyesuaian dalam satu transaksi database. Saldo awal nol tidak memerlukan entri bernilai nol.
 - Form penyesuaian saldo umum belum tersedia. Entri penyesuaian pada tahap ini khusus saldo awal nonnegatif.
-- Kategori pemasukan dan pengeluaran menggunakan pilihan tetap dari domain; belum ada CRUD kategori. Transfer dan saldo awal tidak memiliki kategori.
+- Pemasukan dan pengeluaran wajib menunjuk satu subkategori. Transfer dan saldo awal tidak memiliki kategori.
 - Saldo negatif akibat pengeluaran atau transfer diperbolehkan untuk pencatatan manual; aplikasi bukan sistem otorisasi pembayaran bank.
 - Transaksi biasa dapat dilihat, diedit, dan dihapus permanen setelah konfirmasi. Edit mempertahankan `id` serta `createdAt`; nilai lama belum memiliki audit trail atau undo.
 - Edit atau hapus transaksi menghitung ulang saldo sepanjang waktu dan ringkasan bulan terkait. Transaksi dapat berpindah jenis, rekening, atau bulan selama hasil akhirnya memenuhi seluruh validasi ledger.
 - Entri saldo awal dilindungi dari edit/hapus pada alur transaksi. Pengarsipan rekening belum tersedia.
+
+## Kategori dan subkategori
+
+Kategori dibatasi tepat dua tingkat. Baris induk adalah kelompok, sedangkan transaksi hanya boleh menunjuk baris anak. `categoryId` menjadi foreign key pada ledger; nama tidak disalin ke transaksi. Karena itu rename dan perubahan ikon langsung tercermin pada riwayat tanpa memutus identitas yang kelak dipakai kalender, anggaran, diagram, dan filter.
+
+- Kelompok serta subkategori dapat dibuat, diubah nama/ikonnya, diarsipkan, dan dipulihkan.
+- Jenis pemasukan/pengeluaran dan induk subkategori tidak dapat diubah setelah dibuat.
+- Kelompok baru dibuat atomik bersama subkategori pertama.
+- Minimal satu subkategori efektif harus tetap aktif untuk masing-masing jenis transaksi.
+- Kategori yang diarsipkan tidak tersedia untuk transaksi baru, tetapi transaksi lama tetap dapat ditampilkan dan diedit selama referensinya tidak diganti.
+- Ikon disimpan sebagai semantic string key yang dipetakan ke katalog Material terbatas. `IconData.codePoint` dan berkas gambar tidak disimpan di database.
+- Upload gambar ditunda sampai spesifikasi backup mampu membawa database dan aset sebagai satu paket tervalidasi.
 
 ## Tanggal dan periode
 
@@ -96,11 +116,13 @@ Alpha belum menambahkan enkripsi database, PIN, atau biometrik. Penyimpanan priv
 
 ## Skema dan pengembangan berikutnya
 
-Skema database saat ini versi **1**. Inisialisasi skema baru tidak sama dengan pengujian migrasi versi lama. Sebelum menaikkan `schemaVersion`:
+Skema database saat ini versi **2**. Snapshot v1 dan v2 disimpan di `drift_schemas/app_database/`. Migrasi v1 ke v2 membuat kategori dua tingkat, memetakan setiap kategori teks lama ke subkategori `Umum`, lalu membangun ulang ledger dengan foreign key. Uji migrasi memverifikasi struktur schema sekaligus identitas, nominal, rekening, tanggal, catatan, saldo, dan ringkasan.
+
+Sebelum menaikkan `schemaVersion` berikutnya:
 
 1. Simpan ekspor skema versi lama sebagai artefak versi.
 2. Tulis langkah migrasi yang menjaga rekening dan ledger.
 3. Uji upgrade menggunakan data representatif, termasuk transfer dan tanggal lampau.
 4. Verifikasi saldo dan ringkasan sebelum/sesudah upgrade.
 
-Backup lengkap yang berversi, enkripsi backup berbasis kata sandi, dan restore atomik masih rencana produk. Kalender grid, pengelolaan kategori, anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.
+Backup lengkap yang berversi, enkripsi backup berbasis kata sandi, dan restore atomik masih rencana produk. Kalender grid adalah irisan fitur berikutnya yang kini dapat bergantung pada ID subkategori stabil. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.

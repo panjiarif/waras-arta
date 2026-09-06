@@ -11,7 +11,9 @@ Ini adalah irisan awal menuju versi 0.1 pada [product brief](docs/product-brief.
 Yang tersedia:
 
 - Membuat rekening tunai, bank, e-wallet, atau lainnya dengan saldo awal yang dicatat sebagai penyesuaian ledger.
-- Mencatat pemasukan dan pengeluaran dengan kategori bawaan, tanggal kejadian, dan catatan.
+- Mencatat pemasukan dan pengeluaran dengan subkategori, tanggal kejadian, dan catatan.
+- Mengelola kategori pemasukan/pengeluaran dalam hierarki dua tingkat: kelompok dan subkategori.
+- Mengubah nama serta ikon Material kategori, lalu mengarsipkannya tanpa memutus riwayat lama.
 - Transfer satu transaksi antar-rekening sendiri, tidak dihitung sebagai pemasukan/pengeluaran.
 - Pencatatan tanggal lampau melalui pemilih tanggal.
 - Ikhtisar saldo seluruh rekening dan ringkasan bulanan.
@@ -20,8 +22,9 @@ Yang tersedia:
 - Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
 - Hapus permanen transaksi biasa melalui dialog konfirmasi.
 - Penyimpanan persisten lokal menggunakan Drift/SQLite.
+- Migrasi schema v1 ke v2 yang mengubah kategori teks lama menjadi referensi subkategori tanpa mengubah transaksi dan saldo.
 
-Belum tersedia: edit saldo awal, arsip rekening, pengelolaan kategori, kalender grid, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
+Belum tersedia: gambar kategori unggahan pengguna, edit saldo awal, arsip rekening, kalender grid, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
 
 **Gunakan data percobaan atau pertahankan catatan utama di tempat lain.** Alpha belum memiliki backup/restore maupun enkripsi database khusus aplikasi. Penyimpanan privat Android bukan jaminan pemulihan. Uninstall, hapus data, atau kerusakan/kehilangan HP dapat menghilangkan catatan. Jangan menjadikan alpha satu-satunya catatan keuangan.
 
@@ -42,7 +45,7 @@ Ganti `DEVICE_ID` dengan ID HP. Proyek ini belum menargetkan runtime web atau de
 
 ## Fondasi teknis
 
-Flutter/Dart, Material 3, MVVM dengan Riverpod, repository, Drift/SQLite dengan background isolate, dan `go_router`. Saldo berasal dari ledger, nominal menggunakan bilangan bulat rupiah, serta periode transaksi berdasarkan tanggal kejadian.
+Flutter/Dart, Material 3, MVVM dengan Riverpod, repository, Drift/SQLite dengan background isolate, dan `go_router`. Saldo berasal dari ledger, nominal menggunakan bilangan bulat rupiah, periode transaksi berdasarkan tanggal kejadian, dan identitas kategori memakai ID stabil.
 
 - [Product brief dan ruang lingkup versi](docs/product-brief.md)
 - [Arsitektur dan aturan data](docs/architecture.md)

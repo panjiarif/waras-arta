@@ -29,6 +29,7 @@ dart run build_runner build
 dart format lib test
 flutter analyze
 flutter test
+flutter test test/drift/app_database/migration_test.dart
 git diff --check
 git status --short
 git diff
@@ -69,6 +70,12 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 - [ ] Nama rekening kosong/duplikat, nominal tidak valid, dan pilihan wajib yang kosong ditolak dengan pesan yang bisa dipahami.
 - [ ] Transfer ke rekening yang sama tidak dapat disimpan; alur transfer dengan kurang dari dua rekening memberi arahan yang jelas.
 - [ ] Form pemasukan hanya menawarkan kategori pemasukan dan form pengeluaran hanya kategori pengeluaran.
+- [ ] Form transaksi hanya dapat memilih subkategori; baris kelompok tidak dapat dipilih.
+- [ ] Mengganti jenis pengeluaran ke pemasukan atau transfer membersihkan pilihan subkategori lama.
+- [ ] Tambah kelompok selalu meminta satu subkategori pertama; nama dan ikon keduanya dapat diedit.
+- [ ] Rename/ubah ikon kategori langsung terlihat di riwayat dan detail transaksi lama.
+- [ ] Kategori arsip hilang dari pilihan transaksi baru, tetap terbaca pada riwayat, dan dapat dipulihkan.
+- [ ] Aplikasi menolak pengarsipan jika tindakan itu menghilangkan subkategori aktif terakhir untuk suatu jenis.
 - [ ] Tekan simpan berulang ketika proses sedang berjalan: tidak terjadi transaksi ganda.
 - [ ] Batalkan form atau kembali dari pemilih tanggal: data tidak tersimpan tanpa konfirmasi simpan.
 - [ ] Tanggal di akhir bulan/tahun masuk ke periode kejadian yang benar.
@@ -113,8 +120,9 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 ## Urutan kerja setelah alpha
 
 1. Jalankan checklist manual pada HP referensi dan perbaiki ketidaksesuaian saldo/tampilan.
-2. Siapkan ekspor skema dan pengujian migrasi sebelum perubahan skema berikutnya.
-3. Implementasikan backup/restore lengkap dan uji pemulihan pada perangkat/instalasi terpisah menggunakan data percobaan.
-4. Lanjutkan kalender grid serta kebutuhan v0.1 yang belum tersedia.
+2. Implementasikan kalender grid menggunakan `occurredDay` dan ID subkategori yang sudah stabil.
+3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah.
+4. Implementasikan backup/restore lengkap dan uji pemulihan pada perangkat/instalasi terpisah menggunakan data percobaan.
+5. Lanjutkan kebutuhan v0.1 lainnya.
 
 Selama backup/restore belum tersedia, jangan menjadikan alpha satu-satunya catatan keuangan.

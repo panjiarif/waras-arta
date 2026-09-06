@@ -6,11 +6,11 @@
 
 - **Status:** Draft
 - **Versi produk awal:** `0.1.0`
-- **Terakhir diperbarui:** 27 Agustus 2026
+- **Terakhir diperbarui:** 6 September 2026
 - **Platform pertama:** Android
 - **Repository:** `waras-arta`
 - **Package Dart:** `waras_arta`
-- **Application ID yang direncanakan:** `io.github.panjiarif.warasarta`
+- **Application ID:** `io.github.panjiarif.waras_arta`
 
 ## Ringkasan
 
@@ -88,11 +88,20 @@ Versi awal menggunakan susunan tetap. Pengaturan kartu dan urutan dashboard dire
 ### 3. Transaksi
 
 - Mencatat pemasukan dan pengeluaran.
-- Memilih rekening, kategori, nominal, tanggal, dan catatan.
+- Memilih rekening, subkategori, nominal, tanggal, dan catatan.
 - Melihat riwayat berdasarkan bulan atau tahun.
 - Mencari dan memfilter transaksi.
 - Mengubah atau menghapus transaksi dengan pembaruan saldo yang konsisten.
 - Menyimpan tanggal kejadian terpisah dari waktu pencatatan.
+
+Kategori pemasukan dan pengeluaran memiliki tepat dua tingkat:
+
+- kelompok kategori sebagai induk yang tidak dipilih langsung oleh transaksi;
+- subkategori sebagai pilihan transaksi dan identitas yang dipakai laporan;
+- nama serta ikon Material kelompok/subkategori dapat diubah;
+- kategori yang tidak lagi digunakan diarsipkan agar transaksi lama tetap utuh;
+- kategori bawaan dapat dikustomisasi seperti kategori buatan pengguna;
+- gambar unggahan pengguna ditunda sampai format backup dapat menyertakan aset dengan aman.
 
 ### 4. Transfer Antar-Rekening
 
@@ -265,3 +274,6 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Koreksi saldo harus dapat ditelusuri.
 - Backup dan restore merupakan bagian dari produk, bukan fitur tambahan opsional.
 - MVP didahulukan sebelum dashboard yang sangat fleksibel dan analitik lanjutan.
+- Transaksi pemasukan/pengeluaran menyimpan ID subkategori, bukan nama kategori.
+- Hierarki kategori dibatasi dua tingkat agar kalender, anggaran, diagram, dan filter memiliki fondasi yang konsisten.
+- Kategori bawaan lama menjadi kelompok dengan subkategori `Umum` saat migrasi schema v1 ke v2.

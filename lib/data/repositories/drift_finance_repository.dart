@@ -10,6 +10,16 @@ class DriftFinanceRepository implements FinanceRepository {
   final AppDatabase _db;
 
   @override
+  Stream<FinanceEntry?> watchEntry(int id) {
+    if (id < 1) return Stream.value(null);
+    final query = _db.select(_db.ledgerEntries)
+      ..where((entry) => entry.id.equals(id));
+    return query.watchSingleOrNull().map(
+      (row) => row == null ? null : _toEntry(row),
+    );
+  }
+
+  @override
   Stream<FinanceSnapshot> watchMonth(DateTime month, {int limit = 50}) => _db
       .customSelect(
         'SELECT COUNT(*) AS entry_count FROM ledger_entries',
@@ -142,6 +152,66 @@ class DriftFinanceRepository implements FinanceRepository {
 
   @override
   Future<int> addEntry(EntryDraft draft) async {
+    final normalized = _validateAndNormalizeEntry(draft);
+
+    return _db.transaction(() async {
+      await _requireAccounts(normalized);
+      // A transfer is one insert: it cannot leave a half-completed debit/credit.
+      return _db
+          .into(_db.ledgerEntries)
+          .insert(_insertCompanion(normalized, createdAt: DateTime.now()));
+    });
+  }
+
+  @override
+  Future<void> updateEntry(int id, EntryDraft draft) async {
+    _validateEntryId(id);
+    final normalized = _validateAndNormalizeEntry(draft);
+
+    await _db.transaction(() async {
+      final existing = await _requireEntry(id);
+      if (existing.kind == EntryKind.adjustment.index) {
+        throw const FinanceValidationException(
+          'Saldo awal tidak dapat diubah dari riwayat transaksi.',
+        );
+      }
+      await _requireAccounts(normalized);
+      final affected =
+          await (_db.update(
+            _db.ledgerEntries,
+          )..where((entry) => entry.id.equals(id))).write(
+            LedgerEntriesCompanion(
+              kind: Value(normalized.kind.index),
+              accountId: Value(normalized.accountId),
+              destinationAccountId: Value(normalized.destinationAccountId),
+              amount: Value(normalized.amount),
+              category: Value(normalized.category),
+              note: Value(normalized.note),
+              occurredDay: Value(_dayKey(normalized.occurredAt)),
+            ),
+          );
+      if (affected != 1) _throwEntryNotFound();
+    });
+  }
+
+  @override
+  Future<void> deleteEntry(int id) async {
+    _validateEntryId(id);
+    await _db.transaction(() async {
+      final existing = await _requireEntry(id);
+      if (existing.kind == EntryKind.adjustment.index) {
+        throw const FinanceValidationException(
+          'Saldo awal tidak dapat dihapus dari riwayat transaksi.',
+        );
+      }
+      final affected = await (_db.delete(
+        _db.ledgerEntries,
+      )..where((entry) => entry.id.equals(id))).go();
+      if (affected != 1) _throwEntryNotFound();
+    });
+  }
+
+  static EntryDraft _validateAndNormalizeEntry(EntryDraft draft) {
     if (draft.kind == EntryKind.adjustment) {
       throw const FinanceValidationException(
         'Saldo awal hanya dibuat saat menambahkan rekening.',
@@ -180,27 +250,30 @@ class DriftFinanceRepository implements FinanceRepository {
       }
     }
 
-    return _db.transaction(() async {
-      await _requireAccount(draft.accountId);
-      if (draft.destinationAccountId != null) {
-        await _requireAccount(draft.destinationAccountId!);
-      }
-      // A transfer is one insert: it cannot leave a half-completed debit/credit.
-      return _db
-          .into(_db.ledgerEntries)
-          .insert(
-            LedgerEntriesCompanion.insert(
-              kind: draft.kind.index,
-              accountId: draft.accountId,
-              destinationAccountId: Value(draft.destinationAccountId),
-              amount: draft.amount,
-              category: Value(category),
-              note: Value(note),
-              occurredDay: _dayKey(draft.occurredAt),
-              createdAt: DateTime.now(),
-            ),
-          );
-    });
+    return EntryDraft(
+      kind: draft.kind,
+      accountId: draft.accountId,
+      destinationAccountId: draft.destinationAccountId,
+      amount: draft.amount,
+      category: category,
+      note: note,
+      occurredAt: draft.occurredAt,
+    );
+  }
+
+  Future<void> _requireAccounts(EntryDraft draft) async {
+    await _requireAccount(draft.accountId);
+    if (draft.destinationAccountId != null) {
+      await _requireAccount(draft.destinationAccountId!);
+    }
+  }
+
+  Future<LedgerRow> _requireEntry(int id) async {
+    final entry = await (_db.select(
+      _db.ledgerEntries,
+    )..where((entry) => entry.id.equals(id))).getSingleOrNull();
+    if (entry == null) _throwEntryNotFound();
+    return entry;
   }
 
   Future<void> _requireAccount(int id) async {
@@ -230,6 +303,27 @@ class DriftFinanceRepository implements FinanceRepository {
       );
     }
   }
+
+  static void _validateEntryId(int id) {
+    if (id < 1) _throwEntryNotFound();
+  }
+
+  static Never _throwEntryNotFound() =>
+      throw const FinanceValidationException('Transaksi tidak ditemukan.');
+
+  static LedgerEntriesCompanion _insertCompanion(
+    EntryDraft draft, {
+    required DateTime createdAt,
+  }) => LedgerEntriesCompanion.insert(
+    kind: draft.kind.index,
+    accountId: draft.accountId,
+    destinationAccountId: Value(draft.destinationAccountId),
+    amount: draft.amount,
+    category: Value(draft.category),
+    note: Value(draft.note),
+    occurredDay: _dayKey(draft.occurredAt),
+    createdAt: createdAt,
+  );
 
   static int _dayKey(DateTime date) =>
       date.year * 10000 + date.month * 100 + date.day;

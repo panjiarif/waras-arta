@@ -13,6 +13,8 @@ String formatMonth(DateTime date) =>
     DateFormat('MMMM yyyy', 'id_ID').format(date);
 String formatDate(DateTime date) =>
     DateFormat('d MMM yyyy', 'id_ID').format(date);
+String formatDateTime(DateTime date) =>
+    DateFormat('d MMM yyyy, HH.mm', 'id_ID').format(date);
 
 DateTime dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 

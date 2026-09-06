@@ -8,7 +8,9 @@ import '../view_models/ledger_view_model.dart';
 import 'form_widgets.dart';
 
 class EntryFormScreen extends ConsumerStatefulWidget {
-  const EntryFormScreen({super.key});
+  const EntryFormScreen({super.key, this.initialEntry});
+
+  final FinanceEntry? initialEntry;
 
   @override
   ConsumerState<EntryFormScreen> createState() => _EntryFormScreenState();
@@ -16,19 +18,49 @@ class EntryFormScreen extends ConsumerStatefulWidget {
 
 class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _amount = TextEditingController();
-  final _note = TextEditingController();
-  EntryKind _kind = EntryKind.expense;
-  int? _accountId;
-  int? _destinationId;
-  String _category = expenseCategories.first;
-  DateTime _date = dateOnly(DateTime.now());
+  late final TextEditingController _amount;
+  late final TextEditingController _note;
+  late EntryKind _kind;
+  late int? _accountId;
+  late int? _destinationId;
+  late String _category;
+  late DateTime _date;
+  bool _dirty = false;
+  bool _allowPop = false;
+  bool _confirmingDiscard = false;
+
+  bool get _isEditing => widget.initialEntry != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final entry = widget.initialEntry;
+    _amount = TextEditingController(text: entry?.amount.toString() ?? '');
+    _note = TextEditingController(text: entry?.note ?? '');
+    _kind = entry?.kind ?? EntryKind.expense;
+    _accountId = entry?.accountId;
+    _destinationId = entry?.destinationAccountId;
+    _category =
+        entry?.category ??
+        (_kind == EntryKind.income
+            ? incomeCategories.first
+            : expenseCategories.first);
+    _date = entry?.occurredAt ?? dateOnly(DateTime.now());
+    _amount.addListener(_markDirty);
+    _note.addListener(_markDirty);
+  }
 
   @override
   void dispose() {
+    _amount.removeListener(_markDirty);
+    _note.removeListener(_markDirty);
     _amount.dispose();
     _note.dispose();
     super.dispose();
+  }
+
+  void _markDirty() {
+    if (!_dirty && mounted) setState(() => _dirty = true);
   }
 
   Future<void> _save(List<FinanceAccount> accounts) async {
@@ -39,26 +71,73 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
         ? (_destinationId ??
               accounts.firstWhere((item) => item.id != account).id)
         : null;
-    final saved = await ref
-        .read(financeActionsProvider.notifier)
-        .addEntry(
-          EntryDraft(
-            kind: _kind,
-            accountId: account,
-            destinationAccountId: destination,
-            amount: parseRupiah(_amount.text)!,
-            category: _kind == EntryKind.transfer ? null : _category,
-            note: _note.text,
-            occurredAt: _date,
-          ),
-        );
+    final draft = EntryDraft(
+      kind: _kind,
+      accountId: account,
+      destinationAccountId: destination,
+      amount: parseRupiah(_amount.text)!,
+      category: _kind == EntryKind.transfer ? null : _category,
+      note: _note.text,
+      occurredAt: _date,
+    );
+    final actions = ref.read(financeActionsProvider.notifier);
+    final saved = _isEditing
+        ? await actions.updateEntry(widget.initialEntry!.id, draft)
+        : await actions.addEntry(draft);
     if (saved && mounted) {
       final messenger = ScaffoldMessenger.of(context);
-      context.pop();
+      final router = GoRouter.of(context);
+      setState(() {
+        _dirty = false;
+        _allowPop = true;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      router.pop();
       messenger.showSnackBar(
-        const SnackBar(content: Text('Transaksi tersimpan di perangkat.')),
+        SnackBar(
+          content: Text(
+            _isEditing
+                ? 'Perubahan transaksi tersimpan.'
+                : 'Transaksi tersimpan di perangkat.',
+          ),
+        ),
       );
     }
+  }
+
+  Future<void> _confirmDiscard() async {
+    if (_confirmingDiscard) return;
+    _confirmingDiscard = true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Buang perubahan?'),
+        content: Text(
+          _isEditing
+              ? 'Perubahan pada transaksi ini belum disimpan.'
+              : 'Data transaksi yang sudah diisi belum disimpan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Tetap di sini'),
+          ),
+          FilledButton(
+            key: const Key('discard-entry-changes'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Buang perubahan'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    _confirmingDiscard = false;
+    if (discard != true) return;
+    final router = GoRouter.of(context);
+    setState(() => _allowPop = true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) router.pop();
   }
 
   @override
@@ -66,9 +145,16 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
     final snapshot = ref.watch(financeSnapshotProvider);
     final save = ref.watch(financeActionsProvider);
     return PopScope(
-      canPop: !save.isSaving,
+      canPop: _allowPop || (!save.isSaving && !_dirty),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !save.isSaving && !_allowPop) {
+          _confirmDiscard();
+        }
+      },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Catat transaksi')),
+        appBar: AppBar(
+          title: Text(_isEditing ? 'Edit transaksi' : 'Catat transaksi'),
+        ),
         body: snapshot.when(
           data: (data) => data.accounts.isEmpty
               ? const FormBody(
@@ -115,9 +201,14 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Sedikit catatan, lebih terarah.',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+              Text(
+                _isEditing
+                    ? 'Perbarui catatan dengan teliti.'
+                    : 'Sedikit catatan, lebih terarah.',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 24),
               DropdownButtonFormField<EntryKind>(
@@ -137,6 +228,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                   if (value != null) {
                     setState(() {
                       _kind = value;
+                      _dirty = true;
                       _category =
                           (value == EntryKind.income
                                   ? incomeCategories
@@ -184,6 +276,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                 onChanged: (id) => setState(() {
                   _accountId = id;
                   _destinationId = null;
+                  _dirty = true;
                 }),
               ),
               const SizedBox(height: 8),
@@ -207,7 +300,10 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                         ),
                       ),
                   ],
-                  onChanged: (id) => setState(() => _destinationId = id),
+                  onChanged: (id) => setState(() {
+                    _destinationId = id;
+                    _dirty = true;
+                  }),
                 ),
                 const SizedBox(height: 20),
                 const FormMessage(
@@ -230,7 +326,12 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                       DropdownMenuItem(value: category, child: Text(category)),
                   ],
                   onChanged: (value) {
-                    if (value != null) setState(() => _category = value);
+                    if (value != null) {
+                      setState(() {
+                        _category = value;
+                        _dirty = true;
+                      });
+                    }
                   },
                 ),
                 const SizedBox(height: 20),
@@ -238,7 +339,12 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
               EntryDateField(
                 date: _date,
                 onChanged: (date) {
-                  if (mounted) setState(() => _date = date);
+                  if (mounted) {
+                    setState(() {
+                      _date = date;
+                      _dirty = true;
+                    });
+                  }
                 },
               ),
               const SizedBox(height: 8),
@@ -265,7 +371,13 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                 onPressed: save.isSaving || !canTransfer
                     ? null
                     : () => _save(accounts),
-                child: Text(save.isSaving ? 'Menyimpan…' : 'Simpan transaksi'),
+                child: Text(
+                  save.isSaving
+                      ? 'Menyimpan…'
+                      : _isEditing
+                      ? 'Simpan perubahan'
+                      : 'Simpan transaksi',
+                ),
               ),
             ],
           ),

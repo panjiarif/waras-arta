@@ -125,6 +125,28 @@ void main() {
       },
     );
 
+    test('successful edit stores the id and selects the new month', () async {
+      final draft = expenseDraft();
+      final actions = container.read(financeActionsProvider.notifier);
+
+      expect(await actions.updateEntry(42, draft), isTrue);
+      expect(repository.updatedEntryId, 42);
+      expect(repository.updatedEntry, same(draft));
+      expect(container.read(ledgerFilterProvider).month, DateTime(2024, 8));
+      expect(container.read(financeActionsProvider).isSaving, isFalse);
+    });
+
+    test('successful delete keeps the selected month', () async {
+      final model = container.read(ledgerFilterProvider.notifier);
+      model.showMonth(DateTime(2023, 6));
+      final actions = container.read(financeActionsProvider.notifier);
+
+      expect(await actions.deleteEntry(17), isTrue);
+      expect(repository.deletedEntryId, 17);
+      expect(container.read(ledgerFilterProvider).month, DateTime(2023, 6));
+      expect(container.read(financeActionsProvider).isSaving, isFalse);
+    });
+
     test(
       'surfaces business validation without changing selected month',
       () async {
@@ -223,6 +245,9 @@ class FakeFinanceRepository implements FinanceRepository {
   );
   final accounts = <AccountDraft>[];
   final entries = <EntryDraft>[];
+  int? updatedEntryId;
+  EntryDraft? updatedEntry;
+  int? deletedEntryId;
   Future<int> Function(AccountDraft)? onCreateAccount;
   Future<int> Function(EntryDraft)? onAddEntry;
   DateTime? lastMonth;
@@ -239,6 +264,20 @@ class FakeFinanceRepository implements FinanceRepository {
     entries.add(draft);
     return onAddEntry == null ? 1 : await onAddEntry!(draft);
   }
+
+  @override
+  Future<void> updateEntry(int id, EntryDraft draft) async {
+    updatedEntryId = id;
+    updatedEntry = draft;
+  }
+
+  @override
+  Future<void> deleteEntry(int id) async {
+    deletedEntryId = id;
+  }
+
+  @override
+  Stream<FinanceEntry?> watchEntry(int id) => Stream.value(null);
 
   @override
   Future<FinanceSnapshot> loadMonth(DateTime month, {int limit = 50}) async {

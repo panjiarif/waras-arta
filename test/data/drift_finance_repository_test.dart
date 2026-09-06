@@ -384,6 +384,153 @@ void main() {
   });
 
   test(
+    'edit preserves identity, moves month, and recalculates both accounts',
+    () async {
+      final source = await account('Bank', opening: 1000);
+      final destination = await account('Tunai');
+      final id = await repository.addEntry(
+        entry(source, amount: 200, date: DateTime(2024, 1, 20)),
+      );
+      final before = await repository.watchEntry(id).first;
+      expect(before, isNotNull);
+
+      final januaryChanged = repository
+          .watchMonth(january)
+          .firstWhere(
+            (snapshot) => snapshot.income == 0 && snapshot.totalEntries == 1,
+          );
+      final februaryChanged = repository
+          .watchMonth(february)
+          .firstWhere((snapshot) => snapshot.totalEntries == 1);
+      final detailChanged = repository
+          .watchEntry(id)
+          .firstWhere((current) => current?.kind == EntryKind.transfer);
+
+      await repository.updateEntry(
+        id,
+        EntryDraft(
+          kind: EntryKind.transfer,
+          accountId: source,
+          destinationAccountId: destination,
+          amount: 300,
+          note: '  pindah tunai  ',
+          occurredAt: DateTime(2024, 2, 2),
+        ),
+      );
+
+      final jan = await januaryChanged.timeout(const Duration(seconds: 5));
+      final feb = await februaryChanged.timeout(const Duration(seconds: 5));
+      final changed = await detailChanged.timeout(const Duration(seconds: 5));
+      expect(changed, isNotNull);
+      expect(changed!.id, id);
+      expect(changed.createdAt, before!.createdAt);
+      expect(changed.destinationAccountId, destination);
+      expect(changed.category, isNull);
+      expect(changed.note, 'pindah tunai');
+      expect(changed.occurredAt, DateTime(2024, 2, 2));
+      expect(jan.totalBalance, 1000);
+      expect(jan.expense, 0);
+      expect(feb.income, 0);
+      expect(feb.expense, 0);
+      expect(feb.accounts.firstWhere((a) => a.id == source).balance, 700);
+      expect(feb.accounts.firstWhere((a) => a.id == destination).balance, 300);
+    },
+  );
+
+  test(
+    'delete reverses transfer atomically and detail emits missing',
+    () async {
+      final source = await account('Bank', opening: 1000);
+      final destination = await account('Tunai');
+      final id = await repository.addEntry(
+        entry(
+          source,
+          kind: EntryKind.transfer,
+          amount: 300,
+          destination: destination,
+        ),
+      );
+      final detailDeleted = repository
+          .watchEntry(id)
+          .firstWhere((current) => current == null);
+
+      await repository.deleteEntry(id);
+
+      expect(await detailDeleted.timeout(const Duration(seconds: 5)), isNull);
+      final snapshot = await repository.loadMonth(january);
+      expect(snapshot.accounts.firstWhere((a) => a.id == source).balance, 1000);
+      expect(
+        snapshot.accounts.firstWhere((a) => a.id == destination).balance,
+        0,
+      );
+      expect(snapshot.totalBalance, 1000);
+      expect(snapshot.income, 0);
+      expect(snapshot.expense, 0);
+      expect(snapshot.totalEntries, 1);
+    },
+  );
+
+  test(
+    'failed edits and missing ids do not mutate the original entry',
+    () async {
+      final source = await account('Bank');
+      final id = await repository.addEntry(
+        entry(source, kind: EntryKind.expense, amount: 100),
+      );
+      final invalidDrafts = [
+        entry(source, kind: EntryKind.transfer, amount: 250, destination: 999),
+        entry(source, kind: EntryKind.expense, amount: 0),
+        entry(source, kind: EntryKind.expense, category: 'Gaji'),
+        entry(
+          source,
+          kind: EntryKind.expense,
+          date: DateTime.now().add(const Duration(days: 2)),
+        ),
+      ];
+      for (final draft in invalidDrafts) {
+        await expectLater(
+          repository.updateEntry(id, draft),
+          throwsA(validationError),
+        );
+      }
+      await expectLater(
+        repository.updateEntry(999, entry(source)),
+        throwsA(validationError),
+      );
+      await expectLater(repository.deleteEntry(999), throwsA(validationError));
+      expect(await repository.watchEntry(0).first, isNull);
+      expect(await repository.watchEntry(999).first, isNull);
+
+      final unchanged = await repository.watchEntry(id).first;
+      expect(unchanged?.kind, EntryKind.expense);
+      expect(unchanged?.amount, 100);
+      final snapshot = await repository.loadMonth(january);
+      expect(snapshot.expense, 100);
+      expect(snapshot.totalBalance, -100);
+      expect(snapshot.totalEntries, 1);
+    },
+  );
+
+  test('opening adjustment cannot be edited or deleted', () async {
+    final accountId = await account('Bank', opening: 500);
+    final opening = (await repository.loadMonth(january)).entries.single;
+    expect(opening.kind, EntryKind.adjustment);
+
+    await expectLater(
+      repository.updateEntry(opening.id, entry(accountId)),
+      throwsA(validationError),
+    );
+    await expectLater(
+      repository.deleteEntry(opening.id),
+      throwsA(validationError),
+    );
+
+    final snapshot = await repository.loadMonth(january);
+    expect(snapshot.entries.single.kind, EntryKind.adjustment);
+    expect(snapshot.accounts.single.balance, 500);
+  });
+
+  test(
     'watchMonth refreshes for zero-balance accounts and transaction writes',
     () async {
       final initial = Completer<void>();
@@ -418,6 +565,7 @@ void main() {
     final file = File('${directory.path}/finance.sqlite');
     final firstDb = AppDatabase(NativeDatabase(file));
     final firstRepository = DriftFinanceRepository(firstDb);
+    late int deletedId;
     try {
       final id = await firstRepository.createAccount(
         AccountDraft(
@@ -427,7 +575,13 @@ void main() {
           openedAt: january,
         ),
       );
-      await firstRepository.addEntry(entry(id, amount: 123));
+      final changedId = await firstRepository.addEntry(entry(id, amount: 123));
+      await firstRepository.updateEntry(
+        changedId,
+        entry(id, kind: EntryKind.expense, amount: 50),
+      );
+      deletedId = await firstRepository.addEntry(entry(id, amount: 7));
+      await firstRepository.deleteEntry(deletedId);
     } finally {
       await firstDb.close();
     }
@@ -436,9 +590,14 @@ void main() {
       final restored = await DriftFinanceRepository(secondDb)
           .loadMonth(january);
       expect(restored.accounts.single.name, 'Bank');
-      expect(restored.totalBalance, 323);
-      expect(restored.income, 123);
+      expect(restored.totalBalance, 150);
+      expect(restored.income, 0);
+      expect(restored.expense, 50);
       expect(restored.totalEntries, 2);
+      expect(
+        await DriftFinanceRepository(secondDb).watchEntry(deletedId).first,
+        isNull,
+      );
     } finally {
       await secondDb.close();
     }

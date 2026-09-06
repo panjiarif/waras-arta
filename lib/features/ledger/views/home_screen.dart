@@ -436,13 +436,13 @@ class _AccountCard extends StatelessWidget {
   );
 }
 
-class _EntryCard extends StatelessWidget {
+class _EntryCard extends ConsumerWidget {
   const _EntryCard({required this.entry, required this.names});
   final FinanceEntry entry;
   final Map<int, String> names;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final color = entry.kind == EntryKind.expense
         ? const Color(0xFF9D492B)
         : forest;
@@ -455,52 +455,63 @@ class _EntryCard extends StatelessWidget {
       _ => '',
     };
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(switch (entry.kind) {
-              EntryKind.income => Icons.south_west,
-              EntryKind.expense => Icons.north_east,
-              EntryKind.transfer => Icons.swap_horiz,
-              EntryKind.adjustment => Icons.savings_outlined,
-            }, color: color),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.category ?? entry.kind.label,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+      child: InkWell(
+        key: ValueKey('entry-${entry.id}'),
+        borderRadius: BorderRadius.circular(20),
+        onTap: () {
+          ref.read(financeActionsProvider.notifier).clearError();
+          context.push('/transactions/${entry.id}');
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(switch (entry.kind) {
+                EntryKind.income => Icons.south_west,
+                EntryKind.expense => Icons.north_east,
+                EntryKind.transfer => Icons.swap_horiz,
+                EntryKind.adjustment => Icons.savings_outlined,
+              }, color: color),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.category ?? entry.kind.label,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(route, style: const TextStyle(fontSize: 13)),
-                  Text(
-                    '${entry.kind.label} • ${formatDate(entry.occurredAt)}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  if (entry.note.isNotEmpty && entry.note != 'Saldo awal') ...[
                     const SizedBox(height: 4),
-                    Text(entry.note),
-                  ],
-                  const SizedBox(height: 10),
-                  Text(
-                    '$prefix${formatRupiah(entry.amount)}',
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
+                    Text(route, style: const TextStyle(fontSize: 13)),
+                    Text(
+                      '${entry.kind.label} • ${formatDate(entry.occurredAt)}',
+                      style: const TextStyle(fontSize: 12),
                     ),
-                  ),
-                ],
+                    if (entry.note.isNotEmpty &&
+                        entry.note != 'Saldo awal') ...[
+                      const SizedBox(height: 4),
+                      Text(entry.note),
+                    ],
+                    const SizedBox(height: 10),
+                    Text(
+                      '$prefix${formatRupiah(entry.amount)}',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
         ),
       ),
     );

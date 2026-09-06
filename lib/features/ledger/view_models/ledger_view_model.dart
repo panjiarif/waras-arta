@@ -61,6 +61,11 @@ final financeSnapshotProvider = StreamProvider<FinanceSnapshot>((ref) {
       .watchMonth(filter.month, limit: filter.limit);
 });
 
+final financeEntryProvider = StreamProvider.autoDispose
+    .family<FinanceEntry?, int>((ref, entryId) {
+      return ref.watch(financeRepositoryProvider).watchEntry(entryId);
+    });
+
 class SaveState {
   const SaveState({this.isSaving = false, this.error});
 
@@ -76,26 +81,40 @@ class FinanceActions extends Notifier<SaveState> {
   @override
   SaveState build() => const SaveState();
 
-  Future<bool> createAccount(AccountDraft draft) =>
-      _save((repository) => repository.createAccount(draft), draft.openedAt);
+  Future<bool> createAccount(AccountDraft draft) => _save(
+    (repository) async => repository.createAccount(draft),
+    occurredAt: draft.openedAt,
+  );
 
-  Future<bool> addEntry(EntryDraft draft) =>
-      _save((repository) => repository.addEntry(draft), draft.occurredAt);
+  Future<bool> addEntry(EntryDraft draft) => _save(
+    (repository) async => repository.addEntry(draft),
+    occurredAt: draft.occurredAt,
+  );
+
+  Future<bool> updateEntry(int entryId, EntryDraft draft) => _save(
+    (repository) => repository.updateEntry(entryId, draft),
+    occurredAt: draft.occurredAt,
+  );
+
+  Future<bool> deleteEntry(int entryId) =>
+      _save((repository) => repository.deleteEntry(entryId));
 
   void clearError() {
     if (!state.isSaving) state = const SaveState();
   }
 
   Future<bool> _save(
-    Future<int> Function(FinanceRepository) action,
-    DateTime occurredAt,
-  ) async {
+    Future<void> Function(FinanceRepository) action, {
+    DateTime? occurredAt,
+  }) async {
     if (state.isSaving) return false;
     state = const SaveState(isSaving: true);
     try {
       await action(ref.read(financeRepositoryProvider));
       if (!ref.mounted) return true;
-      ref.read(ledgerFilterProvider.notifier).showMonth(occurredAt);
+      if (occurredAt != null) {
+        ref.read(ledgerFilterProvider.notifier).showMonth(occurredAt);
+      }
       state = const SaveState();
       return true;
     } on FinanceValidationException catch (error) {

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/formatters.dart';
 import '../domain/finance.dart';
+import '../features/backup/views/backup_screen.dart';
 import '../features/categories/views/category_form_screen.dart';
 import '../features/categories/views/category_list_screen.dart';
 import '../features/ledger/views/account_adjustment_screen.dart';
@@ -20,6 +21,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/',
         builder: (context, state) => const HomeScreen(),
         routes: [
+          GoRoute(
+            path: 'backup',
+            builder: (context, state) => const BackupScreen(),
+          ),
           GoRoute(
             path: 'accounts/new',
             builder: (context, state) => const AccountFormScreen(),

@@ -27,12 +27,18 @@ Yang tersedia:
 - Hapus permanen transaksi biasa melalui dialog konfirmasi.
 - Penyimpanan persisten lokal menggunakan Drift/SQLite.
 - Migrasi schema bertahap v1 ke v2 dan v2 ke v3 yang menjaga transaksi serta saldo lama ketika kategori dan siklus rekening berevolusi.
+- Backup manual terenkripsi ke file `.warasarta` melalui pemilih dokumen Android; hasil simpan dibuka ulang dan diverifikasi sebelum dianggap berhasil.
+- Restore replace-all dengan pemeriksaan kata sandi, ringkasan isi, konfirmasi, transaksi database atomik, dan safety backup terenkripsi yang wajib disimpan lebih dahulu.
 
 Rekening arsip disembunyikan secara default, tetap dapat ditampilkan dan dipulihkan, serta tidak dapat dipilih untuk transaksi baru. Entri penyesuaian, termasuk saldo awal, bersifat tetap agar jejak perubahan saldo tidak ditulis ulang.
 
-Belum tersedia: gambar kategori unggahan pengguna, backup/restore, anggaran, tujuan keuangan, diagram, dan utang/piutang.
+Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, anggaran, tujuan keuangan, diagram, dan utang/piutang.
 
-**Gunakan data percobaan atau pertahankan catatan utama di tempat lain.** Alpha belum memiliki backup/restore maupun enkripsi database khusus aplikasi. Penyimpanan privat Android bukan jaminan pemulihan. Uninstall, hapus data, atau kerusakan/kehilangan HP dapat menghilangkan catatan. Jangan menjadikan alpha satu-satunya catatan keuangan.
+Backup rutin adalah snapshot manual saat tombol ditekan; aplikasi belum menjadwalkan, mengunggah, merotasi, atau memverifikasi backup secara otomatis. Verifikasi tepat setelah penulisan hanya memastikan ukuran dan SHA-256 file yang baru disimpan cocok pada saat itu, bukan memantau retensi file berikutnya. Pengecualiannya adalah jalur restore: setelah pengguna mengonfirmasi restore, aplikasi wajib menyimpan safety backup terenkripsi dari data aktif dengan kata sandi yang sama sebelum melakukan replace-all. Jika penyimpanan dibatalkan, gagal, atau tidak lolos verifikasi penulisan, restore tidak dijalankan. Simpan beberapa file di luar HP, misalnya pada penyedia dokumen cloud dan komputer, lalu uji restore menggunakan data percobaan sebelum mengandalkannya. **Kata sandi backup tidak disimpan dan tidak dapat dipulihkan. Jika lupa, file tersebut tidak dapat direstore.**
+
+File backup dienkripsi, tetapi database SQLite yang sedang dipakai aplikasi belum dienkripsi khusus oleh Waras Arta. Penyimpanan privat Android juga bukan jaminan pemulihan: uninstall, hapus data, atau kehilangan HP tetap dapat menghilangkan data yang belum masuk backup terbaru.
+
+Backup otomatis dan transfer data aplikasi milik Android dinonaktifkan serta dikecualikan lewat aturan platform agar database kerja yang belum dienkripsi tidak menjadi salinan portabel di luar alur `.warasarta`. Konsekuensinya, pindah HP harus dilakukan dengan membuat dan merestore file backup terenkripsi secara manual.
 
 ## Mulai mengembangkan
 
@@ -55,6 +61,7 @@ Flutter/Dart, Material 3, MVVM dengan Riverpod, repository, Drift/SQLite dengan 
 
 - [Product brief dan ruang lingkup versi](docs/product-brief.md)
 - [Arsitektur dan aturan data](docs/architecture.md)
+- [Format, keamanan, dan pemulihan backup](docs/backup-restore.md)
 - [Pengembangan, verifikasi, dan commit](docs/development.md)
 
 Package Dart: `waras_arta`. Application ID Android saat ini: `io.github.panjiarif.waras_arta`; nama tampilan: **Waras Arta**.

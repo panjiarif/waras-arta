@@ -30,6 +30,11 @@ dart format lib test
 flutter analyze
 flutter test
 flutter test test/drift/app_database/migration_test.dart
+flutter test test/data/drift_backup_data_store_test.dart
+flutter test test/data/encrypted_backup_codec_test.dart
+flutter test test/data/backup_file_gateway_test.dart
+flutter test test/data/backup_service_test.dart
+flutter test test/features/backup/backup_screen_test.dart
 git diff --check
 git status --short
 git diff
@@ -47,7 +52,7 @@ Jangan menyimpulkan performa release berdasarkan debug mode. Build release saat 
 
 ## Checklist manual alpha
 
-Gunakan data percobaan. Alpha belum memiliki backup/restore, sehingga penghapusan permanen hanya boleh diuji pada data yang dapat dibuat ulang. Checklist ini adalah langkah verifikasi yang harus dijalankan, bukan laporan bahwa semua pengujian sudah lulus.
+Gunakan data percobaan. Backup/restore sudah tersedia dalam bentuk manual, tetapi keberadaan fitur tidak membuktikan bahwa suatu file tertentu aman atau dapat dipulihkan. Penghapusan permanen dan replace-all hanya boleh diuji pada data yang dapat dibuat ulang sampai alur Android selesai diverifikasi. Checklist ini adalah langkah verifikasi yang harus dijalankan, bukan laporan bahwa semua pengujian sudah lulus.
 
 ### Skenario perhitungan
 
@@ -86,6 +91,29 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 7. Buat lebih dari 50 entri dalam satu bulan dengan beberapa entri pada satu tanggal. Pastikan penanda, total harian, dan daftar tanggal terpilih mencakup semuanya walaupun riwayat bulanan belum dimuat lanjut.
 8. Edit tanggal atau nominal sebuah transaksi, kemudian hapus transaksi percobaan. Pastikan penanda, total, dan daftar pada tanggal lama maupun baru bereaksi tanpa membuka ulang aplikasi.
 
+### Skenario backup dan restore
+
+Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan snapshot percobaan yang mencakup rekening aktif/arsip, kategori kustom/arsip, seluruh jenis ledger, dan tanggal lampau.
+
+1. Buka menu **Backup & pulihkan data**. Pastikan peringatan menjelaskan bahwa kata sandi tidak disimpan dan file tidak dapat dipulihkan jika kata sandi dilupakan.
+2. Coba kata sandi kosong, kurang dari 12 karakter, dan konfirmasi berbeda. Dialog penyimpanan tidak boleh terbuka.
+3. Buat backup dengan kata sandi valid ke Downloads. Pastikan file `.warasarta` benar-benar tersedia, status berhasil baru muncul setelah hasil tulis diverifikasi, dan aplikasi tidak menganggap pembatalan pemilih lokasi sebagai keberhasilan.
+4. Jika Google Drive tersedia pada pemilih dokumen Android, simpan salinan kedua ke Drive. Pastikan file dapat dipilih kembali; tindakan ini tetap manual dan bukan sinkronisasi Waras Arta.
+5. Tambah transaksi setelah backup dibuat. Ingat bahwa transaksi ini tidak berada dalam snapshot lama.
+6. Pilih file backup lalu masukkan kata sandi salah. File harus ditolak dan seluruh data aktif tetap sama.
+7. Rusak atau potong **salinan** file backup percobaan. File harus ditolak tanpa perubahan database; jangan merusak satu-satunya salinan yang valid.
+8. Buka backup valid dengan kata sandi benar. Cocokkan waktu pembuatan serta jumlah rekening, kategori, dan transaksi pada ringkasan, lalu tekan **Batal** dan pastikan tidak ada data berubah.
+9. Konfirmasikan replace-all dan pastikan aplikasi membuka Save As untuk safety backup terenkripsi dari data aktif sebelum ada data yang diganti.
+10. Batalkan Save As tersebut. Restore harus ikut dibatalkan dan data aktif tidak boleh berubah.
+11. Ulangi restore, simpan safety backup dengan berhasil, lalu pastikan replace-all baru berjalan setelah penyimpanan dan verifikasi baca ulang selesai.
+12. Buka safety backup dengan kata sandi restore yang sama untuk memastikan keadaan sebelum restore dapat dipulihkan.
+13. Uji kegagalan penulisan atau baca ulang safety backup bila memungkinkan. Restore harus berhenti dan data aktif tidak boleh berubah.
+14. Bandingkan rekening aktif/arsip, kategori, riwayat, saldo, ringkasan bulanan, dan kalender dengan data sumber.
+15. Tambahkan rekening, kategori, dan transaksi setelah restore untuk memastikan ID baru tidak bertabrakan.
+16. Ulangi dari instalasi atau perangkat terpisah dengan mengambil file dari Downloads/Drive. Tutup aplikasi sepenuhnya setelah restore, buka lagi, dan pastikan data tetap sama.
+17. Pastikan dokumen restore lebih dari 16 MiB ditolak selama pembacaan berbatas, plaintext lebih dari 10 MiB ditolak, dan parameter KDF container v1 yang tidak sama persis dengan profil produksi ditolak tanpa mengubah database.
+18. Pada HP referensi, periksa waktu derivasi kata sandi, penggunaan memori, layar sempit, ukuran teks besar, keyboard, pembatalan pemilih dokumen, dan ketukan tombol berulang.
+
 ### Input, navigasi, dan ketahanan tampilan
 
 - [ ] Instalasi baru menampilkan keadaan kosong yang jelas dan alur tambah rekening dapat dibuka.
@@ -123,6 +151,7 @@ build: add local finance dependencies and Android metadata
 feat(data): persist accounts and ledger with balance tests
 feat(ledger): add account and transaction flows with UI tests
 feat(accounts): add safe account management
+feat(backup): add encrypted manual backup and atomic restore
 docs: document alpha architecture and development workflow
 ```
 
@@ -143,9 +172,9 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 
 ## Urutan kerja setelah alpha
 
-1. Jalankan checklist transaksi, kelola rekening, dan kalender pada HP referensi, lalu perbaiki ketidaksesuaian saldo/tampilan.
-2. Implementasikan backup/restore lengkap dan uji pemulihan pada perangkat/instalasi terpisah menggunakan data percobaan.
-3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; kalender saat ini tetap memakai schema v3.
-4. Lanjutkan kebutuhan v0.1 lainnya setelah jalur pemulihan data terbukti bekerja.
+1. Jalankan checklist transaksi, kelola rekening, kalender, serta backup/restore pada HP referensi dan perbaiki setiap ketidaksesuaian.
+2. Uji file Downloads dan penyedia dokumen cloud pada perangkat/instalasi terpisah menggunakan data percobaan; ukur juga Argon2id pada HP referensi.
+3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini tetap memakai schema v3.
+4. Lanjutkan ke anggaran setelah jalur pemulihan manual terbukti bekerja, lalu perluas format backup pada versi baru sebelum menyimpan data anggaran nyata.
 
-Selama backup/restore belum tersedia, jangan menjadikan alpha satu-satunya catatan keuangan.
+Jangan menjadikan alpha satu-satunya catatan keuangan sebelum restore lintas instalasi berhasil diuji. Setelah itu pun, buat backup rutin secara berkala dan pertahankan beberapa salinan di luar HP; aplikasi belum membuat backup terjadwal. Safety backup yang wajib saat restore hanya melindungi keadaan tepat sebelum replace-all dan bukan pengganti kebiasaan backup rutin.

@@ -108,6 +108,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             onPressed: () => context.push('/categories'),
             icon: const Icon(Icons.category_outlined),
           ),
+          PopupMenuButton<_HomeMenuAction>(
+            key: const Key('more-menu'),
+            tooltip: 'Menu lainnya',
+            onSelected: (action) {
+              switch (action) {
+                case _HomeMenuAction.backup:
+                  context.push('/backup');
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _HomeMenuAction.backup,
+                child: ListTile(
+                  leading: Icon(Icons.backup_outlined),
+                  title: Text('Backup & pulihkan data'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: SafeArea(
@@ -300,7 +320,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ),
       const SizedBox(height: 24),
       const FormMessage(
-        'Versi awal • Data tersimpan di perangkat. Backup belum tersedia; gunakan data uji dahulu.',
+        'Versi awal • Data tersimpan di perangkat. Buat backup terenkripsi secara berkala.',
       ),
       const SizedBox(height: 90),
     ];
@@ -328,6 +348,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 }
+
+enum _HomeMenuAction { backup }
 
 enum _HomeTab { overview, history, calendar, accounts }
 

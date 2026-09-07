@@ -172,12 +172,19 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 ### 11. Backup dan Restore
 
 - Database kerja disimpan secara lokal.
-- Pengguna dapat membuat backup manual ke lokasi yang dipilih, termasuk penyedia dokumen seperti Google Drive atau OneDrive melalui pemilih berkas Android.
-- Format backup memiliki versi agar dapat dimigrasikan pada versi aplikasi berikutnya.
-- Backup berisi data lengkap untuk restore, bukan hanya laporan CSV.
-- Backup dapat dienkripsi menggunakan kata sandi yang dimiliki pengguna.
-- Restore memvalidasi format dan versi, menampilkan ringkasan, lalu membuat safety backup sebelum mengganti data aktif.
+- Pengguna dapat membuat backup manual ke lokasi yang dipilih, termasuk penyedia dokumen seperti Google Drive atau OneDrive melalui Storage Access Framework Android.
+- Dokumen restore dibaca langsung dari URI penyedia sebagai stream berbatas ukuran tanpa salinan cache perantara milik aplikasi.
+- Format backup dan container enkripsi memiliki versi terpisah agar dapat dimigrasikan pada versi aplikasi berikutnya.
+- Setiap backup memuat seluruh data fitur yang didukung oleh versi pembuatnya untuk restore, bukan hanya laporan CSV.
+- Setiap file backup dienkripsi dengan kunci berbasis kata sandi menggunakan Argon2id dan XChaCha20-Poly1305; tidak tersedia mode backup JSON polos pada antarmuka pengguna.
+- Kata sandi tidak disimpan dan tidak dapat dipulihkan. Jika pengguna lupa, file backup tidak dapat direstore; peringatan ini harus terlihat sebelum pembuatan backup.
+- Restore memvalidasi kata sandi, integritas, format, versi, dan relasi data, lalu menampilkan ringkasan sebelum mengganti data aktif.
 - Versi awal menggunakan strategi **replace all**, belum mendukung penggabungan dua database.
+- Setelah konfirmasi restore, aplikasi wajib membuat safety backup terenkripsi dari data aktif dengan kata sandi restore yang sama. File harus selesai ditulis, dibuka ulang, serta cocok dalam jumlah byte dan SHA-256 sebelum replace-all dimulai; pembatalan atau kegagalan penulisan/verifikasi menghentikan restore tanpa mengubah database.
+- Penggantian berlangsung atomik: kegagalan membatalkan seluruh perubahan database.
+- Container v1 hanya menerima profil Argon2id produksi secara persis. Ukuran file terenkripsi dibatasi 16 MiB dan plaintext hasil dekripsi dibatasi 10 MiB.
+- Payload saat ini mencakup rekening, kategori, dan seluruh ledger. Ketika anggaran atau fitur data baru ditambahkan, versi format berikutnya harus membawa data tersebut dan menyediakan jalur pembacaan backup lama.
+- Backup adalah snapshot manual, bukan sinkronisasi atau jadwal otomatis. Lokasi cloud dipilih pengguna melalui penyedia dokumen Android; aplikasi tidak mengunggah file sendiri.
 - Ekspor CSV disediakan sebagai laporan terpisah dan bukan format utama restore.
 
 ## Aturan Data Utama
@@ -292,4 +299,6 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Migrasi schema v2 ke v3 menambahkan siklus arsip rekening dan dukungan penyesuaian saldo bertanda tanpa mengubah arus kas lama.
 - Kalender memakai `occurredDay` dan indeks ledger yang sudah ada sehingga schema database tetap versi 3.
 - Kalender dibatasi Januari 2000 sampai hari ini, menggunakan pekan Senin–Minggu, dan menyertakan seluruh jenis transaksi pada daftar harian.
-- Setelah kalender, backup/restore merupakan fondasi kritis v0.1 berikutnya sebelum aplikasi dipercaya sebagai satu-satunya catatan keuangan.
+- Backup manual menggunakan file `.warasarta` terenkripsi berbasis kata sandi, sedangkan restore memakai validasi, preview, konfirmasi replace-all, dan transaksi atomik.
+- Enkripsi backup tidak berarti database SQLite aktif sudah terenkripsi; perlindungan database kerja dan PIN/biometrik tetap keputusan terpisah.
+- Backup/restore harus diverifikasi pada Downloads, penyedia dokumen cloud, dan instalasi/perangkat berbeda sebelum aplikasi dipercaya sebagai satu-satunya catatan keuangan.

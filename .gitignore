@@ -58,6 +58,7 @@ app.*.map.json
 *.db
 *.db-*
 *.finbackup
+*.warasarta
 *.jks
 *.keystore
 key.properties

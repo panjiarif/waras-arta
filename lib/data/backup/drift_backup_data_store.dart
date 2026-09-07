@@ -1,0 +1,369 @@
+import 'package:drift/drift.dart';
+
+import '../../domain/backup.dart';
+import '../../domain/backup_repository.dart';
+import '../../domain/finance.dart';
+import '../database/app_database.dart';
+
+// Deliberately independent from AppDatabase.schemaVersion. A database or
+// backup-format change must first extend the DTO, export, restore, and decoder
+// migration before these adapter coverage pins are updated.
+const _encodedBackupVersion = 1;
+const _encodedDatabaseSchemaVersion = 3;
+const _encodedTableColumns = <String, Set<String>>{
+  'accounts': {
+    'id',
+    'name',
+    'normalized_name',
+    'type',
+    'is_archived',
+    'created_at',
+  },
+  'categories': {
+    'id',
+    'parent_id',
+    'kind',
+    'name',
+    'normalized_name',
+    'icon_key',
+    'is_archived',
+    'sort_order',
+    'system_key',
+    'created_at',
+    'updated_at',
+  },
+  'ledger_entries': {
+    'id',
+    'kind',
+    'account_id',
+    'destination_account_id',
+    'amount',
+    'category_id',
+    'note',
+    'occurred_day',
+    'created_at',
+  },
+};
+
+class DriftBackupDataStore implements BackupDataStore {
+  DriftBackupDataStore(this._db);
+
+  final AppDatabase _db;
+
+  @override
+  int get databaseSchemaVersion => _db.schemaVersion;
+
+  @override
+  Future<BackupDocument> exportDocument({
+    required DateTime createdAtUtc,
+  }) async {
+    try {
+      _ensureAdapterCoversCurrentDatabase();
+      return await _db.transaction(() async {
+        final accounts = await (_db.select(
+          _db.accounts,
+        )..orderBy([(row) => OrderingTerm.asc(row.id)])).get();
+        final categories = await (_db.select(
+          _db.categories,
+        )..orderBy([(row) => OrderingTerm.asc(row.id)])).get();
+        final ledgerEntries = await (_db.select(
+          _db.ledgerEntries,
+        )..orderBy([(row) => OrderingTerm.asc(row.id)])).get();
+        final sequences = await _readSequences(
+          maximumAccountId: _maximum(accounts.map((row) => row.id)),
+          maximumCategoryId: _maximum(categories.map((row) => row.id)),
+          maximumLedgerId: _maximum(ledgerEntries.map((row) => row.id)),
+        );
+
+        final document = BackupDocument(
+          databaseSchemaVersion: _db.schemaVersion,
+          createdAtUtc: createdAtUtc.toUtc(),
+          sequences: sequences,
+          accounts: accounts.map(_backupAccount),
+          categories: categories.map(_backupCategory),
+          ledgerEntries: ledgerEntries.map(_backupLedgerEntry),
+        );
+        validateBackupDocument(document, requireSequenceHeadroom: false);
+        return document;
+      });
+    } on BackupException {
+      rethrow;
+    } catch (error) {
+      throw BackupPersistenceException(
+        'Data belum dapat disiapkan untuk backup.',
+        cause: error,
+      );
+    }
+  }
+
+  void _ensureAdapterCoversCurrentDatabase() {
+    final actualTableColumns = <String, Set<String>>{
+      for (final table in _db.allTables)
+        table.actualTableName: {
+          for (final column in table.$columns) column.$name,
+        },
+    };
+    final coversPersistentSchema =
+        actualTableColumns.length == _encodedTableColumns.length &&
+        _encodedTableColumns.entries.every((expected) {
+          final actualColumns = actualTableColumns[expected.key];
+          return actualColumns != null &&
+              actualColumns.length == expected.value.length &&
+              actualColumns.containsAll(expected.value);
+        });
+    if (currentBackupVersion != _encodedBackupVersion ||
+        _db.schemaVersion != _encodedDatabaseSchemaVersion ||
+        !coversPersistentSchema) {
+      throw const BackupPersistenceException(
+        'Format backup belum mencakup struktur database aplikasi ini.',
+      );
+    }
+  }
+
+  @override
+  Future<void> restoreDocument(BackupDocument document) async {
+    _ensureAdapterCoversCurrentDatabase();
+    validateBackupDocument(document);
+    if (document.databaseSchemaVersion != _db.schemaVersion) {
+      throw const BackupValidationException(
+        'Versi database pada backup belum didukung oleh aplikasi ini.',
+      );
+    }
+
+    try {
+      await _db.transaction(() async {
+        // Ledger delete/insert triggers reject archived accounts. Temporarily
+        // activate accounts on both sides of the replacement, then restore the
+        // archived flags only after every ledger row exists.
+        await _db
+            .update(_db.accounts)
+            .write(const AccountsCompanion(isArchived: Value(false)));
+        await _db.delete(_db.ledgerEntries).go();
+        await (_db.delete(
+          _db.categories,
+        )..where((row) => row.parentId.isNotNull())).go();
+        await (_db.delete(
+          _db.categories,
+        )..where((row) => row.parentId.isNull())).go();
+        await _db.delete(_db.accounts).go();
+
+        final accountRows = [
+          for (final account in document.accounts)
+            AccountRow(
+              id: account.id,
+              name: account.name,
+              normalizedName: account.normalizedName,
+              type: account.type.index,
+              isArchived: false,
+              createdAt: account.createdAtUtc,
+            ),
+        ];
+        final categoryRoots = <CategoryRow>[];
+        final categoryChildren = <CategoryRow>[];
+        for (final category in document.categories) {
+          final row = CategoryRow(
+            id: category.id,
+            parentId: category.parentId,
+            kind: category.kind.index,
+            name: category.name,
+            normalizedName: category.normalizedName,
+            iconKey: category.iconKey,
+            isArchived: category.isArchived,
+            sortOrder: category.sortOrder,
+            systemKey: category.systemKey,
+            createdAt: category.createdAtUtc,
+            updatedAt: category.updatedAtUtc,
+          );
+          (category.parentId == null ? categoryRoots : categoryChildren).add(
+            row,
+          );
+        }
+        final ledgerRows = [
+          for (final entry in document.ledgerEntries)
+            LedgerRow(
+              id: entry.id,
+              kind: entry.kind.index,
+              accountId: entry.accountId,
+              destinationAccountId: entry.destinationAccountId,
+              amount: entry.amount,
+              categoryId: entry.categoryId,
+              note: entry.note,
+              occurredDay: entry.occurredDay,
+              createdAt: entry.createdAtUtc,
+            ),
+        ];
+
+        await _db.batch((batch) {
+          if (accountRows.isNotEmpty) {
+            batch.insertAll(_db.accounts, accountRows);
+          }
+          if (categoryRoots.isNotEmpty) {
+            batch.insertAll(_db.categories, categoryRoots);
+          }
+          if (categoryChildren.isNotEmpty) {
+            batch.insertAll(_db.categories, categoryChildren);
+          }
+          if (ledgerRows.isNotEmpty) {
+            batch.insertAll(_db.ledgerEntries, ledgerRows);
+          }
+        });
+
+        final archivedIds = document.accounts
+            .where((account) => account.isArchived)
+            .map((account) => account.id)
+            .toList(growable: false);
+        if (archivedIds.isNotEmpty) {
+          await (_db.update(_db.accounts)
+                ..where((row) => row.id.isIn(archivedIds)))
+              .write(const AccountsCompanion(isArchived: Value(true)));
+        }
+
+        await _writeSequences(document.sequences);
+        await _verifyRestore(document);
+      });
+    } on BackupException {
+      rethrow;
+    } catch (error) {
+      throw BackupPersistenceException(
+        'Data lama tetap tersimpan karena proses restore gagal.',
+        cause: error,
+      );
+    }
+  }
+
+  Future<BackupSequences> _readSequences({
+    required int maximumAccountId,
+    required int maximumCategoryId,
+    required int maximumLedgerId,
+  }) async {
+    final rows = await _db.customSelect('''
+      SELECT name, COALESCE(seq, 0) AS seq
+      FROM sqlite_sequence
+      WHERE name IN ('accounts', 'categories', 'ledger_entries')
+    ''').get();
+    final values = {
+      for (final row in rows) row.read<String>('name'): row.read<int>('seq'),
+    };
+    return BackupSequences(
+      accounts: _atLeast(values['accounts'] ?? 0, maximumAccountId),
+      categories: _atLeast(values['categories'] ?? 0, maximumCategoryId),
+      ledgerEntries: _atLeast(values['ledger_entries'] ?? 0, maximumLedgerId),
+    );
+  }
+
+  Future<void> _writeSequences(BackupSequences sequences) async {
+    await _db.customStatement('''
+      DELETE FROM sqlite_sequence
+      WHERE name IN ('accounts', 'categories', 'ledger_entries')
+    ''');
+    await _db.customStatement(
+      '''
+        INSERT INTO sqlite_sequence (name, seq) VALUES
+          ('accounts', ?),
+          ('categories', ?),
+          ('ledger_entries', ?)
+      ''',
+      [sequences.accounts, sequences.categories, sequences.ledgerEntries],
+    );
+  }
+
+  Future<void> _verifyRestore(BackupDocument document) async {
+    final foreignKeyErrors = await _db
+        .customSelect('PRAGMA foreign_key_check')
+        .get();
+    if (foreignKeyErrors.isNotEmpty) {
+      throw const BackupValidationException(
+        'Relasi data hasil restore tidak valid.',
+      );
+    }
+
+    final counts = await _db.customSelect('''
+      SELECT
+        (SELECT COUNT(*) FROM accounts) AS account_count,
+        (SELECT COUNT(*) FROM categories) AS category_count,
+        (SELECT COUNT(*) FROM ledger_entries) AS ledger_count
+    ''').getSingle();
+    if (counts.read<int>('account_count') != document.accounts.length ||
+        counts.read<int>('category_count') != document.categories.length ||
+        counts.read<int>('ledger_count') != document.ledgerEntries.length) {
+      throw const BackupValidationException(
+        'Jumlah data hasil restore tidak sesuai dengan backup.',
+      );
+    }
+
+    final invalidCategories = await _db.customSelect('''
+      SELECT COUNT(*) AS amount
+      FROM ledger_entries AS entry
+      LEFT JOIN categories AS category ON category.id = entry.category_id
+      WHERE (entry.kind IN (0, 1) AND
+             (category.id IS NULL OR category.parent_id IS NULL OR
+              category.kind <> entry.kind))
+         OR (entry.kind IN (2, 3) AND entry.category_id IS NOT NULL)
+    ''').getSingle();
+    if (invalidCategories.read<int>('amount') != 0) {
+      throw const BackupValidationException(
+        'Kategori hasil restore tidak valid.',
+      );
+    }
+
+    final restoredSequences = await _readSequences(
+      maximumAccountId: _maximum(document.accounts.map((row) => row.id)),
+      maximumCategoryId: _maximum(document.categories.map((row) => row.id)),
+      maximumLedgerId: _maximum(document.ledgerEntries.map((row) => row.id)),
+    );
+    if (restoredSequences.accounts != document.sequences.accounts ||
+        restoredSequences.categories != document.sequences.categories ||
+        restoredSequences.ledgerEntries != document.sequences.ledgerEntries) {
+      throw const BackupValidationException(
+        'Urutan ID hasil restore tidak sesuai dengan backup.',
+      );
+    }
+  }
+
+  static BackupAccount _backupAccount(AccountRow row) => BackupAccount(
+    id: row.id,
+    name: row.name,
+    normalizedName: row.normalizedName,
+    type: AccountType.values[row.type],
+    isArchived: row.isArchived,
+    createdAtUtc: row.createdAt.toUtc(),
+  );
+
+  static BackupCategory _backupCategory(CategoryRow row) => BackupCategory(
+    id: row.id,
+    parentId: row.parentId,
+    kind: CategoryKind.values[row.kind],
+    name: row.name,
+    normalizedName: row.normalizedName,
+    iconKey: row.iconKey,
+    isArchived: row.isArchived,
+    sortOrder: row.sortOrder,
+    systemKey: row.systemKey,
+    createdAtUtc: row.createdAt.toUtc(),
+    updatedAtUtc: row.updatedAt.toUtc(),
+  );
+
+  static BackupLedgerEntry _backupLedgerEntry(LedgerRow row) =>
+      BackupLedgerEntry(
+        id: row.id,
+        kind: EntryKind.values[row.kind],
+        accountId: row.accountId,
+        destinationAccountId: row.destinationAccountId,
+        amount: row.amount,
+        categoryId: row.categoryId,
+        note: row.note,
+        occurredDay: row.occurredDay,
+        createdAtUtc: row.createdAt.toUtc(),
+      );
+
+  static int _maximum(Iterable<int> values) {
+    var result = 0;
+    for (final value in values) {
+      if (value > result) result = value;
+    }
+    return result;
+  }
+
+  static int _atLeast(int value, int minimum) =>
+      value < minimum ? minimum : value;
+}

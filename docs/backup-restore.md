@@ -1,0 +1,114 @@
+# Backup dan Restore Waras Arta
+
+## Status dan batas fitur
+
+Waras Arta menyediakan backup rutin **manual** berbasis kata sandi. Setiap kali pengguna menekan **Buat backup**, aplikasi mengambil satu snapshot data saat itu, mengenkripsinya, lalu membuka pemilih dokumen Android untuk menentukan lokasi file `.warasarta`. Integrasi ini memakai adapter native Storage Access Framework (SAF), bukan package `file_picker`. Pengguna dapat memilih Downloads atau penyedia dokumen seperti Google Drive jika penyedia tersebut terpasang dan tersedia pada perangkat. Selain itu, aplikasi mewajibkan satu safety backup terenkripsi setelah pengguna mengonfirmasi restore dan sebelum replace-all dimulai.
+
+Backup rutin ini bukan sinkronisasi dan tidak berjalan otomatis. Aplikasi belum menjadwalkan backup, mengunggah file sendiri, merotasi salinan lama, atau memastikan file masih dapat dibuka. Safety backup yang diwajibkan saat restore adalah pengecualian terbatas dan bukan pengganti backup rutin. Perubahan setelah sebuah file dibuat tidak ikut masuk ke file tersebut. Buat backup baru secara berkala dan simpan lebih dari satu salinan di lokasi berbeda.
+
+## Alur pengguna
+
+### Membuat backup
+
+1. Buka **Backup & pulihkan data** dari menu aplikasi.
+2. Pilih **Buat backup**.
+3. Masukkan kata sandi minimal 12 karakter dan ulangi kata sandi yang sama.
+4. Pilih lokasi melalui dialog **Simpan sebagai** Android.
+5. Aplikasi menutup hasil penulisan, membuka kembali URI dokumen, lalu mencocokkan jumlah byte dan SHA-256 dengan data sumber. Konfirmasi berhasil hanya ditampilkan jika pemeriksaan ini lolos; pastikan file juga terlihat di lokasi pilihan.
+
+Nama yang disarankan aplikasi berbentuk `waras-arta-backup-YYYYMMDD-HHmmss.warasarta`; safety backup memakai `waras-arta-sebelum-restore-YYYYMMDD-HHmmss.warasarta` agar tidak mudah tertukar dengan file sumber. Nama dan ekstensi hanya membantu pengguna mengenali file; keamanan berasal dari enkripsi, bukan dari ekstensi khusus.
+
+Saat restore, aplikasi tidak mempercayai ekstensi atau MIME sebagai bukti bahwa dokumen adalah backup. Isi yang dipilih tetap harus lolos autentikasi container, pemeriksaan versi, dan validasi payload.
+
+> **Kata sandi tidak disimpan oleh Waras Arta dan tidak dapat dipulihkan. Jika kata sandi dilupakan, backup tidak dapat direstore.** Gunakan frasa sandi yang kuat, unik, dan dapat disimpan secara aman oleh pengguna.
+
+### Melakukan restore
+
+1. Pilih **Pulihkan dari backup**, lalu pilih file `.warasarta`.
+2. Masukkan kata sandi file tersebut.
+3. Aplikasi mendekripsi dan memvalidasi format, versi, integritas, serta relasi data sebelum menawarkan perubahan database.
+4. Periksa waktu pembuatan dan jumlah rekening, kategori, serta transaksi pada ringkasan.
+5. Konfirmasikan **Backup lalu pulihkan** hanya jika file dan ringkasannya benar.
+6. Aplikasi mengekspor data aktif, mengenkripsinya memakai kata sandi restore yang sama, lalu membuka Save As untuk safety backup.
+7. Jika Save As dibatalkan, penulisan gagal, atau hasil baca ulang tidak memiliki ukuran dan SHA-256 yang sama, restore dihentikan tanpa mengubah database.
+8. Hanya setelah safety backup berhasil ditulis dan diverifikasi, aplikasi menjalankan replace-all dalam satu transaksi database.
+9. Setelah transaksi restore berhasil, tampilan keuangan dimuat ulang dari data hasil backup.
+
+Restore versi awal memakai strategi **replace-all**, bukan merge. Seluruh rekening, kategori, dan ledger aktif diganti oleh isi backup. Safety backup terenkripsi adalah prasyarat restore dan memakai kata sandi yang sama. Replace-all tidak pernah dimulai jika safety backup belum berhasil disimpan.
+
+## Isi dan versi format
+
+File `.warasarta` adalah container terenkripsi, bukan file SQLite dan bukan JSON polos. Setelah autentikasi serta dekripsi berhasil, payload logis versi 1 memuat:
+
+- identitas format dan `backupVersion`;
+- versi schema database sumber;
+- waktu pembuatan dalam UTC;
+- rekening, termasuk status arsip dan waktu pembuatannya;
+- kelompok kategori dan subkategori, termasuk ikon, urutan, status arsip, serta identitas kategori bawaan;
+- seluruh ledger pemasukan, pengeluaran, transfer, dan penyesuaian saldo;
+- ID asli dan high-water mark ID SQLite agar identitas berikutnya tetap konsisten setelah restore.
+
+Saldo, ringkasan, dan penanda kalender tidak disimpan sebagai salinan turunan. Nilai tersebut dihitung kembali dari ledger setelah restore.
+
+`backupVersion` dan versi container enkripsi dipisahkan dari `databaseSchemaVersion`. Pemisahan ini memungkinkan format data, skema lokal, dan parameter keamanan berevolusi dengan jalur migrasi masing-masing. Versi aplikasi saat ini hanya menerima versi yang dikenal dan menolak versi yang lebih baru daripada yang didukung.
+
+Payload versi 1 belum berisi anggaran, tujuan keuangan, gambar unggahan, atau utang/piutang karena fitur tersebut belum tersedia. Backup yang dibuat sekarang tentu tidak dapat memuat data fitur yang belum ada. Ketika anggaran ditambahkan, backup baru harus memakai versi format berikutnya, menambah bagian anggaran, serta menyediakan migrasi decoder dan pengujian kompatibilitas.
+
+Kompatibilitas ini adalah persyaratan untuk setiap rilis format baru: file v1 harus tetap dapat dibaca oleh versi aplikasi yang lebih baru dengan bagian fitur baru diinisialisasi kosong/default, sedangkan aplikasi lama harus menolak versi baru dan tidak boleh diam-diam mengabaikan datanya. Parser v1 karena itu menolak field semantik yang tidak dikenal; penambahan data baru wajib disertai kenaikan `backupVersion`.
+
+## Enkripsi dan integritas
+
+Kata sandi dinormalisasi ke Unicode NFC lalu diproses sebagai UTF-8 dengan **Argon2id** menggunakan salt acak untuk menghasilkan kunci 256-bit. Normalisasi memastikan karakter beraksen yang tampak sama tidak menghasilkan kunci berbeda hanya karena komposisi code point dari keyboard berbeda. Decoder container v1 memakai allowlist yang cocok persis dengan profil produksi: Argon2 versi 19, normalisasi NFC, memori 19.456 KiB, 2 iterasi, paralelisme 1, dan panjang kunci 32 byte. Perbedaan apa pun ditolak; decoder tidak menerima rentang parameter yang longgar. Perubahan profil harus memakai versi container atau jalur migrasi baru.
+
+Payload kemudian dienkripsi dan diautentikasi dengan **XChaCha20-Poly1305** menggunakan nonce acak. Header keamanan ikut diautentikasi sebagai additional authenticated data. Perubahan pada ciphertext, tag autentikasi, atau header menyebabkan file ditolak. Pesan untuk kata sandi salah dan file rusak sengaja tidak membedakan penyebab kriptografisnya.
+
+Container tidak menyimpan kata sandi atau kunci hasil derivasi. Password dan buffer plaintext dibersihkan dari objek sementara sejauh yang dapat dilakukan oleh runtime, tetapi aplikasi tidak menjanjikan penghapusan forensik dari memori perangkat.
+
+## Akses dokumen Android
+
+Adapter Android native membuka tujuan simpan dengan `ACTION_CREATE_DOCUMENT` dan sumber restore dengan `ACTION_OPEN_DOCUMENT`. Saat memilih dokumen, ukuran dari metadata diperiksa bila tersedia, kemudian isi dibaca langsung dari URI penyedia sebagai stream berbatas 16 MiB. Pembacaan berhenti dan file ditolak ketika batas terlampaui; Waras Arta tidak lebih dahulu membuat salinan perantara di cache aplikasi.
+
+Saat menyimpan, adapter menulis dan menutup stream, membuka kembali URI yang sama, lalu mencocokkan jumlah byte dan SHA-256 dengan container sumber. Operasi baru dilaporkan berhasil setelah verifikasi ini lolos. Pemeriksaan tersebut hanya membuktikan hasil penulisan yang langsung dapat dibaca saat itu; pemeriksaan tidak menjamin retensi penyedia cloud dan bukan verifikasi backup berkala.
+
+## Konsistensi database
+
+Ekspor membaca rekening, kategori, ledger, dan sequence dalam satu transaksi baca sehingga bagian-bagian snapshot berasal dari keadaan database yang konsisten.
+
+Sebelum restore, payload diperiksa terhadap batas nominal, bentuk tanggal, keunikan ID/nama, hierarki kategori, foreign key, aturan jenis transaksi, dan saldo rekening arsip. Penggantian data kemudian dijalankan dalam satu transaksi Drift/SQLite. ID asli dan sequence dipulihkan, hasilnya diperiksa kembali, dan commit hanya dilakukan jika seluruh langkah berhasil. Jika insert atau pemeriksaan akhir gagal, transaksi di-rollback sehingga data lama tetap ada.
+
+Atomic rollback melindungi konsistensi database ketika operasi gagal; mekanisme tersebut bukan pengganti salinan cadangan. Kerusakan perangkat, uninstall, atau penghapusan data aplikasi tetap dapat menghilangkan database aktif dan backup yang hanya disimpan pada HP yang sama.
+
+## Batas keamanan
+
+- File `.warasarta` yang berhasil dibuat dienkripsi, termasuk data keuangan di dalam payload.
+- Database SQLite aktif di direktori privat aplikasi **belum dienkripsi khusus oleh Waras Arta**. Perlindungan file backup tidak mengenkripsi database kerja.
+- Belum tersedia PIN atau biometrik aplikasi.
+- Tidak ada server Waras Arta, akun wajib, sinkronisasi cloud, atau pemulihan kata sandi.
+- Android Auto Backup dan ekstraksi device-to-device untuk data internal aplikasi dinonaktifkan/dikecualikan. Pindah perangkat harus memakai file `.warasarta` terenkripsi secara manual.
+- Memilih Google Drive melalui pemilih dokumen berarti Android menyerahkan file terenkripsi kepada penyedia tersebut; Waras Arta tidak menjalankan sinkronisasi atau memeriksa retensi cloud.
+- Batas ukuran container terenkripsi adalah 16 MiB dan batas plaintext hasil dekripsi adalah 10 MiB. Pemilihan membaca URI secara streaming dengan batas keras dan tanpa salinan cache perantara milik aplikasi, tetapi container hasil baca dan payload hasil dekripsi tetap dimuat ke memori. Pengujian dengan data besar pada HP kelas bawah tetap diperlukan.
+
+## Checklist Android
+
+Gunakan data percobaan dan salinan file, bukan satu-satunya catatan keuangan.
+
+- [ ] Buat data yang mencakup dua rekening, kategori kustom/arsip, pemasukan, pengeluaran, transfer, penyesuaian positif/negatif, dan tanggal lampau.
+- [ ] Pastikan kata sandi kosong, kurang dari 12 karakter, dan konfirmasi yang berbeda ditolak sebelum dialog simpan dibuka.
+- [ ] Simpan backup ke Downloads, pastikan status berhasil baru muncul setelah verifikasi hasil tulis, temukan file `.warasarta`, dan salin file itu ke lokasi kedua.
+- [ ] Jika Google Drive tersedia sebagai penyedia dokumen, simpan salinan ke Drive dan pastikan file dapat dipilih kembali setelah dialog ditutup.
+- [ ] Tambah satu transaksi setelah backup; pastikan transaksi baru itu tidak dianggap masuk ke snapshot lama.
+- [ ] Pilih backup dan masukkan kata sandi salah. Data aktif tidak boleh berubah.
+- [ ] Ubah beberapa byte pada salinan file atau gunakan file yang terpotong. Restore harus ditolak dan data aktif tidak boleh berubah.
+- [ ] Masukkan kata sandi benar, periksa waktu dan jumlah data pada ringkasan, lalu pilih **Batal**. Data aktif tidak boleh berubah.
+- [ ] Konfirmasi restore dan pastikan Save As untuk safety backup muncul sebelum database berubah.
+- [ ] Batalkan Save As; restore harus ikut batal dan data aktif tidak boleh berubah.
+- [ ] Ulangi restore, simpan safety backup, lalu pastikan replace-all baru berjalan setelah file berhasil disimpan.
+- [ ] Buka safety backup dengan kata sandi restore yang sama dan pastikan keadaan lama dapat dipulihkan.
+- [ ] Uji kegagalan penulisan atau baca ulang hasil simpan bila memungkinkan; operasi harus dianggap gagal, dan khusus safety backup restore harus batal dengan data aktif tetap utuh.
+- [ ] Bandingkan rekening aktif/arsip, kategori, transaksi, saldo total, ringkasan bulanan, dan kalender dengan keadaan sumber.
+- [ ] Tambahkan rekening, kategori, dan transaksi setelah restore untuk memastikan ID baru tidak bertabrakan.
+- [ ] Uji pada perangkat atau instalasi terpisah: ambil file dari Downloads/Drive, restore, tutup aplikasi sepenuhnya, lalu buka kembali dan periksa data.
+- [ ] Pastikan container di atas 16 MiB, plaintext di atas 10 MiB, dan parameter KDF v1 yang tidak sama persis dengan profil produksi ditolak tanpa mengubah database.
+- [ ] Ulangi pembuatan dan pembukaan backup pada HP referensi untuk menilai durasi, penggunaan memori, keyboard, ukuran teks besar, pembatalan pemilih dokumen, dan ketahanan terhadap ketukan tombol berulang.
+
+Checklist otomatis dan langkah pengembangan umum tersedia di [panduan pengembangan](development.md).

@@ -21,10 +21,12 @@ View -> ViewModel -> FinanceRepository -> Drift / SQLite
 ```
 
 - **View:** widget Material 3 berbahasa Indonesia, input form, tampilan loading/error, dan navigasi.
-- **ViewModel:** pilihan bulan riwayat, batas jumlah riwayat, bulan/tanggal kalender, pemuatan data, operasi transaksi, serta aksi edit, koreksi saldo, arsip/pulihkan, dan hapus rekening. Tidak menyimpan `BuildContext` atau mengakses SQL secara langsung.
-- **Domain:** model immutable, jenis rekening/transaksi/kategori, draft input, dan kontrak repository. Belum ada lapisan use case terpisah.
-- **Repository:** validasi aturan keuangan, operasi database, dan pemetaan hasil query ke model domain.
+- **ViewModel:** pilihan bulan riwayat, batas jumlah riwayat, bulan/tanggal kalender, operasi transaksi, serta state proses backup/restore. Tidak menyimpan `BuildContext` atau mengakses SQL, kriptografi, maupun pemilih dokumen platform secara langsung.
+- **Domain:** model immutable, jenis rekening/transaksi/kategori, DTO backup berversi, draft input, dan kontrak repository/data store. Belum ada lapisan use case umum yang terpisah.
+- **Repository/data store:** validasi aturan keuangan, operasi database, pemetaan hasil query, ekspor snapshot konsisten, dan restore atomik.
 - **Database:** tabel, constraint, indeks, dan koneksi persisten. SQLite adalah sumber data utama, bukan cache tampilan.
+- **Backup service:** mengorkestrasi snapshot, codec terenkripsi, nama file, dan preview sebelum restore tanpa mencampurkan tanggung jawab tersebut ke repository keuangan.
+- **Backup file gateway:** menjembatani Dart ke adapter SAF native Android untuk memilih, membaca, menulis, dan memverifikasi dokumen tanpa mengekspos detail platform ke ViewModel.
 
 ```text
 lib/
@@ -37,9 +39,16 @@ lib/
 │   ├── category_icons.dart
 │   └── formatters.dart
 ├── domain/
+│   ├── backup.dart
+│   ├── backup_repository.dart
 │   ├── finance.dart
 │   └── finance_repository.dart
 ├── data/
+│   ├── backup/
+│   │   ├── backup_file_gateway.dart
+│   │   ├── backup_service.dart
+│   │   ├── drift_backup_data_store.dart
+│   │   └── encrypted_backup_codec.dart
 │   ├── database/
 │   │   ├── app_database.dart
 │   │   ├── app_database.g.dart
@@ -47,6 +56,9 @@ lib/
 │   └── repositories/
 │       └── drift_finance_repository.dart
 └── features/
+    ├── backup/
+    │   ├── view_models/backup_view_model.dart
+    │   └── views/backup_screen.dart
     ├── calendar/
     │   ├── view_models/calendar_view_model.dart
     │   └── views/calendar_view.dart
@@ -75,7 +87,7 @@ lib/
 
 Fitur rekening dan transaksi dikelompokkan sebagai satu irisan `ledger` untuk tahap awal. Kalender menjadi irisan tersendiri, tetapi memakai model ledger dan rute detail/form transaksi yang sama. Pecah menjadi fitur terpisah ketika tanggung jawabnya bertambah, bukan dengan menambahkan direktori kosong sejak awal. `go_router` menangani rute layar; [Riverpod](https://riverpod.dev/docs/introduction/getting_started) menghubungkan repository dan ViewModel agar dependensi bisa diganti saat pengujian.
 
-Navigasi utama HP menggunakan empat tujuan `NavigationBar`: Ikhtisar, Riwayat, Kalender, dan Rekening. Kalender tidak membuka tumpukan rute baru ketika tanggal dipilih; detail transaksi dan form pencatatan tetap memakai rute ledger yang sudah ada.
+Navigasi utama HP menggunakan empat tujuan `NavigationBar`: Ikhtisar, Riwayat, Kalender, dan Rekening. Kalender tidak membuka tumpukan rute baru ketika tanggal dipilih; detail transaksi dan form pencatatan tetap memakai rute ledger yang sudah ada. Backup/restore merupakan alur pemeliharaan data yang dibuka dari menu aplikasi, bukan tujuan navigasi utama kelima.
 
 ## Model saldo dan transaksi
 
@@ -135,7 +147,24 @@ Koneksi `drift_flutter` menyimpan database SQLite di direktori dukungan aplikasi
 
 Ringkasan dihitung melalui agregasi database, dan riwayat dimuat bertahap dengan awal 50 entri. Agregasi kalender dilakukan langsung di SQLite dengan pengelompokan `occurredDay`, sehingga penanda dan total kalender mencakup seluruh transaksi bulan tersebut dan tidak bergantung pada batas 50 entri riwayat. Daftar tanggal terpilih juga membaca seluruh entri untuk satu tanggal. Indeks `ledger_entries_occurred_day_id` yang sudah ada mendukung kedua query; kalender tidak memerlukan tabel atau indeks baru. Ini adalah keputusan desain, bukan klaim bahwa benchmark pada data besar atau HP referensi sudah lulus.
 
-Alpha belum menambahkan enkripsi database, PIN, atau biometrik. Penyimpanan privat Android bukan pengganti backup ataupun enkripsi aplikasi. Tidak ada sinkronisasi cloud atau backup/restore buatan aplikasi. Jangan mengandalkan salinan otomatis sistem untuk pemulihan; uninstall, hapus data, kerusakan, atau kehilangan HP dapat menghilangkan data.
+### Backup manual terenkripsi
+
+Backup memakai dua bentuk yang sengaja dipisahkan:
+
+1. snapshot logis JSON dengan `backupVersion`, versi schema database, timestamp UTC, rekening, kategori, ledger, ID, dan high-water mark ID SQLite;
+2. container terenkripsi `.warasarta` dengan versi sendiri.
+
+Saldo, ringkasan, dan data kalender tidak diduplikasi karena dapat dihitung ulang dari ledger. Format payload dibuat eksplisit dan berversi, tidak memakai serialisasi generated Drift sebagai kontrak permanen. Versi mendatang dapat menambah bagian seperti anggaran melalui versi format baru dan migrasi decoder; payload v1 belum membawa data fitur yang belum ada.
+
+Kata sandi dinormalisasi ke Unicode NFC, lalu kunci 256-bit diturunkan menggunakan Argon2id dan salt acak. Snapshot dienkripsi serta diautentikasi dengan XChaCha20-Poly1305 dan nonce acak; header keamanan ikut diautentikasi. Kata sandi maupun kunci tidak disimpan. Akibatnya, kata sandi yang terlupa tidak dapat dipulihkan dan file tidak dapat direstore. Decoder container v1 hanya menerima profil produksi secara persis: Argon2 versi 19, normalisasi NFC, memori 19.456 KiB, 2 iterasi, paralelisme 1, dan panjang kunci 32 byte. Parameter berbeda ditolak; perubahan profil harus diperkenalkan melalui versi container atau jalur migrasi baru. Ukuran container terenkripsi dibatasi 16 MiB dan plaintext hasil dekripsi dibatasi 10 MiB.
+
+Ekspor membaca seluruh tabel terkait dalam satu transaksi baca. Restore memvalidasi container, payload, relasi, dan ringkasan sebelum meminta konfirmasi replace-all. Setelah konfirmasi, satu operasi terkoordinasi pada `BackupController` mengekspor data aktif, mengenkripsinya dengan kata sandi yang sama seperti file restore, lalu mewajibkan pengguna menyimpannya melalui Save As sebagai safety backup. Hanya penyimpanan yang berhasil yang mengizinkan restore berlanjut; pembatalan atau kegagalan menghentikan alur sebelum database diubah. Penggantian rekening, kategori, ledger, ID, serta sequence kemudian berlangsung dalam satu transaksi database; kegagalan membuat transaksi di-rollback. Versi ini tidak melakukan merge.
+
+Pemilih dokumen Android menjadi batas penyimpanan. `SafBackupFileGateway` berbicara melalui `MethodChannel` dengan adapter native pada `MainActivity`, menggunakan `ACTION_CREATE_DOCUMENT` dan `ACTION_OPEN_DOCUMENT` tanpa dependency `file_picker`. Dokumen pilihan dibaca langsung dari URI penyedia sebagai stream berbatas 16 MiB, tanpa salinan cache perantara milik aplikasi. Setelah penulisan, URI dibuka kembali dan jumlah byte serta SHA-256 harus sama dengan container sumber sebelum operasi dinyatakan berhasil. Karena itu, safety backup yang batal, gagal ditulis, atau gagal diverifikasi tidak dapat membuka jalan ke replace-all.
+
+Pengguna dapat memilih Downloads atau penyedia seperti Google Drive bila tersedia, tetapi Waras Arta tidak mengunggah, menjadwalkan, menyinkronkan, merotasi, atau memverifikasi backup rutin secara otomatis. Verifikasi baca ulang hanya memeriksa hasil penulisan saat itu dan bukan jaminan retensi jangka panjang. Safety backup wajib dalam alur restore tetap disimpan melalui pemilih dokumen ini. Lihat [spesifikasi backup dan restore](backup-restore.md).
+
+Enkripsi file backup tidak mengubah database kerja: SQLite aktif masih belum dienkripsi khusus oleh Waras Arta. Alpha juga belum menambahkan PIN atau biometrik. Android Auto Backup serta device-to-device extraction dinonaktifkan dan seluruh domain data aplikasi dikecualikan melalui aturan Android 11 dan Android 12+ agar database plaintext tidak berpindah di luar alur `.warasarta`. Penyimpanan privat Android bukan pengganti backup; uninstall, hapus data, kerusakan, atau kehilangan HP dapat menghilangkan perubahan sejak snapshot manual terakhir.
 
 ## Skema dan pengembangan berikutnya
 
@@ -149,5 +178,6 @@ Sebelum menaikkan `schemaVersion` berikutnya:
 2. Tulis langkah migrasi yang menjaga rekening dan ledger.
 3. Uji upgrade menggunakan data representatif, termasuk transfer dan tanggal lampau.
 4. Verifikasi saldo dan ringkasan sebelum/sesudah upgrade.
+5. Perluas DTO, ekspor, restore, dan migrasi decoder backup untuk semua data semantik baru; naikkan `backupVersion` bila kontrak payload berubah, lalu baru perbarui guard cakupan adapter dan tesnya. Guard ekspor maupun restore saat ini sengaja mematok adapter v1 pada schema v3 serta nama tabel dan kolom persisten rekening, kategori, dan ledger secara persis. Penambahan tabel atau kolom—bahkan bila `schemaVersion` lupa dinaikkan—akan berhenti secara fail-closed, bukan menghasilkan backup parsial atau menyisakan data baru saat replace-all.
 
-Kalender grid kini memakai fondasi rekening, ledger, dan ID subkategori tanpa mengubah model inti. Backup lengkap yang berversi, enkripsi backup berbasis kata sandi, dan restore atomik menjadi fondasi kritis v0.1 berikutnya. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.
+Kalender dan backup/restore kini memakai fondasi rekening, ledger, dan ID subkategori tanpa menaikkan schema database dari versi 3. Langkah berikutnya adalah memverifikasi alur file Android serta performa Argon2id pada HP referensi sebelum menjadikannya jalur pemulihan yang dipercaya. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.

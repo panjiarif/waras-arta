@@ -33,6 +33,30 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('more menu opens encrypted backup screen on a narrow phone', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+
+    await tester.tap(find.byKey(const Key('more-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Backup & pulihkan data'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jaga catatan keuanganmu'), findsOneWidget);
+    expect(find.byKey(const Key('backup-password-warning')), findsOneWidget);
+    expect(
+      find.textContaining('Jika lupa, file backup tidak akan bisa direstore'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('create-backup')), findsOneWidget);
+    expect(find.byKey(const Key('restore-backup')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'empty app leads to creating first account and saving opening balance',
     (tester) async {

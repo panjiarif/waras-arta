@@ -133,6 +133,8 @@ Kategori dibatasi tepat dua tingkat. Baris induk adalah kelompok, sedangkan tran
 - Ikon disimpan sebagai semantic string key yang dipetakan ke katalog Material terbatas. `IconData.codePoint` dan berkas gambar tidak disimpan di database.
 - Upload gambar ditunda sampai spesifikasi backup mampu membawa database dan aset sebagai satu paket tervalidasi.
 
+Rencana anggaran mendukung periode bulanan, tahunan kalender, dan rentang tanggal kustom. Semuanya menggunakan ID subkategori pengeluaran dan menghitung progres langsung dari ledger. Kontrak produk, schema v4, payload backup v2, serta batas implementasinya dijelaskan dalam [spesifikasi Anggaran v1](budgets.md).
+
 ## Tanggal dan periode
 
 `occurredAt` adalah tanggal kejadian yang dipilih pengguna. Alpha menerima tanggal 1 Januari 2000 sampai hari ini, belum transaksi terjadwal di masa depan. Di database tanggal ini disimpan sebagai bilangan `YYYYMMDD` (`occurredDay`), bukan timestamp yang dikonversi zona waktu. `createdAt` mencatat waktu entri dibuat dan tidak menentukan periode keuangan.

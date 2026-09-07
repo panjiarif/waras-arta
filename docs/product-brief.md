@@ -6,7 +6,7 @@
 
 - **Status:** Draft
 - **Versi produk awal:** `0.1.0`
-- **Terakhir diperbarui:** 6 September 2026
+- **Terakhir diperbarui:** 7 September 2026
 - **Platform pertama:** Android
 - **Repository:** `waras-arta`
 - **Package Dart:** `waras_arta`
@@ -126,11 +126,16 @@ Transfer mengurangi saldo rekening asal dan menambah saldo rekening tujuan, teta
 
 ### 6. Anggaran
 
-- Anggaran dibuat untuk satu bulan.
-- Satu anggaran dapat memakai satu atau beberapa kategori pengeluaran.
+- Anggaran dapat memakai satu bulan kalender, satu tahun kalender, atau rentang tanggal kustom.
+- Satu anggaran dapat memakai satu atau beberapa subkategori pengeluaran.
 - Pemakaian anggaran bertambah otomatis ketika ada pengeluaran pada kategori terkait.
 - Pemasukan, transfer, dan penyesuaian saldo tidak menggunakan anggaran.
-- Kategori yang tumpang tindih pada beberapa anggaran aktif harus diperingatkan atau dicegah.
+- Batas berlaku untuk seluruh periode dan tidak otomatis dibagi per bulan.
+- Satu subkategori dicegah berada pada beberapa anggaran dengan rentang tanggal yang beririsan, termasuk antarjenis periode.
+- Progres tidak disimpan, tetapi dihitung ulang dari ledger agar edit/hapus transaksi tetap konsisten.
+- Pengeluaran tetap boleh dicatat setelah batas terlampaui.
+
+Aturan lengkap, schema yang direncanakan, kompatibilitas backup, dan matriks pengujian tersedia pada [spesifikasi Anggaran v1](budgets.md).
 
 ### 7. Tujuan Keuangan
 
@@ -269,7 +274,7 @@ MVP dianggap berhasil ketika pengguna dapat:
 4. menutup dan membuka kembali aplikasi tanpa kehilangan data;
 5. membuat backup, menghapus atau mengganti data aktif, kemudian merestore backup dengan hasil yang sama;
 6. menggunakan alur utama dengan nyaman pada perangkat referensi;
-7. memastikan transfer tidak mengubah total pemasukan, pengeluaran, atau pemakaian anggaran.
+7. memastikan transfer hanya memindahkan saldo antar-rekening tanpa mengubah total pemasukan atau pengeluaran.
 
 ## Pertanyaan Terbuka
 

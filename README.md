@@ -60,6 +60,7 @@ Ganti `DEVICE_ID` dengan ID HP. Proyek ini belum menargetkan runtime web atau de
 Flutter/Dart, Material 3, MVVM dengan Riverpod, repository, Drift/SQLite dengan background isolate, dan `go_router`. Saldo berasal dari ledger, nominal menggunakan bilangan bulat rupiah, periode transaksi berdasarkan tanggal kejadian, dan identitas kategori memakai ID stabil.
 
 - [Product brief dan ruang lingkup versi](docs/product-brief.md)
+- [Spesifikasi Anggaran v1](docs/budgets.md)
 - [Arsitektur dan aturan data](docs/architecture.md)
 - [Format, keamanan, dan pemulihan backup](docs/backup-restore.md)
 - [Pengembangan, verifikasi, dan commit](docs/development.md)

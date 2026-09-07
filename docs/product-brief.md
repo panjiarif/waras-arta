@@ -88,16 +88,22 @@ Versi awal menggunakan susunan tetap. Pengaturan kartu dan urutan dashboard dire
 ### 3. Transaksi
 
 - Mencatat pemasukan dan pengeluaran.
-- Memilih rekening, subkategori, nominal, tanggal, dan catatan.
+- Memilih rekening, tanggal, dan catatan yang berlaku untuk seluruh transaksi.
+- Memasukkan 1–50 alokasi kategori; setiap alokasi mempunyai nominal positif dan satu subkategori yang sesuai jenis transaksi.
+- Membuka form dengan satu alokasi secara default agar pencatatan biasa tetap ringkas, lalu menambah baris melalui tombol **+ Tambah kategori lain** bila satu pembayaran atau penerimaan mencakup beberapa kategori.
 - Melihat riwayat berdasarkan bulan atau tahun.
 - Mencari dan memfilter transaksi.
 - Mengubah atau menghapus transaksi dengan pembaruan saldo yang konsisten.
 - Menyimpan tanggal kejadian terpisah dari waktu pencatatan.
 
+Header tetap mewakili satu transaksi dan satu pergerakan saldo. Total bukan input independen: aplikasi menghitungnya otomatis dari jumlah seluruh alokasi lalu menyimpannya pada header. Saldo rekening, arus kas, kalender, dan jumlah transaksi memakai total header tepat sekali; rincian kategori serta anggaran memakai nominal masing-masing alokasi agar transaksi split tidak dihitung ganda.
+
+Aturan lengkap, evolusi schema/backup, serta matriks pengujiannya direncanakan dalam [spesifikasi Alokasi Kategori Transaksi](transaction-allocations.md).
+
 Kategori pemasukan dan pengeluaran memiliki tepat dua tingkat:
 
 - kelompok kategori sebagai induk yang tidak dipilih langsung oleh transaksi;
-- subkategori sebagai pilihan transaksi dan identitas yang dipakai laporan;
+- subkategori sebagai pilihan alokasi transaksi dan identitas yang dipakai laporan;
 - nama serta ikon Material kelompok/subkategori dapat diubah;
 - kategori yang tidak lagi digunakan diarsipkan agar transaksi lama tetap utuh;
 - kategori bawaan dapat dikustomisasi seperti kategori buatan pengguna;
@@ -128,11 +134,11 @@ Transfer mengurangi saldo rekening asal dan menambah saldo rekening tujuan, teta
 
 - Anggaran dapat memakai satu bulan kalender, satu tahun kalender, atau rentang tanggal kustom.
 - Satu anggaran dapat memakai satu atau beberapa subkategori pengeluaran.
-- Pemakaian anggaran bertambah otomatis ketika ada pengeluaran pada kategori terkait.
+- Pemakaian anggaran bertambah otomatis dari nominal alokasi pengeluaran pada kategori terkait.
 - Pemasukan, transfer, dan penyesuaian saldo tidak menggunakan anggaran.
 - Batas berlaku untuk seluruh periode dan tidak otomatis dibagi per bulan.
 - Satu subkategori dicegah berada pada beberapa anggaran dengan rentang tanggal yang beririsan, termasuk antarjenis periode.
-- Progres tidak disimpan, tetapi dihitung ulang dari ledger agar edit/hapus transaksi tetap konsisten.
+- Progres tidak disimpan, tetapi dihitung ulang dari alokasi kategori beserta tanggal transaksi induknya agar edit/hapus transaksi tetap konsisten.
 - Pengeluaran tetap boleh dicatat setelah batas terlampaui.
 
 Aturan lengkap, schema yang direncanakan, kompatibilitas backup, dan matriks pengujian tersedia pada [spesifikasi Anggaran v1](budgets.md).
@@ -188,7 +194,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 - Setelah konfirmasi restore, aplikasi wajib membuat safety backup terenkripsi dari data aktif dengan kata sandi restore yang sama. File harus selesai ditulis, dibuka ulang, serta cocok dalam jumlah byte dan SHA-256 sebelum replace-all dimulai; pembatalan atau kegagalan penulisan/verifikasi menghentikan restore tanpa mengubah database.
 - Penggantian berlangsung atomik: kegagalan membatalkan seluruh perubahan database.
 - Container v1 hanya menerima profil Argon2id produksi secara persis. Ukuran file terenkripsi dibatasi 16 MiB dan plaintext hasil dekripsi dibatasi 10 MiB.
-- Payload saat ini mencakup rekening, kategori, dan seluruh ledger. Ketika anggaran atau fitur data baru ditambahkan, versi format berikutnya harus membawa data tersebut dan menyediakan jalur pembacaan backup lama.
+- Payload saat ini mencakup rekening, kategori, dan seluruh ledger. Ketika alokasi kategori transaksi, anggaran, atau fitur data baru ditambahkan, versi format berikutnya harus membawa data tersebut dan menyediakan jalur pembacaan backup lama.
 - Backup adalah snapshot manual, bukan sinkronisasi atau jadwal otomatis. Lokasi cloud dipilih pengguna melalui penyedia dokumen Android; aplikasi tidak mengunggah file sendiri.
 - Ekspor CSV disediakan sebagai laporan terpisah dan bukan format utama restore.
 
@@ -205,6 +211,8 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 9. Perubahan transaksi lama harus menghitung ulang rekening, anggaran, dan ringkasan terkait secara konsisten.
 10. Transaksi lama yang menyentuh rekening arsip tetap dapat dilihat, tetapi hanya dapat diedit atau dihapus setelah rekening dipulihkan.
 11. Rekening hanya dapat dihapus permanen jika tidak memiliki referensi ledger sebagai sumber maupun tujuan; penghapusan tidak pernah melakukan cascade ke transaksi.
+12. Setiap pemasukan/pengeluaran memiliki 1–50 alokasi kategori dengan jumlah nominal persis sama dengan total transaksi; transfer dan penyesuaian saldo tidak memiliki alokasi kategori.
+13. Alokasi kategori hanya mengklasifikasikan transaksi dan tidak mengubah saldo secara terpisah. Saldo serta arus kas menghitung header satu kali, sedangkan laporan kategori dan anggaran menghitung nominal alokasi.
 
 ## Ruang Lingkup Versi
 
@@ -224,6 +232,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 
 ### Versi 0.2 — Perencanaan dan Analisis
 
+- fondasi alokasi kategori transaksi dan alur split transaction;
 - anggaran multi-kategori;
 - tujuan keuangan;
 - diagram;
@@ -294,7 +303,7 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Koreksi saldo harus dapat ditelusuri.
 - Backup dan restore merupakan bagian dari produk, bukan fitur tambahan opsional.
 - MVP didahulukan sebelum dashboard yang sangat fleksibel dan analitik lanjutan.
-- Transaksi pemasukan/pengeluaran menyimpan ID subkategori, bukan nama kategori.
+- Pada schema v4, alokasi pemasukan/pengeluaran menyimpan ID subkategori, bukan nama kategori; header transaksi tidak lagi menyimpan kategori langsung.
 - Hierarki kategori dibatasi dua tingkat agar kalender, anggaran, diagram, dan filter memiliki fondasi yang konsisten.
 - Kategori bawaan lama menjadi kelompok dengan subkategori `Umum` saat migrasi schema v1 ke v2.
 - Koreksi saldo disimpan sebagai penyesuaian ledger bertanda dan tidak masuk ringkasan pemasukan/pengeluaran; entri penyesuaian tidak dapat diedit atau dihapus.
@@ -307,3 +316,6 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Backup manual menggunakan file `.warasarta` terenkripsi berbasis kata sandi, sedangkan restore memakai validasi, preview, konfirmasi replace-all, dan transaksi atomik.
 - Enkripsi backup tidak berarti database SQLite aktif sudah terenkripsi; perlindungan database kerja dan PIN/biometrik tetap keputusan terpisah.
 - Backup/restore harus diverifikasi pada Downloads, penyedia dokumen cloud, dan instalasi/perangkat berbeda sebelum aplikasi dipercaya sebagai satu-satunya catatan keuangan.
+- Pemasukan/pengeluaran direncanakan mempunyai 1–50 alokasi kategori dengan satu alokasi sebagai default. Tombol plus menambah rincian kategori tanpa mengubah transaksi menjadi beberapa pergerakan saldo.
+- Total transaksi menjadi sumber perubahan saldo dan arus kas, sedangkan nominal alokasi menjadi sumber laporan kategori serta progres anggaran; keduanya wajib selalu berjumlah sama.
+- Fondasi alokasi kategori dan split transaction dikerjakan sebelum Anggaran v1 agar anggaran sejak awal menghitung bagian kategori, bukan menggandakan total transaksi.

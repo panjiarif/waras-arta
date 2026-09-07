@@ -13,7 +13,7 @@ Yang tersedia:
 - Membuat rekening tunai, bank, e-wallet, atau lainnya dengan saldo awal yang dicatat sebagai penyesuaian ledger.
 - Membuka detail rekening, mengubah nama/jenis, serta mengoreksi saldo melalui entri penyesuaian bertanda yang dapat ditelusuri dan tidak masuk ringkasan arus kas.
 - Mengarsipkan rekening bersaldo nol, memulihkannya, atau menghapus permanen rekening yang tidak memiliki referensi ledger tanpa menghapus riwayat secara berantai.
-- Mencatat pemasukan dan pengeluaran dengan subkategori, tanggal kejadian, dan catatan.
+- Mencatat pemasukan dan pengeluaran dengan satu subkategori, tanggal kejadian, dan catatan.
 - Mengelola kategori pemasukan/pengeluaran dalam hierarki dua tingkat: kelompok dan subkategori.
 - Mengubah nama serta ikon Material kategori, lalu mengarsipkannya tanpa memutus riwayat lama.
 - Transfer satu transaksi antar-rekening sendiri, tidak dihitung sebagai pemasukan/pengeluaran.
@@ -32,7 +32,7 @@ Yang tersedia:
 
 Rekening arsip disembunyikan secara default, tetap dapat ditampilkan dan dipulihkan, serta tidak dapat dipilih untuk transaksi baru. Entri penyesuaian, termasuk saldo awal, bersifat tetap agar jejak perubahan saldo tidak ditulis ulang.
 
-Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, anggaran, tujuan keuangan, diagram, dan utang/piutang.
+Belum tersedia: pembagian satu transaksi ke beberapa alokasi kategori (split transaction), gambar kategori unggahan pengguna, backup rutin terjadwal, anggaran, tujuan keuangan, diagram, dan utang/piutang.
 
 Backup rutin adalah snapshot manual saat tombol ditekan; aplikasi belum menjadwalkan, mengunggah, merotasi, atau memverifikasi backup secara otomatis. Verifikasi tepat setelah penulisan hanya memastikan ukuran dan SHA-256 file yang baru disimpan cocok pada saat itu, bukan memantau retensi file berikutnya. Pengecualiannya adalah jalur restore: setelah pengguna mengonfirmasi restore, aplikasi wajib menyimpan safety backup terenkripsi dari data aktif dengan kata sandi yang sama sebelum melakukan replace-all. Jika penyimpanan dibatalkan, gagal, atau tidak lolos verifikasi penulisan, restore tidak dijalankan. Simpan beberapa file di luar HP, misalnya pada penyedia dokumen cloud dan komputer, lalu uji restore menggunakan data percobaan sebelum mengandalkannya. **Kata sandi backup tidak disimpan dan tidak dapat dipulihkan. Jika lupa, file tersebut tidak dapat direstore.**
 
@@ -60,6 +60,7 @@ Ganti `DEVICE_ID` dengan ID HP. Proyek ini belum menargetkan runtime web atau de
 Flutter/Dart, Material 3, MVVM dengan Riverpod, repository, Drift/SQLite dengan background isolate, dan `go_router`. Saldo berasal dari ledger, nominal menggunakan bilangan bulat rupiah, periode transaksi berdasarkan tanggal kejadian, dan identitas kategori memakai ID stabil.
 
 - [Product brief dan ruang lingkup versi](docs/product-brief.md)
+- [Spesifikasi Alokasi Kategori Transaksi](docs/transaction-allocations.md)
 - [Spesifikasi Anggaran v1](docs/budgets.md)
 - [Arsitektur dan aturan data](docs/architecture.md)
 - [Format, keamanan, dan pemulihan backup](docs/backup-restore.md)

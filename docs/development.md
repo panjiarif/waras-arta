@@ -175,6 +175,8 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 1. Jalankan checklist transaksi, kelola rekening, kalender, serta backup/restore pada HP referensi dan perbaiki setiap ketidaksesuaian.
 2. Uji file Downloads dan penyedia dokumen cloud pada perangkat/instalasi terpisah menggunakan data percobaan; ukur juga Argon2id pada HP referensi.
 3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini tetap memakai schema v3.
-4. Setelah jalur pemulihan manual terbukti bekerja, implementasikan [Anggaran v1](budgets.md) bersama schema v4 dan payload backup v2 sebelum menyimpan data anggaran nyata.
+4. Setelah jalur pemulihan manual terbukti bekerja, implementasikan fondasi [Alokasi Kategori Transaksi](transaction-allocations.md) bersama schema v4 dan payload backup v2. Migrasikan setiap pemasukan/pengeluaran lama menjadi satu alokasi tanpa mengubah ID transaksi, saldo, atau ringkasan.
+5. Setelah persistence, migrasi, backup/restore, dan alur satu alokasi stabil, tambahkan UI split transaction. Form tetap membuka satu alokasi secara default; tombol **+ Tambah kategori lain** menambahkan baris, dan total transaksi dihitung otomatis dari jumlah seluruh nominal alokasi tanpa input total kedua.
+6. Setelah split transaction lulus pengujian otomatis dan smoke test perangkat, implementasikan [Anggaran v1](budgets.md) bersama schema v5 dan payload backup v3. Progres anggaran harus menjumlahkan nominal alokasi pengeluaran, bukan total header transaksi.
 
 Jangan menjadikan alpha satu-satunya catatan keuangan sebelum restore lintas instalasi berhasil diuji. Setelah itu pun, buat backup rutin secara berkala dan pertahankan beberapa salinan di luar HP; aplikasi belum membuat backup terjadwal. Safety backup yang wajib saat restore hanya melindungi keadaan tepat sebelum replace-all dan bukan pengganti kebiasaan backup rutin.

@@ -107,11 +107,19 @@ Aturan alpha:
 - Membuat rekening dengan saldo awal positif juga membuat entri penyesuaian dalam satu transaksi database. Saldo awal nol tidak memerlukan entri bernilai nol.
 - Koreksi saldo menerima target saldo aktual. Repository membandingkannya dengan saldo ledger saat ini, lalu menyimpan selisih nonnol sebagai entri penyesuaian positif atau negatif. Mengubah angka saldo rekening secara langsung tidak diperbolehkan.
 - Penyesuaian tidak dihitung sebagai pemasukan/pengeluaran dan tidak memakai kategori. Seluruh entri penyesuaian, termasuk saldo awal, tidak dapat diedit atau dihapus agar jejak koreksi tetap utuh.
-- Pemasukan dan pengeluaran wajib menunjuk satu subkategori. Transfer dan saldo awal tidak memiliki kategori.
+- Pada schema v3 saat ini, pemasukan dan pengeluaran wajib menunjuk satu subkategori langsung dari row ledger. Transfer dan saldo awal tidak memiliki kategori.
 - Saldo negatif akibat pengeluaran atau transfer diperbolehkan untuk pencatatan manual; aplikasi bukan sistem otorisasi pembayaran bank.
 - Transaksi biasa dapat dilihat, diedit, dan dihapus permanen setelah konfirmasi. Edit mempertahankan `id` serta `createdAt`; nilai lama belum memiliki audit trail atau undo.
 - Edit atau hapus transaksi menghitung ulang saldo sepanjang waktu dan ringkasan bulan terkait. Transaksi dapat berpindah jenis, rekening, atau bulan selama hasil akhirnya memenuhi seluruh validasi ledger.
 - Entri lama yang menyentuh rekening arsip tetap dapat dilihat, tetapi tidak dapat diedit atau dihapus sampai rekening tersebut dipulihkan. Aturan ini menjaga rekening yang sudah diarsipkan tetap bersaldo nol.
+
+### Fondasi alokasi kategori berikutnya
+
+Schema v4 akan mempertahankan `ledger_entries` sebagai header satu kejadian uang nyata: satu ID, jenis, rekening, total, tanggal, catatan, dan waktu pembuatan. `category_id` dipindahkan ke `ledger_allocations` sehingga setiap pemasukan/pengeluaran mempunyai 1–50 pasangan nominal dan subkategori. Transfer serta penyesuaian tetap tidak mempunyai allocation.
+
+Total header pemasukan/pengeluaran diturunkan dari jumlah allocation dan disimpan agar perhitungan saldo tetap sederhana. Saldo, arus kas total, jumlah transaksi, riwayat, dan kalender menjumlahkan header tepat sekali. Anggaran, filter kategori, dan diagram kategori menjumlahkan nominal allocation. Karena itu transaksi Rp17.000 dengan Rp15.000 Makan serta Rp2.000 Parkir tetap satu transaksi dan satu pengurangan saldo, tetapi berkontribusi tepat ke dua kategori.
+
+Form tetap membuka satu pasangan nominal+subkategori. Tombol berikon plus dengan label **Tambah kategori lain** menambahkan pasangan di bawahnya; total bukan input kedua, melainkan dihitung otomatis. Kontrak schema, migrasi, backup, UX, dan pengujiannya dijelaskan dalam [spesifikasi alokasi kategori transaksi](transaction-allocations.md).
 
 ## Siklus rekening
 
@@ -123,7 +131,7 @@ Aturan alpha:
 
 ## Kategori dan subkategori
 
-Kategori dibatasi tepat dua tingkat. Baris induk adalah kelompok, sedangkan transaksi hanya boleh menunjuk baris anak. `categoryId` menjadi foreign key pada ledger; nama tidak disalin ke transaksi. Karena itu rename dan perubahan ikon langsung tercermin pada riwayat tanpa memutus identitas yang kelak dipakai kalender, anggaran, diagram, dan filter.
+Kategori dibatasi tepat dua tingkat. Baris induk adalah kelompok, sedangkan alokasi transaksi hanya boleh menunjuk baris anak. Schema v3 masih menyimpan `categoryId` pada ledger; schema v4 memindahkannya ke `ledger_allocations` tanpa menyalin nama kategori. Karena itu rename dan perubahan ikon langsung tercermin pada riwayat tanpa memutus identitas yang dipakai kalender, anggaran, diagram, dan filter.
 
 - Kelompok serta subkategori dapat dibuat, diubah nama/ikonnya, diarsipkan, dan dipulihkan.
 - Jenis pemasukan/pengeluaran dan induk subkategori tidak dapat diubah setelah dibuat.
@@ -133,7 +141,7 @@ Kategori dibatasi tepat dua tingkat. Baris induk adalah kelompok, sedangkan tran
 - Ikon disimpan sebagai semantic string key yang dipetakan ke katalog Material terbatas. `IconData.codePoint` dan berkas gambar tidak disimpan di database.
 - Upload gambar ditunda sampai spesifikasi backup mampu membawa database dan aset sebagai satu paket tervalidasi.
 
-Rencana anggaran mendukung periode bulanan, tahunan kalender, dan rentang tanggal kustom. Semuanya menggunakan ID subkategori pengeluaran dan menghitung progres langsung dari ledger. Kontrak produk, schema v4, payload backup v2, serta batas implementasinya dijelaskan dalam [spesifikasi Anggaran v1](budgets.md).
+Rencana anggaran mendukung periode bulanan, tahunan kalender, dan rentang tanggal kustom. Semuanya menggunakan ID subkategori pengeluaran dan menghitung progres dari `ledger_allocations.amount`. Kontrak produk, schema v5, payload backup v3, serta batas implementasinya dijelaskan dalam [spesifikasi Anggaran v1](budgets.md).
 
 ## Tanggal dan periode
 
@@ -156,7 +164,7 @@ Backup memakai dua bentuk yang sengaja dipisahkan:
 1. snapshot logis JSON dengan `backupVersion`, versi schema database, timestamp UTC, rekening, kategori, ledger, ID, dan high-water mark ID SQLite;
 2. container terenkripsi `.warasarta` dengan versi sendiri.
 
-Saldo, ringkasan, dan data kalender tidak diduplikasi karena dapat dihitung ulang dari ledger. Format payload dibuat eksplisit dan berversi, tidak memakai serialisasi generated Drift sebagai kontrak permanen. Versi mendatang dapat menambah bagian seperti anggaran melalui versi format baru dan migrasi decoder; payload v1 belum membawa data fitur yang belum ada.
+Saldo, ringkasan, dan data kalender tidak diduplikasi karena dapat dihitung ulang dari ledger. Format payload dibuat eksplisit dan berversi, tidak memakai serialisasi generated Drift sebagai kontrak permanen. Payload v1/schema 3 adalah format saat ini. Rencana berikutnya adalah payload v2/schema 4 untuk allocation dan payload v3/schema 5 untuk anggaran; decoder lama dinormalisasi ke model terbaru tanpa mengubah container enkripsi v1.
 
 Kata sandi dinormalisasi ke Unicode NFC, lalu kunci 256-bit diturunkan menggunakan Argon2id dan salt acak. Snapshot dienkripsi serta diautentikasi dengan XChaCha20-Poly1305 dan nonce acak; header keamanan ikut diautentikasi. Kata sandi maupun kunci tidak disimpan. Akibatnya, kata sandi yang terlupa tidak dapat dipulihkan dan file tidak dapat direstore. Decoder container v1 hanya menerima profil produksi secara persis: Argon2 versi 19, normalisasi NFC, memori 19.456 KiB, 2 iterasi, paralelisme 1, dan panjang kunci 32 byte. Parameter berbeda ditolak; perubahan profil harus diperkenalkan melalui versi container atau jalur migrasi baru. Ukuran container terenkripsi dibatasi 16 MiB dan plaintext hasil dekripsi dibatasi 10 MiB.
 
@@ -182,4 +190,4 @@ Sebelum menaikkan `schemaVersion` berikutnya:
 4. Verifikasi saldo dan ringkasan sebelum/sesudah upgrade.
 5. Perluas DTO, ekspor, restore, dan migrasi decoder backup untuk semua data semantik baru; naikkan `backupVersion` bila kontrak payload berubah, lalu baru perbarui guard cakupan adapter dan tesnya. Guard ekspor maupun restore saat ini sengaja mematok adapter v1 pada schema v3 serta nama tabel dan kolom persisten rekening, kategori, dan ledger secara persis. Penambahan tabel atau kolom—bahkan bila `schemaVersion` lupa dinaikkan—akan berhenti secara fail-closed, bukan menghasilkan backup parsial atau menyisakan data baru saat replace-all.
 
-Kalender dan backup/restore kini memakai fondasi rekening, ledger, dan ID subkategori tanpa menaikkan schema database dari versi 3. Langkah berikutnya adalah memverifikasi alur file Android serta performa Argon2id pada HP referensi sebelum menjadikannya jalur pemulihan yang dipercaya. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.
+Kalender dan backup/restore kini memakai fondasi rekening, ledger, dan ID subkategori tanpa menaikkan schema database dari versi 3. Setelah verifikasi alur file Android serta performa Argon2id, evolusi data berikutnya adalah allocation schema v4/payload v2, kemudian Anggaran schema v5/payload v3. Split transaction, anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha saat ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.

@@ -52,7 +52,17 @@ Saldo, ringkasan, dan penanda kalender tidak disimpan sebagai salinan turunan. N
 
 `backupVersion` dan versi container enkripsi dipisahkan dari `databaseSchemaVersion`. Pemisahan ini memungkinkan format data, skema lokal, dan parameter keamanan berevolusi dengan jalur migrasi masing-masing. Versi aplikasi saat ini hanya menerima versi yang dikenal dan menolak versi yang lebih baru daripada yang didukung.
 
-Payload versi 1 belum berisi anggaran, tujuan keuangan, gambar unggahan, atau utang/piutang karena fitur tersebut belum tersedia. Backup yang dibuat sekarang tentu tidak dapat memuat data fitur yang belum ada. Ketika anggaran ditambahkan, backup baru harus memakai versi format berikutnya, menambah bagian anggaran, serta menyediakan migrasi decoder dan pengujian kompatibilitas.
+Payload versi 1 belum berisi allocation terpisah, anggaran, tujuan keuangan, gambar unggahan, atau utang/piutang karena fitur tersebut belum tersedia. Backup yang dibuat sekarang tentu tidak dapat memuat data fitur yang belum ada.
+
+Evolusi yang sudah direncanakan:
+
+| Payload | Schema sumber | Isi kategorisasi |
+| --- | --- | --- |
+| v1 | 3 | Satu `categoryId` langsung pada setiap ledger pemasukan/pengeluaran; tanpa anggaran |
+| v2 | 4 | `allocations[]` pada ledger; tanpa anggaran |
+| v3 | 5 | `allocations[]` dan seluruh data anggaran |
+
+Decoder v1 pada schema 4/5 menormalkan `categoryId + amount` lama menjadi satu allocation; transfer dan penyesuaian menjadi daftar allocation kosong. Decoder v2 pada schema 5 mempertahankan allocation dan menginisialisasi anggaran kosong. Exporter selalu menulis payload yang sesuai schema aplikasi saat itu. Parser dan encoder terpisah per versi, field semantik asing ditolak, dan aplikasi lama menolak versi lebih baru daripada yang dipahami. Container enkripsi tetap v1 karena evolusi ini mengubah isi logis, bukan primitive kriptografi.
 
 Kompatibilitas ini adalah persyaratan untuk setiap rilis format baru: file v1 harus tetap dapat dibaca oleh versi aplikasi yang lebih baru dengan bagian fitur baru diinisialisasi kosong/default, sedangkan aplikasi lama harus menolak versi baru dan tidak boleh diam-diam mengabaikan datanya. Parser v1 karena itu menolak field semantik yang tidak dikenal; penambahan data baru wajib disertai kenaikan `backupVersion`.
 
@@ -72,9 +82,11 @@ Saat menyimpan, adapter menulis dan menutup stream, membuka kembali URI yang sam
 
 ## Konsistensi database
 
-Ekspor membaca rekening, kategori, ledger, dan sequence dalam satu transaksi baca sehingga bagian-bagian snapshot berasal dari keadaan database yang konsisten.
+Versi saat ini mengekspor rekening, kategori, ledger, dan sequence dalam satu transaksi baca sehingga bagian-bagian snapshot berasal dari keadaan database yang konsisten. Schema v4 menambahkan allocation ke snapshot yang sama; schema v5 menambahkan anggaran beserta mapping dan sequence-nya.
 
-Sebelum restore, payload diperiksa terhadap batas nominal, bentuk tanggal, keunikan ID/nama, hierarki kategori, foreign key, aturan jenis transaksi, dan saldo rekening arsip. Penggantian data kemudian dijalankan dalam satu transaksi Drift/SQLite. ID asli dan sequence dipulihkan, hasilnya diperiksa kembali, dan commit hanya dilakukan jika seluruh langkah berhasil. Jika insert atau pemeriksaan akhir gagal, transaksi di-rollback sehingga data lama tetap ada.
+Sebelum restore, payload diperiksa terhadap batas nominal, bentuk tanggal, keunikan ID/nama, hierarki kategori, foreign key, aturan jenis transaksi, dan saldo rekening arsip. Pada payload v2+, setiap pemasukan/pengeluaran wajib mempunyai allocation yang jumlahnya sama dengan total header; transfer/penyesuaian wajib tidak mempunyai allocation. Pada payload v3, relasi serta overlap anggaran juga divalidasi. Penggantian data kemudian dijalankan dalam satu transaksi Drift/SQLite. ID asli dan sequence dipulihkan, hasilnya diperiksa kembali, dan commit hanya dilakukan jika seluruh langkah berhasil. Jika insert atau pemeriksaan akhir gagal, transaksi di-rollback sehingga data lama tetap ada.
+
+Kontrak rinci evolusi tersebut berada pada [spesifikasi alokasi kategori transaksi](transaction-allocations.md) dan [spesifikasi Anggaran v1](budgets.md).
 
 Atomic rollback melindungi konsistensi database ketika operasi gagal; mekanisme tersebut bukan pengganti salinan cadangan. Kerusakan perangkat, uninstall, atau penghapusan data aplikasi tetap dapat menghilangkan database aktif dan backup yang hanya disimpan pada HP yang sama.
 

@@ -13,6 +13,14 @@ extension FinanceEntryPresentation on FinanceEntry {
       ? '${allocations.length} rincian'
       : categoryName ?? kind.label;
 
+  String get compactPresentationTitle {
+    if (isSplitEntry || allocations.isEmpty) return presentationTitle;
+    final allocation = allocations.single;
+    return allocation.categoryName.trim().toLowerCase() == 'umum'
+        ? allocation.parentCategoryName
+        : allocation.categoryName;
+  }
+
   String? get presentationCategorySummary {
     if (allocations.isEmpty) return null;
     if (!isSplitEntry) return parentCategoryName;

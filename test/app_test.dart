@@ -952,7 +952,124 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('transaction card opens details and edit pre-fills the form', (
+  testWidgets('overview and history use the same compact transaction row', (
+    tester,
+  ) async {
+    final entry = _financeEntry(
+      id: 27,
+      kind: EntryKind.expense,
+      accountId: 1,
+      amount: 33500,
+      categoryId: 12,
+      categoryName: 'Umum',
+      parentCategoryName: 'Transportasi',
+      categoryIconKey: 'directions_car',
+      note: 'Catatan hanya untuk halaman detail',
+      occurredAt: DateTime(2026, 9, 5),
+      createdAt: DateTime(2026, 9, 5, 10),
+    );
+    await pumpApp(tester, _UiRepository(withAccounts: true, entry: entry));
+
+    final row = find.byKey(const ValueKey('entry-row-27'));
+    await tester.scrollUntilVisible(
+      row,
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
+
+    void expectCompactRow() {
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('entry-title-27'))).data,
+        'Transportasi',
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('entry-account-27')))
+            .data,
+        'Dompet',
+      );
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('entry-amount-27'))).data,
+        '− Rp 33.500',
+      );
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('entry-date-27'))).data,
+        '5 Sep 2026',
+      );
+      expect(find.text('Catatan hanya untuk halaman detail'), findsNothing);
+      expect(tester.getSize(row).height, inInclusiveRange(48, 80));
+      expect(find.ancestor(of: row, matching: find.byType(Card)), findsNothing);
+    }
+
+    expectCompactRow();
+    await tester.tap(find.text('Riwayat').last);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      row,
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expectCompactRow();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('compact transaction row fits narrow enlarged text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    final repository = _UiRepository(
+      withAccounts: true,
+      entry: _financeEntry(
+        id: 28,
+        kind: EntryKind.expense,
+        accountId: 1,
+        amount: maxAmount,
+        categoryId: 12,
+        categoryName: 'Perjalanan antarkota yang sangat panjang',
+        parentCategoryName: 'Transportasi',
+        categoryIconKey: 'directions_car',
+        note: 'Detail panjang',
+        occurredAt: DateTime(2026, 9, 5),
+        createdAt: DateTime(2026, 9, 5, 10),
+      ),
+    );
+    repository.accounts[0] = _copyUiAccount(
+      repository.accounts[0],
+      name: 'Rekening utama dengan nama sangat panjang',
+    );
+    await pumpApp(tester, repository);
+
+    await tester.tap(find.text('Riwayat').last);
+    await tester.pumpAndSettle();
+    final row = find.byKey(const ValueKey('entry-row-28'));
+    await tester.scrollUntilVisible(
+      row,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.byKey(const ValueKey('entry-title-28')), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-account-28')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('entry-amount-28'))).data,
+      '− Rp 999.999.999.999',
+    );
+    final fittedAmount = tester.widget<FittedBox>(
+      find.byKey(const ValueKey('entry-amount-fit-28')),
+    );
+    expect(fittedAmount.fit, BoxFit.scaleDown);
+    expect(fittedAmount.alignment, Alignment.centerRight);
+    expect(find.byKey(const ValueKey('entry-date-28')), findsOneWidget);
+    expect(tester.getSize(row).height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('transaction row opens details and edit pre-fills the form', (
     tester,
   ) async {
     final entry = _financeEntry(
@@ -973,6 +1090,11 @@ void main() {
 
     await tester.tap(find.text('Riwayat').last);
     await tester.pumpAndSettle();
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('entry-title-7'))).data,
+      'Makan & minum',
+    );
+    expect(find.text('Makan siang'), findsNothing);
     await tester.tap(find.byKey(const Key('entry-7')));
     await tester.pumpAndSettle();
     expect(find.text('Detail transaksi'), findsOneWidget);
@@ -1045,6 +1167,12 @@ void main() {
     await tester.tap(find.text('Riwayat').last);
     await tester.pumpAndSettle();
     expect(find.text('2 rincian'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('entry-amount-17'))).data,
+      '− Rp 17.000',
+    );
+    expect(find.text('Rp 15.000'), findsNothing);
+    expect(find.text('Rp 2.000'), findsNothing);
     await tester.tap(find.byKey(const Key('entry-17')));
     await tester.pumpAndSettle();
 

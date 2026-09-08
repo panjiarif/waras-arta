@@ -107,7 +107,7 @@ Aturan alpha:
 - Membuat rekening dengan saldo awal positif juga membuat entri penyesuaian dalam satu transaksi database. Saldo awal nol tidak memerlukan entri bernilai nol.
 - Koreksi saldo menerima target saldo aktual. Repository membandingkannya dengan saldo ledger saat ini, lalu menyimpan selisih nonnol sebagai entri penyesuaian positif atau negatif. Mengubah angka saldo rekening secara langsung tidak diperbolehkan.
 - Penyesuaian tidak dihitung sebagai pemasukan/pengeluaran dan tidak memakai kategori. Seluruh entri penyesuaian, termasuk saldo awal, tidak dapat diedit atau dihapus agar jejak koreksi tetap utuh.
-- Pada schema v4 saat ini, pemasukan dan pengeluaran mempunyai 1–50 alokasi nominal–subkategori. Transfer dan saldo awal tidak memiliki alokasi kategori.
+- Sejak schema v4, pemasukan dan pengeluaran mempunyai 1–50 alokasi nominal–subkategori. Transfer dan saldo awal tidak memiliki alokasi kategori; schema v5 mempertahankan bentuk ini sambil menambahkan kelompok saldo rekening.
 - Saldo negatif akibat pengeluaran atau transfer diperbolehkan untuk pencatatan manual; aplikasi bukan sistem otorisasi pembayaran bank.
 - Transaksi biasa dapat dilihat, diedit, dan dihapus permanen setelah konfirmasi. Edit mempertahankan `id` serta `createdAt`; nilai lama belum memiliki audit trail atau undo.
 - Edit atau hapus transaksi menghitung ulang saldo sepanjang waktu dan ringkasan bulan terkait. Transaksi dapat berpindah jenis, rekening, atau bulan selama hasil akhirnya memenuhi seluruh validasi ledger.
@@ -141,7 +141,7 @@ Kategori dibatasi tepat dua tingkat. Baris induk adalah kelompok, sedangkan alok
 - Ikon disimpan sebagai semantic string key yang dipetakan ke katalog Material terbatas. `IconData.codePoint` dan berkas gambar tidak disimpan di database.
 - Upload gambar ditunda sampai spesifikasi backup mampu membawa database dan aset sebagai satu paket tervalidasi.
 
-Rencana anggaran mendukung periode bulanan, tahunan kalender, dan rentang tanggal kustom. Semuanya menggunakan ID subkategori pengeluaran dan menghitung progres dari `ledger_allocations.amount`. Kontrak produk, schema v5, payload backup v3, serta batas implementasinya dijelaskan dalam [spesifikasi Anggaran v1](budgets.md).
+Rencana anggaran mendukung periode bulanan, tahunan kalender, dan rentang tanggal kustom. Semuanya menggunakan ID subkategori pengeluaran dan menghitung progres dari `ledger_allocations.amount`. Kontrak produk, schema v6, payload backup v4, serta batas implementasinya dijelaskan dalam [spesifikasi Anggaran v1](budgets.md).
 
 ## Tanggal dan periode
 
@@ -164,7 +164,7 @@ Backup memakai dua bentuk yang sengaja dipisahkan:
 1. snapshot logis JSON dengan `backupVersion`, versi schema database, timestamp UTC, rekening, kategori, ledger, ID, dan high-water mark ID SQLite;
 2. container terenkripsi `.warasarta` dengan versi sendiri.
 
-Saldo, ringkasan, dan data kalender tidak diduplikasi karena dapat dihitung ulang dari ledger. Format payload dibuat eksplisit dan berversi, tidak memakai serialisasi generated Drift sebagai kontrak permanen. Payload v2/schema 4 adalah format saat ini dan membawa seluruh allocation. Payload v1/schema 3 tetap dapat dibaca dan dinormalisasi; rencana berikutnya adalah payload v3/schema 5 untuk anggaran tanpa mengubah container enkripsi v1.
+Saldo, ringkasan, dan data kalender tidak diduplikasi karena dapat dihitung ulang dari ledger. Format payload dibuat eksplisit dan berversi, tidak memakai serialisasi generated Drift sebagai kontrak permanen. Payload v3/schema 5 adalah format saat ini: bentuk allocation dari v2 dipertahankan dan setiap rekening membawa `balanceGroup`. Payload v1/schema 3 serta v2/schema 4 tetap dapat dibaca dan dinormalisasi; rekening dari kedua format lama dipetakan ke Saldo utama. Anggaran mendatang menaikkan format menjadi payload v4/schema 6 tanpa mengubah container enkripsi v1.
 
 Kata sandi dinormalisasi ke Unicode NFC, lalu kunci 256-bit diturunkan menggunakan Argon2id dan salt acak. Snapshot dienkripsi serta diautentikasi dengan XChaCha20-Poly1305 dan nonce acak; header keamanan ikut diautentikasi. Kata sandi maupun kunci tidak disimpan. Akibatnya, kata sandi yang terlupa tidak dapat dipulihkan dan file tidak dapat direstore. Decoder container v1 hanya menerima profil produksi secara persis: Argon2 versi 19, normalisasi NFC, memori 19.456 KiB, 2 iterasi, paralelisme 1, dan panjang kunci 32 byte. Parameter berbeda ditolak; perubahan profil harus diperkenalkan melalui versi container atau jalur migrasi baru. Ukuran container terenkripsi dibatasi 16 MiB dan plaintext hasil dekripsi dibatasi 10 MiB.
 
@@ -178,9 +178,9 @@ Enkripsi file backup tidak mengubah database kerja: SQLite aktif masih belum die
 
 ## Skema dan pengembangan berikutnya
 
-Skema database saat ini versi **4**. Snapshot v1 sampai v4 disimpan di `drift_schemas/app_database/`. Migrasi v1 ke v2 membuat kategori dua tingkat, memetakan setiap kategori teks lama ke subkategori `Umum`, lalu membangun ulang ledger dengan foreign key. Migrasi v2 ke v3 menambahkan status arsip rekening dan membangun ulang constraint nominal ledger agar penyesuaian dapat menyimpan delta bertanda. Migrasi v3 ke v4 membangun `ledger_entries` sebagai header tanpa `category_id` dan memindahkan kategori serta nominal pemasukan/pengeluaran ke `ledger_allocations`. Langkah migrasi dijalankan berurutan untuk instalasi yang berpindah langsung dari versi lama ke v4.
+Skema database saat ini versi **5**. Snapshot v1 sampai v5 disimpan di `drift_schemas/app_database/`. Migrasi v1 ke v2 membuat kategori dua tingkat, memetakan setiap kategori teks lama ke subkategori `Umum`, lalu membangun ulang ledger dengan foreign key. Migrasi v2 ke v3 menambahkan status arsip rekening dan membangun ulang constraint nominal ledger agar penyesuaian dapat menyimpan delta bertanda. Migrasi v3 ke v4 membangun `ledger_entries` sebagai header tanpa `category_id` dan memindahkan kategori serta nominal pemasukan/pengeluaran ke `ledger_allocations`. Migrasi v4 ke v5 menambahkan `balance_group` dengan default `primary`, sehingga seluruh rekening lama tetap tampil sebagai Saldo utama. Langkah migrasi dijalankan berurutan untuk instalasi yang berpindah langsung dari versi lama ke v5.
 
-Uji migrasi memverifikasi jalur v1→v4, v2→v4, serta v3→v4 beserta struktur schema, identitas, urutan allocation, nominal, rekening, tanggal, catatan, saldo, ringkasan, trigger, dan pemeriksaan integritas.
+Uji migrasi memverifikasi jalur versi lama menuju schema v5, termasuk v4→v5 dan upgrade berurutan dari schema awal, beserta struktur schema, identitas, urutan allocation, nominal, kelompok rekening, tanggal, catatan, saldo, ringkasan, trigger, indeks, dan pemeriksaan integritas.
 
 Sebelum menaikkan `schemaVersion` berikutnya:
 
@@ -188,6 +188,6 @@ Sebelum menaikkan `schemaVersion` berikutnya:
 2. Tulis langkah migrasi yang menjaga rekening dan ledger.
 3. Uji upgrade menggunakan data representatif, termasuk transfer dan tanggal lampau.
 4. Verifikasi saldo dan ringkasan sebelum/sesudah upgrade.
-5. Perluas DTO, ekspor, restore, dan migrasi decoder backup untuk semua data semantik baru; naikkan `backupVersion` bila kontrak payload berubah, lalu baru perbarui guard cakupan adapter dan tesnya. Guard ekspor maupun restore saat ini sengaja mematok adapter v2 pada schema v4 serta nama tabel dan kolom persisten rekening, kategori, ledger, dan allocation secara persis. Penambahan tabel atau kolom—bahkan bila `schemaVersion` lupa dinaikkan—akan berhenti secara fail-closed, bukan menghasilkan backup parsial atau menyisakan data baru saat replace-all.
+5. Perluas DTO, ekspor, restore, dan migrasi decoder backup untuk semua data semantik baru; naikkan `backupVersion` bila kontrak payload berubah, lalu baru perbarui guard cakupan adapter dan tesnya. Guard ekspor maupun restore saat ini sengaja mematok adapter v3 pada schema v5 serta nama tabel dan kolom persisten rekening (termasuk `balance_group`), kategori, ledger, dan allocation secara persis. Penambahan tabel atau kolom—bahkan bila `schemaVersion` lupa dinaikkan—akan berhenti secara fail-closed, bukan menghasilkan backup parsial atau menyisakan data baru saat replace-all.
 
-Kalender, split transaction, dan backup/restore kini memakai schema v4/payload v2 dengan `ledger_allocations`. Setelah smoke test perangkat untuk alur split serta backup/restore selesai, evolusi data berikutnya adalah Anggaran schema v5/payload v3. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha saat ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.
+Kalender dan split transaction memakai `ledger_allocations` sejak schema v4/payload v2. Kelompok Saldo utama serta Simpanan & investasi menaikkan versi aktif menjadi schema v5/payload v3 dengan `balanceGroup`; restore v1/v2 tetap didukung dan memetakan rekening lama ke Saldo utama. Setelah smoke test perangkat untuk alur ini selesai, evolusi data berikutnya adalah Anggaran schema v6/payload v4. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha saat ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.

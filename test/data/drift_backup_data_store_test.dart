@@ -49,10 +49,12 @@ void main() {
     DriftFinanceRepository repository,
     String name, {
     int openingBalance = 0,
+    AccountBalanceGroup balanceGroup = AccountBalanceGroup.primary,
   }) => repository.createAccount(
     AccountDraft(
       name: name,
       type: AccountType.bank,
+      balanceGroup: balanceGroup,
       openingBalance: openingBalance,
       openedAt: occurredAt,
     ),
@@ -73,14 +75,18 @@ void main() {
   );
 
   test(
-    'JSON v2 split round-trip replaces dirty data and preserves ID sequences',
+    'JSON v3 split round-trip preserves account groups and ID sequences',
     () async {
       final walletId = await createAccount(
         sourceFinance,
         'Dompet Utama',
         openingBalance: 1000,
       );
-      final bankId = await createAccount(sourceFinance, 'Bank');
+      final bankId = await createAccount(
+        sourceFinance,
+        'Bank',
+        balanceGroup: AccountBalanceGroup.savingsInvestment,
+      );
       final disposableId = await createAccount(sourceFinance, 'Sementara');
       await sourceFinance.deleteAccount(disposableId);
       final bonusCategoryId = await sourceFinance.createSubcategory(
@@ -144,6 +150,12 @@ void main() {
             .cast<String, Object?>(),
       );
       expect(decoded.summary.accountCount, 2);
+      expect(
+        decoded.accounts
+            .singleWhere((account) => account.id == bankId)
+            .balanceGroup,
+        AccountBalanceGroup.savingsInvestment,
+      );
       expect(decoded.summary.categoryCount, 23);
       expect(decoded.summary.ledgerEntryCount, 5);
       final split = decoded.ledgerEntries.singleWhere(
@@ -195,7 +207,7 @@ void main() {
     },
   );
 
-  test('restores payload v1/schema 3 into schema 4 allocations', () async {
+  test('restores payload v1/schema 3 into schema 5 allocations', () async {
     final accountId = await createAccount(sourceFinance, 'Sumber lama');
     await sourceFinance.addEntry(income(accountId, 125, note: 'Transaksi v1'));
     final current = await sourceStore.exportDocument(
@@ -206,6 +218,10 @@ void main() {
     legacyJson['backupVersion'] = 1;
     legacyJson['databaseSchemaVersion'] = 3;
     final data = legacyJson['data']! as Map<String, Object?>;
+    final accounts = data['accounts']! as List<Object?>;
+    for (final value in accounts) {
+      (value as Map<String, Object?>).remove('balanceGroup');
+    }
     final entries = data['ledgerEntries']! as List<Object?>;
     for (final value in entries) {
       final entry = value as Map<String, Object?>;
@@ -221,8 +237,9 @@ void main() {
       createdAtUtc: createdAtUtc,
     );
 
-    expect(restored.backupVersion, 2);
-    expect(restored.databaseSchemaVersion, 4);
+    expect(restored.backupVersion, 3);
+    expect(restored.databaseSchemaVersion, 5);
+    expect(restored.accounts.single.balanceGroup, AccountBalanceGroup.primary);
     final restoredEntry = restored.ledgerEntries.single;
     expect(restoredEntry.id, legacy.ledgerEntries.single.id);
     expect(restoredEntry.amount, 125);
@@ -232,10 +249,39 @@ void main() {
     expect(restoredEntry.allocations.single.amount, 125);
   });
 
-  test('backup adapter coverage pins schema v4 tables and persistent columns', () async {
+  test('restores payload v2/schema 4 accounts as Saldo utama', () async {
+    final accountId = await createAccount(
+      sourceFinance,
+      'Simpanan lama',
+      balanceGroup: AccountBalanceGroup.savingsInvestment,
+    );
+    await sourceFinance.addEntry(income(accountId, 250));
+    final current = await sourceStore.exportDocument(
+      createdAtUtc: createdAtUtc,
+    );
+    final legacyJson = (jsonDecode(jsonEncode(current.toJson())) as Map)
+        .cast<String, Object?>();
+    legacyJson['backupVersion'] = 2;
+    legacyJson['databaseSchemaVersion'] = 4;
+    final data = legacyJson['data']! as Map<String, Object?>;
+    final accounts = data['accounts']! as List<Object?>;
+    for (final value in accounts) {
+      (value as Map<String, Object?>).remove('balanceGroup');
+    }
+
+    final legacy = BackupDocument.fromJson(legacyJson);
+    expect(legacy.accounts.single.balanceGroup, AccountBalanceGroup.primary);
+
+    await targetStore.restoreDocument(legacy);
+    final details = await targetFinance.getAccountDetails(accountId);
+    expect(details?.account.balance, 250);
+    expect(details?.account.balanceGroup, AccountBalanceGroup.primary);
+  });
+
+  test('backup adapter coverage pins schema v5 tables and persistent columns', () async {
     expect(
       sourceDb.schemaVersion,
-      4,
+      5,
       reason:
           'A database schema bump must update the backup DTO, encoder, restore, '
           'decoder migration, and coverage guard before this expectation.',
@@ -254,6 +300,7 @@ void main() {
           'name',
           'normalized_name',
           'type',
+          'balance_group',
           'is_archived',
           'created_at',
         },
@@ -290,8 +337,8 @@ void main() {
     final document = await sourceStore.exportDocument(
       createdAtUtc: createdAtUtc,
     );
-    expect(document.backupVersion, 2);
-    expect(document.databaseSchemaVersion, 4);
+    expect(document.backupVersion, 3);
+    expect(document.databaseSchemaVersion, 5);
   });
 
   test('export fails closed for an uncovered database schema', () async {
@@ -335,7 +382,11 @@ void main() {
   );
 
   test('restore keeps archived accounts and their historical ledger', () async {
-    final archivedId = await createAccount(sourceFinance, 'Rekening Lama');
+    final archivedId = await createAccount(
+      sourceFinance,
+      'Rekening Lama',
+      balanceGroup: AccountBalanceGroup.savingsInvestment,
+    );
     final activeId = await createAccount(sourceFinance, 'Rekening Aktif');
     await sourceFinance.addEntry(
       income(archivedId, 100, note: 'Riwayat sebelum arsip'),
@@ -360,9 +411,17 @@ void main() {
       targetDb.accounts,
     )..where((row) => row.id.equals(archivedId))).getSingle();
     expect(archivedRow.isArchived, isTrue);
+    expect(
+      AccountBalanceGroup.values[archivedRow.balanceGroup],
+      AccountBalanceGroup.savingsInvestment,
+    );
     expect(await targetDb.select(targetDb.ledgerEntries).get(), hasLength(2));
     final details = await targetFinance.getAccountDetails(archivedId);
     expect(details?.account.balance, 0);
+    expect(
+      details?.account.balanceGroup,
+      AccountBalanceGroup.savingsInvestment,
+    );
     expect(details?.ledgerEntryCount, 2);
   });
 
@@ -389,7 +448,7 @@ void main() {
   );
 
   test(
-    'allocation insert failure rolls back headers, allocations, and sequences',
+    'allocation insert failure rolls back account groups, data, and sequences',
     () async {
       final sourceId = await createAccount(sourceFinance, 'Sumber backup');
       final secondCategoryId = await sourceFinance.createSubcategory(
@@ -415,10 +474,18 @@ void main() {
         createdAtUtc: createdAtUtc,
       );
 
-      final oldId = await createAccount(targetFinance, 'Data lama');
+      final oldId = await createAccount(
+        targetFinance,
+        'Data lama',
+        balanceGroup: AccountBalanceGroup.savingsInvestment,
+      );
       await targetFinance.addEntry(income(oldId, 10, note: 'Harus tetap ada'));
       final before = await targetStore.exportDocument(
         createdAtUtc: createdAtUtc,
+      );
+      expect(
+        before.accounts.single.balanceGroup,
+        AccountBalanceGroup.savingsInvestment,
       );
       await targetDb.customStatement('''
       CREATE TRIGGER test_force_restore_failure
@@ -436,6 +503,10 @@ void main() {
         createdAtUtc: createdAtUtc,
       );
       expect(after.toJson(), before.toJson());
+      expect(
+        after.accounts.single.balanceGroup,
+        AccountBalanceGroup.savingsInvestment,
+      );
       expect(after.sequences.toJson(), before.sequences.toJson());
     },
   );

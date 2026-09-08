@@ -12,6 +12,21 @@ extension AccountTypeLabel on AccountType {
   };
 }
 
+enum AccountBalanceGroup { primary, savingsInvestment }
+
+extension AccountBalanceGroupLabel on AccountBalanceGroup {
+  String get label => switch (this) {
+    AccountBalanceGroup.primary => 'Saldo utama',
+    AccountBalanceGroup.savingsInvestment => 'Simpanan & investasi',
+  };
+
+  String get description => switch (this) {
+    AccountBalanceGroup.primary =>
+      'Untuk uang yang digunakan dalam kebutuhan rutin.',
+    AccountBalanceGroup.savingsInvestment => 'Untuk rekening atau tempat uang yang benar-benar terpisah, bukan alokasi saldo di rekening lain.',
+  };
+}
+
 enum EntryKind { income, expense, transfer, adjustment }
 
 extension EntryKindLabel on EntryKind {
@@ -138,6 +153,7 @@ class FinanceAccount {
     required this.name,
     required this.type,
     required this.balance,
+    this.balanceGroup = AccountBalanceGroup.primary,
     this.isArchived = false,
   });
 
@@ -145,6 +161,7 @@ class FinanceAccount {
   final String name;
   final AccountType type;
   final int balance;
+  final AccountBalanceGroup balanceGroup;
   final bool isArchived;
 }
 
@@ -239,8 +256,25 @@ class FinanceSnapshot {
   final int expense;
   final int totalEntries;
 
-  int get totalBalance =>
-      accounts.fold(0, (sum, account) => sum + account.balance);
+  int get primaryBalance => accounts
+      .where(
+        (account) =>
+            !account.isArchived &&
+            account.balanceGroup == AccountBalanceGroup.primary,
+      )
+      .fold(0, (sum, account) => sum + account.balance);
+
+  int get savingsInvestmentBalance => accounts
+      .where(
+        (account) =>
+            !account.isArchived &&
+            account.balanceGroup == AccountBalanceGroup.savingsInvestment,
+      )
+      .fold(0, (sum, account) => sum + account.balance);
+
+  /// Total seluruh rekening aktif. Ikhtisar memakai [primaryBalance] agar
+  /// simpanan dan investasi tidak tampak sebagai uang yang siap digunakan.
+  int get totalBalance => primaryBalance + savingsInvestmentBalance;
   int get net => income - expense;
   bool get hasMore => entries.length < totalEntries;
 }
@@ -306,19 +340,26 @@ class AccountDraft {
     required this.type,
     required this.openingBalance,
     required this.openedAt,
+    this.balanceGroup = AccountBalanceGroup.primary,
   });
 
   final String name;
   final AccountType type;
   final int openingBalance;
   final DateTime openedAt;
+  final AccountBalanceGroup balanceGroup;
 }
 
 class AccountUpdateDraft {
-  const AccountUpdateDraft({required this.name, required this.type});
+  const AccountUpdateDraft({
+    required this.name,
+    required this.type,
+    required this.balanceGroup,
+  });
 
   final String name;
   final AccountType type;
+  final AccountBalanceGroup balanceGroup;
 }
 
 class AccountBalanceAdjustmentDraft {

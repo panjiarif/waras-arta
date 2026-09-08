@@ -47,7 +47,7 @@ class DriftFinanceRepository implements FinanceRepository {
     return _db
         .customSelect(
           '''
-          SELECT a.id, a.name, a.type, a.is_archived,
+          SELECT a.id, a.name, a.type, a.balance_group, a.is_archived,
                  COALESCE(b.balance, 0) AS balance
           FROM accounts AS a
           LEFT JOIN (
@@ -195,7 +195,7 @@ class DriftFinanceRepository implements FinanceRepository {
     // A read transaction keeps the balances, summary, and list consistent.
     return _db.transaction(() async {
       final accountRows = await _db.customSelect('''
-        SELECT a.id, a.name, a.type, a.is_archived,
+        SELECT a.id, a.name, a.type, a.balance_group, a.is_archived,
                COALESCE(b.balance, 0) AS balance
         FROM accounts a
         LEFT JOIN (
@@ -243,6 +243,8 @@ class DriftFinanceRepository implements FinanceRepository {
                 name: row.read<String>('name'),
                 type: AccountType.values[row.read<int>('type')],
                 balance: row.read<int>('balance'),
+                balanceGroup:
+                    AccountBalanceGroup.values[row.read<int>('balance_group')],
                 isArchived: row.read<int>('is_archived') != 0,
               ),
             )
@@ -272,6 +274,7 @@ class DriftFinanceRepository implements FinanceRepository {
               name: name,
               normalizedName: normalizedName,
               type: draft.type.index,
+              balanceGroup: Value(draft.balanceGroup.index),
               createdAt: now,
             ),
           );
@@ -312,6 +315,7 @@ class DriftFinanceRepository implements FinanceRepository {
               name: Value(name),
               normalizedName: Value(normalizedName),
               type: Value(draft.type.index),
+              balanceGroup: Value(draft.balanceGroup.index),
             ),
           );
       if (affected != 1) _throwAccountNotFound();
@@ -1234,6 +1238,7 @@ class DriftFinanceRepository implements FinanceRepository {
     name: row.read<String>('name'),
     type: AccountType.values[row.read<int>('type')],
     balance: row.read<int>('balance'),
+    balanceGroup: AccountBalanceGroup.values[row.read<int>('balance_group')],
     isArchived: row.read<int>('is_archived') != 0,
   );
 
@@ -1255,6 +1260,7 @@ class DriftFinanceRepository implements FinanceRepository {
         name: row.name,
         type: AccountType.values[row.type],
         balance: balance,
+        balanceGroup: AccountBalanceGroup.values[row.balanceGroup],
         isArchived: row.isArchived,
       );
 

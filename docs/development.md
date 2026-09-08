@@ -58,7 +58,7 @@ Gunakan data percobaan. Backup/restore sudah tersedia dalam bentuk manual, tetap
 
 Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–4 berada pada bulan tersebut.
 
-1. Buat rekening **Bank Uji**, saldo awal Rp1.000.000, dan **Tunai Uji**, saldo awal Rp200.000. Total saldo harus Rp1.200.000; pemasukan/pengeluaran tetap nol.
+1. Buat rekening **Bank Uji**, saldo awal Rp1.000.000, dan **Tunai Uji**, saldo awal Rp200.000; pilih kelompok **Saldo utama** untuk keduanya. Kartu Ikhtisar harus menunjukkan Saldo utama Rp1.200.000; pemasukan/pengeluaran tetap nol.
 2. Catat pemasukan Rp3.000.000 ke Bank Uji. Bank menjadi Rp4.000.000, pemasukan bulan itu Rp3.000.000.
 3. Catat pengeluaran Rp100.000 dari Bank Uji. Bank menjadi Rp3.900.000; pengeluaran Rp100.000 dan selisih bulanan Rp2.900.000.
 4. Transfer Rp150.000 dari Bank Uji ke Tunai Uji. Bank menjadi Rp3.750.000, Tunai Rp350.000, total Rp4.100.000. Ringkasan tetap pemasukan Rp3.000.000 dan pengeluaran Rp100.000. Riwayat hanya menampilkan satu transaksi transfer.
@@ -68,15 +68,16 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 8. Buka detail pengeluaran Rp100.000, ubah menjadi Rp125.000, lalu pastikan Bank, pengeluaran bulanan, dan selisih berubah tepat Rp25.000.
 9. Ubah tanggal pengeluaran tersebut ke bulan sebelumnya. Pastikan transaksi dan pengeluaran berpindah periode, sedangkan saldo saat ini tidak berubah lagi hanya karena perpindahan tanggal.
 10. Hapus transfer Rp150.000 setelah membaca dialog konfirmasi. Bank harus bertambah Rp150.000, Tunai berkurang Rp150.000, total saldo tetap, dan hanya satu baris transfer yang hilang.
+11. Buat **Dana Uji** pada kelompok **Simpanan & investasi** dengan saldo nol, lalu transfer Rp100.000 dari Bank Uji. Saldo utama berkurang Rp100.000, subtotal simpanan bertambah Rp100.000, total seluruh rekening tetap Rp4.025.000, dan ringkasan pemasukan/pengeluaran tidak berubah.
 
 ### Skenario kelola rekening
 
-1. Buka detail Bank Uji, ubah nama dan jenisnya, lalu pastikan saldo serta seluruh riwayat tetap terhubung ke rekening yang sama.
+1. Buka detail Bank Uji, ubah nama, jenis, dan kelompok saldonya, lalu pastikan saldo serta seluruh riwayat tetap terhubung ke rekening yang sama dan tidak ada transaksi baru. Kembalikan ke Saldo utama sebelum melanjutkan skenario perhitungan.
 2. Koreksi saldo Bank Uji ke angka yang lebih rendah. Pastikan riwayat menampilkan satu penyesuaian negatif sebesar selisihnya, saldo mencapai target, dan pemasukan/pengeluaran bulanan tidak berubah.
 3. Koreksi kembali ke angka yang lebih tinggi. Pastikan penyesuaian positif baru dibuat; entri penyesuaian lama tidak menyediakan edit atau hapus.
 4. Coba arsipkan rekening yang saldonya tidak nol. Aplikasi harus menolak dan mengarahkan pengguna untuk menolkan saldo terlebih dahulu.
-5. Buat dua rekening aktif untuk pengujian, nolkan salah satunya, lalu arsipkan. Rekening harus hilang dari daftar default, muncul ketika rekening arsip ditampilkan, dan tidak tersedia pada form transaksi atau penyesuaian baru.
-6. Buka transaksi lama yang menyentuh rekening arsip. Detail tetap terbaca, tetapi edit dan hapus tidak tersedia sampai rekening dipulihkan. Setelah dipulihkan, rekening kembali aktif beserta riwayatnya.
+5. Buat dua rekening aktif untuk pengujian, tempatkan salah satunya pada Simpanan & investasi, nolkan, lalu arsipkan. Rekening harus pindah ke section Rekening diarsipkan, tetap menyimpan kelompok lamanya, dan tidak tersedia pada form transaksi atau penyesuaian baru.
+6. Buka transaksi lama yang menyentuh rekening arsip. Detail tetap terbaca, tetapi edit dan hapus tidak tersedia sampai rekening dipulihkan. Setelah dipulihkan, rekening kembali ke kelompok aktif sebelumnya beserta riwayatnya.
 7. Coba arsipkan satu-satunya rekening aktif yang tersisa. Aplikasi harus menolak tindakan tersebut.
 8. Buat rekening baru bersaldo nol tanpa riwayat lalu hapus permanen setelah konfirmasi. Buat rekening lain yang sudah memiliki ledger dan pastikan hapus permanennya tidak tersedia; tidak boleh ada transaksi yang ikut terhapus.
 
@@ -93,7 +94,7 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 
 ### Skenario backup dan restore
 
-Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan snapshot percobaan yang mencakup rekening aktif/arsip, kategori kustom/arsip, seluruh jenis ledger, dan tanggal lampau.
+Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan snapshot percobaan yang mencakup kedua kelompok rekening aktif, rekening arsip beserta kelompok tersimpannya, kategori kustom/arsip, seluruh jenis ledger, dan tanggal lampau.
 
 1. Buka menu **Backup & pulihkan data**. Pastikan peringatan menjelaskan bahwa kata sandi tidak disimpan dan file tidak dapat dipulihkan jika kata sandi dilupakan.
 2. Coba kata sandi kosong, kurang dari 12 karakter, dan konfirmasi berbeda. Dialog penyimpanan tidak boleh terbuka.
@@ -108,8 +109,8 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 11. Ulangi restore, simpan safety backup dengan berhasil, lalu pastikan replace-all baru berjalan setelah penyimpanan dan verifikasi baca ulang selesai.
 12. Buka safety backup dengan kata sandi restore yang sama untuk memastikan keadaan sebelum restore dapat dipulihkan.
 13. Uji kegagalan penulisan atau baca ulang safety backup bila memungkinkan. Restore harus berhenti dan data aktif tidak boleh berubah.
-14. Bandingkan rekening aktif/arsip, kategori, riwayat, saldo, ringkasan bulanan, dan kalender dengan data sumber.
-15. Tambahkan rekening, kategori, dan transaksi setelah restore untuk memastikan ID baru tidak bertabrakan.
+14. Bandingkan kelompok rekening aktif/arsip, kategori, riwayat, Saldo utama, subtotal simpanan, total seluruh rekening, ringkasan bulanan, dan kalender dengan data sumber.
+15. Restore fixture payload v1 dan v2 lalu pastikan semua rekening lama masuk ke Saldo utama; restore payload v3 harus mempertahankan kedua kelompok. Setelah itu tambahkan rekening, kategori, dan transaksi untuk memastikan ID baru tidak bertabrakan.
 16. Ulangi dari instalasi atau perangkat terpisah dengan mengambil file dari Downloads/Drive. Tutup aplikasi sepenuhnya setelah restore, buka lagi, dan pastikan data tetap sama.
 17. Pastikan dokumen restore lebih dari 16 MiB ditolak selama pembacaan berbatas, plaintext lebih dari 10 MiB ditolak, dan parameter KDF container v1 yang tidak sama persis dengan profil produksi ditolak tanpa mengubah database.
 18. Pada HP referensi, periksa waktu derivasi kata sandi, penggunaan memori, layar sempit, ukuran teks besar, keyboard, pembatalan pemilih dokumen, dan ketukan tombol berulang.
@@ -119,6 +120,9 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Instalasi baru menampilkan keadaan kosong yang jelas dan alur tambah rekening dapat dibuka.
 - [ ] Nama rekening kosong/duplikat, nominal tidak valid, dan pilihan wajib yang kosong ditolak dengan pesan yang bisa dipahami.
 - [ ] Nama rekening tetap dianggap duplikat tanpa membedakan huruf besar/kecil, termasuk jika nama yang sama dimiliki rekening arsip.
+- [ ] Form rekening membedakan jenis dari kelompok saldo; default rekening baru adalah Saldo utama dan perubahan kelompok tidak membuat transaksi atau mengubah saldo.
+- [ ] Tab Rekening memisahkan Saldo utama, Simpanan & investasi, dan Rekening diarsipkan; Ikhtisar hanya menampilkan subtotal Saldo utama.
+- [ ] Transfer lintas kelompok mengubah kedua subtotal tetapi tetap netral terhadap total seluruh rekening dan arus kas.
 - [ ] Transfer ke rekening yang sama tidak dapat disimpan; alur transfer dengan kurang dari dua rekening memberi arahan yang jelas.
 - [ ] Form pemasukan hanya menawarkan kategori pemasukan dan form pengeluaran hanya kategori pengeluaran.
 - [ ] Form transaksi hanya dapat memilih subkategori; baris kelompok tidak dapat dipilih.
@@ -178,8 +182,8 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 
 1. Jalankan checklist transaksi, kelola rekening, kalender, serta backup/restore pada HP referensi dan perbaiki setiap ketidaksesuaian.
 2. Uji file Downloads dan penyedia dokumen cloud pada perangkat/instalasi terpisah menggunakan data percobaan; ukur juga Argon2id pada HP referensi.
-3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini memakai schema v4 dan payload backup v2.
-4. Jalankan checklist perangkat untuk [Alokasi Kategori Transaksi](transaction-allocations.md): satu rincian, split, edit, perubahan jenis, kategori arsip, backup v2, dan restore file v1/v2.
-5. Setelah split transaction lulus smoke test perangkat, implementasikan [Anggaran v1](budgets.md) bersama schema v5 dan payload backup v3. Progres anggaran harus menjumlahkan nominal alokasi pengeluaran, bukan total header transaksi.
+3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini memakai schema v5 dan payload backup v3 dengan `balanceGroup` rekening.
+4. Jalankan checklist perangkat untuk [Alokasi Kategori Transaksi](transaction-allocations.md): satu rincian, split, edit, perubahan jenis, kategori arsip, backup v3, serta restore file v1/v2/v3. Fixture v1/v2 harus menghasilkan rekening Saldo utama.
+5. Setelah kelompok rekening dan split transaction lulus smoke test perangkat, implementasikan [Anggaran v1](budgets.md) bersama schema v6 dan payload backup v4. Progres anggaran harus menjumlahkan nominal alokasi pengeluaran, bukan total header transaksi.
 
 Jangan menjadikan alpha satu-satunya catatan keuangan sebelum restore lintas instalasi berhasil diuji. Setelah itu pun, buat backup rutin secara berkala dan pertahankan beberapa salinan di luar HP; aplikasi belum membuat backup terjadwal. Safety backup yang wajib saat restore hanya melindungi keadaan tepat sebelum replace-all dan bukan pengganti kebiasaan backup rutin.

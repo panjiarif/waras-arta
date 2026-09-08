@@ -357,7 +357,11 @@ int estimateBackupPayloadUpperBoundBytes(BackupDocument document) {
   var estimatedBytes = 1024;
   for (final account in document.accounts) {
     estimatedBytes +=
-        256 + 6 * (account.name.length + account.normalizedName.length);
+        256 +
+        6 *
+            (account.name.length +
+                account.normalizedName.length +
+                account.balanceGroup.name.length);
   }
   for (final category in document.categories) {
     estimatedBytes +=

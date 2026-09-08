@@ -215,9 +215,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final activeAccounts = data.accounts
         .where((account) => !account.isArchived)
         .toList(growable: false);
-    final visibleAccounts = _showArchivedAccounts
-        ? data.accounts
-        : activeAccounts;
+    final primaryAccounts = activeAccounts
+        .where((account) => account.balanceGroup == AccountBalanceGroup.primary)
+        .toList(growable: false);
+    final savingsInvestmentAccounts = activeAccounts
+        .where(
+          (account) =>
+              account.balanceGroup == AccountBalanceGroup.savingsInvestment,
+        )
+        .toList(growable: false);
+    final archivedAccounts = data.accounts
+        .where((account) => account.isArchived)
+        .toList(growable: false);
+    final accountRows = _tab == _HomeTab.accounts
+        ? _accountRows(
+            primaryAccounts: primaryAccounts,
+            savingsInvestmentAccounts: savingsInvestmentAccounts,
+            archivedAccounts: archivedAccounts,
+            data: data,
+          )
+        : const <Widget>[];
     final intro = <Widget>[
       if (_tab == _HomeTab.overview) ...[
         const Text(
@@ -230,7 +247,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
         const SizedBox(height: 16),
-        _BalanceCard(total: data.totalBalance, count: activeAccounts.length),
+        _BalanceCard(total: data.primaryBalance, count: primaryAccounts.length),
         const SizedBox(height: 24),
       ] else ...[
         Text(
@@ -243,22 +260,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         Text(
           _tab == _HomeTab.history
               ? 'Setiap catatan, satu langkah lebih teratur.'
-              : 'Saldo saat ini dari seluruh catatan.',
+              : 'Pisahkan uang rutin dari simpanan dan investasi.',
         ),
         const SizedBox(height: 24),
-        if (_tab == _HomeTab.accounts) ...[
-          SwitchListTile.adaptive(
-            key: const Key('show-archived-accounts'),
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Tampilkan rekening diarsipkan'),
-            subtitle: const Text('Riwayat dan nama rekening tetap tersimpan.'),
-            value: _showArchivedAccounts,
-            onChanged: (value) {
-              setState(() => _showArchivedAccounts = value);
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
       ],
       if (_tab != _HomeTab.accounts) ...[
         const _MonthSelector(),
@@ -283,22 +287,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ? data.entries.take(5).toList()
         : data.entries;
     final rowCount = _tab == _HomeTab.accounts
-        ? visibleAccounts.length
+        ? accountRows.length
         : entries.length;
+    final contentIsEmpty = _tab == _HomeTab.accounts
+        ? data.accounts.isEmpty
+        : entries.isEmpty;
     final footer = <Widget>[
-      if (rowCount == 0)
+      if (contentIsEmpty)
         _EmptyCard(
           title: _tab == _HomeTab.accounts
-              ? _showArchivedAccounts
-                    ? 'Belum ada rekening'
-                    : 'Belum ada rekening aktif'
+              ? 'Belum ada rekening'
               : data.accounts.isEmpty
               ? 'Mulai dari satu rekening'
               : 'Belum ada catatan bulan ini',
           description: _tab == _HomeTab.accounts
-              ? _showArchivedAccounts
-                    ? 'Tambahkan dompet, bank, atau e-wallet pertamamu.'
-                    : 'Tambahkan rekening baru atau tampilkan rekening yang pernah diarsipkan.'
+              ? 'Tambahkan dompet, bank, atau e-wallet pertamamu.'
               : data.accounts.isEmpty
               ? 'Tambahkan dompet atau bank, lalu catat uang yang masuk dan keluar.'
               : 'Transaksi akan muncul di sini sesuai tanggal kejadiannya.',
@@ -334,13 +337,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         final row = index - intro.length;
         if (row < rowCount) {
           if (_tab == _HomeTab.accounts) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _AccountCard(
-                account: visibleAccounts[row],
-                onTap: () => _open('/accounts/${visibleAccounts[row].id}'),
-              ),
-            );
+            return accountRows[row];
           }
           return _EntryRow(
             entry: entries[row],
@@ -353,11 +350,181 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       },
     );
   }
+
+  List<Widget> _accountRows({
+    required List<FinanceAccount> primaryAccounts,
+    required List<FinanceAccount> savingsInvestmentAccounts,
+    required List<FinanceAccount> archivedAccounts,
+    required FinanceSnapshot data,
+  }) {
+    if (data.accounts.isEmpty) return const [];
+
+    Widget accountCard(FinanceAccount account) => Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: _AccountCard(
+        account: account,
+        onTap: () => _open('/accounts/${account.id}'),
+      ),
+    );
+
+    return [
+      _AccountSectionHeader(
+        title: AccountBalanceGroup.primary.label,
+        total: data.primaryBalance,
+        count: primaryAccounts.length,
+        totalKey: const Key('primary-accounts-total'),
+      ),
+      const SizedBox(height: 10),
+      if (primaryAccounts.isEmpty)
+        const _AccountSectionEmpty(
+          message: 'Belum ada rekening untuk saldo utama.',
+        )
+      else
+        for (final account in primaryAccounts) accountCard(account),
+      const SizedBox(height: 14),
+      _AccountSectionHeader(
+        title: AccountBalanceGroup.savingsInvestment.label,
+        total: data.savingsInvestmentBalance,
+        count: savingsInvestmentAccounts.length,
+        totalKey: const Key('savings-investment-total'),
+      ),
+      const SizedBox(height: 10),
+      if (savingsInvestmentAccounts.isEmpty)
+        const _AccountSectionEmpty(
+          message: 'Belum ada rekening simpanan atau investasi. Pilih kelompok ini saat menambah rekening.',
+        )
+      else
+        for (final account in savingsInvestmentAccounts) accountCard(account),
+      if (archivedAccounts.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        const Divider(),
+        SwitchListTile.adaptive(
+          key: const Key('show-archived-accounts'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            'Rekening diarsipkan (${archivedAccounts.length})',
+            key: const Key('archived-account-count'),
+          ),
+          subtitle: const Text(
+            'Tidak dapat dipakai untuk transaksi baru; riwayat tetap tersimpan.',
+          ),
+          value: _showArchivedAccounts,
+          onChanged: (value) {
+            setState(() => _showArchivedAccounts = value);
+          },
+        ),
+        if (_showArchivedAccounts) ...[
+          const SizedBox(height: 4),
+          for (final account in archivedAccounts) accountCard(account),
+        ],
+      ],
+    ];
+  }
 }
 
 enum _HomeMenuAction { backup }
 
 enum _HomeTab { overview, history, calendar, accounts }
+
+class _AccountSectionHeader extends StatelessWidget {
+  const _AccountSectionHeader({
+    required this.title,
+    required this.total,
+    required this.count,
+    required this.totalKey,
+  });
+
+  final String title;
+  final int total;
+  final int count;
+  final Key totalKey;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked =
+              constraints.maxWidth < 260 ||
+              MediaQuery.textScalerOf(context).scale(1) > 1.3;
+          final heading = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(
+                '$count rekening',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.outline,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          );
+          final amount = FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              formatRupiah(total),
+              key: totalKey,
+              maxLines: 1,
+              softWrap: false,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ),
+          );
+
+          if (stacked) {
+            return Column(
+              key: ValueKey('account-section-stacked-$title'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [heading, const SizedBox(height: 8), amount],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: heading),
+              const SizedBox(width: 12),
+              Flexible(child: amount),
+            ],
+          );
+        },
+      ),
+    ),
+  );
+}
+
+class _AccountSectionEmpty extends StatelessWidget {
+  const _AccountSectionEmpty({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.info_outline,
+          size: 18,
+          color: Theme.of(context).colorScheme.outline,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: TextStyle(color: Theme.of(context).colorScheme.outline),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
 class _BalanceCard extends StatelessWidget {
   const _BalanceCard({required this.total, required this.count});
@@ -375,7 +542,7 @@ class _BalanceCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'TOTAL SALDO SAAT INI',
+          'SALDO UTAMA',
           style: TextStyle(
             color: Color(0xFFD6E4D9),
             fontSize: 11,
@@ -384,17 +551,23 @@ class _BalanceCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        Text(
-          formatRupiah(total),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 32,
-            fontWeight: FontWeight.w700,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            formatRupiah(total),
+            key: const Key('primary-balance-total'),
+            maxLines: 1,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         const SizedBox(height: 20),
         Text(
-          '$count rekening • seluruh tanggal',
+          '$count rekening • tidak termasuk simpanan & investasi',
           style: const TextStyle(color: Color(0xFFD6E4D9)),
         ),
       ],
@@ -544,49 +717,68 @@ class _AccountCard extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(18),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(accountIconFor(account.type), color: forest),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(accountIconFor(account.type), color: forest),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            account.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 17,
-                            ),
+                        Text(
+                          account.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 17,
                           ),
                         ),
-                        if (account.isArchived)
-                          const AccountStatusBadge(archived: true),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(account.type.label),
+                            if (account.isArchived)
+                              const AccountStatusBadge(archived: true),
+                          ],
+                        ),
                       ],
                     ),
-                    Text(account.type.label),
-                    const SizedBox(height: 10),
-                    Text(
-                      formatRupiah(account.balance),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 22,
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    formatRupiah(account.balance),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 22,
                     ),
-                    if (account.balance < 0)
-                      const Text(
-                        'Saldo tercatat negatif. Periksa kelengkapan catatan.',
-                        style: TextStyle(color: Color(0xFF9D492B)),
-                      ),
-                  ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right),
+              if (account.balance < 0) ...[
+                const SizedBox(height: 4),
+                const Text(
+                  'Saldo tercatat negatif. Periksa kelengkapan catatan.',
+                  style: TextStyle(color: Color(0xFF9D492B)),
+                ),
+              ],
             ],
           ),
         ),

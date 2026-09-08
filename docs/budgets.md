@@ -206,9 +206,9 @@ Invariant minimal satu mapping tidak dapat dinyatakan sebagai constraint row lan
 
 Anggaran dibangun setelah fondasi alokasi kategori pada [spesifikasi alokasi transaksi](transaction-allocations.md). Sebelum fitur ditambahkan, `databaseProvider` dipindahkan dari irisan `ledger` ke composition root netral, misalnya `lib/app/providers.dart`. Ledger, kategori, kalender, backup, dan anggaran kemudian mengonsumsi provider bersama tanpa dependensi silang antarfitur.
 
-## Schema Drift v5
+## Schema Drift v6
 
-Schema anggaran adalah versi 5 dan menambahkan dua tabel di atas schema v4 yang sudah menormalisasi kategori transaksi ke `ledger_allocations`.
+Schema anggaran adalah versi 6 dan menambahkan dua tabel di atas schema v5. Schema dasar tersebut sudah menormalkan kategori transaksi ke `ledger_allocations` serta menyimpan `balanceGroup` rekening.
 
 ### `budgets`
 
@@ -277,7 +277,7 @@ Indeks awal:
 
 Query progres berjalan dari `budget_categories` ke `ledger_allocations` berdasarkan `category_id`, lalu ke header `ledger_entries` untuk jenis dan tanggal. Evaluasi `EXPLAIN QUERY PLAN` terhadap reverse index allocation dari schema v4. Kandidat terukur adalah menambahkan `amount` sebagai kolom covering pada indeks allocation dan/atau partial index header `ledger_entries(occurred_day, id) WHERE kind = 1`; jangan menambah indeks sebelum benchmark menunjukkan manfaat.
 
-Migrasi v4 ke v5 hanya membuat tabel, constraint, trigger, dan indeks anggaran. Rekening, kategori, header ledger, allocation, saldo, serta ID lama tidak ditulis ulang. Snapshot schema v5, fresh-create v5, dan jalur migrasi v1→v5, v2→v5, v3→v5, serta v4→v5 wajib diuji agar schema extras dibuat pada `onCreate` maupun `onUpgrade`.
+Migrasi v5 ke v6 hanya membuat tabel, constraint, trigger, dan indeks anggaran. Rekening beserta `balanceGroup`, kategori, header ledger, allocation, saldo, serta ID lama tidak ditulis ulang. Snapshot schema v6, fresh-create v6, dan jalur migrasi v1→v6, v2→v6, v3→v6, v4→v6, serta v5→v6 wajib diuji agar schema extras dibuat pada `onCreate` maupun `onUpgrade`.
 
 ## Query dan performa
 
@@ -289,13 +289,13 @@ Stream snapshot wajib mengamati `budgets`, `budget_categories`, `categories`, `l
 
 Target performa menggunakan data representatif sampai batas ledger yang didukung backup pada HP Snapdragon 460/RAM 4 GB. Nominal uang dan agregasi tetap integer; `double` hanya boleh dipakai untuk rasio tampilan setelah klasifikasi integer selesai.
 
-## Backup payload v3
+## Backup payload v4
 
 Penambahan schema anggaran harus berada dalam perubahan yang sama dengan evolusi backup agar aplikasi tidak pernah menghasilkan backup parsial.
 
-- Setelah fondasi allocation memakai payload v2/schema 4, `currentBackupVersion` naik dari 2 ke 3 ketika anggaran ditambahkan.
+- Setelah kelompok rekening memakai payload v3/schema 5, `currentBackupVersion` naik dari 3 ke 4 ketika anggaran ditambahkan.
 - Versi container enkripsi tetap 1; algoritme, kata sandi, peringatan lupa kata sandi, dan ekstensi `.warasarta` tidak berubah.
-- Backup baru berasal dari schema 5 dan selalu menghasilkan payload v3.
+- Backup baru berasal dari schema 6 dan selalu menghasilkan payload v4.
 - `data.budgets` ditambahkan. Setiap record berisi `id`, `periodKind` sebagai string `monthly`/`yearly`/`custom`, `startDay`, `endDay`, `name`, `normalizedName`, `limitAmount`, `categoryIds`, `createdAtUtc`, dan `updatedAtUtc`.
 - Record anggaran diurutkan berdasarkan ID. `categoryIds` wajib strictly ascending dan unik agar wire deterministik.
 - `sequences.budgets` ditambahkan. `budget_categories` tidak memiliki sequence.
@@ -306,17 +306,18 @@ Penambahan schema anggaran harus berada dalam perubahan yang sama dengan evolusi
 Parser tetap strict per versi:
 
 - parser v1 hanya menerima struktur lama;
-- parser v2 hanya menerima struktur allocation tanpa anggaran;
-- parser v3 hanya menerima struktur allocation beserta anggaran;
+- parser v2 hanya menerima struktur allocation tanpa `balanceGroup` dan tanpa anggaran;
+- parser v3 hanya menerima struktur allocation beserta `balanceGroup`, tanpa anggaran;
+- parser v4 hanya menerima struktur allocation, `balanceGroup`, dan anggaran;
 - field semantik yang tidak dikenal ditolak;
-- pasangan yang didukung hanya (`payload v1`, `schema 3`), (`payload v2`, `schema 4`), dan (`payload v3`, `schema 5`);
+- pasangan yang didukung hanya (`payload v1`, `schema 3`), (`payload v2`, `schema 4`), (`payload v3`, `schema 5`), dan (`payload v4`, `schema 6`);
 - aplikasi lama menolak versi yang lebih baru dan tidak boleh mengabaikan allocation atau anggaran diam-diam.
 
-Wire DTO, parser, dan encoder dipisahkan per versi. Parser v1 menormalkan kategori/nominal ledger lama menjadi satu allocation; parser v1 dan v2 sama-sama menghasilkan `budgets = []` serta sequence anggaran `0`, sedangkan allocation v2 dipertahankan. Exporter schema 5 selalu menulis wire payload v3. Objek hasil normalisasi versi lama tidak boleh diserialisasi kembali dengan label lama tetapi field versi baru.
+Wire DTO, parser, dan encoder dipisahkan per versi. Parser v1 menormalkan kategori/nominal ledger lama menjadi satu allocation. Parser v1 dan v2 memberi setiap rekening `balanceGroup = primary`, sedangkan parser v3 mempertahankan nilai kelompok eksplisitnya. Parser v1, v2, dan v3 sama-sama menghasilkan `budgets = []` serta sequence anggaran `0`; allocation v2+ tetap dipertahankan. Exporter schema 6 selalu menulis wire payload v4. Objek hasil normalisasi versi lama tidak boleh diserialisasi kembali dengan label lama tetapi field versi baru.
 
-Restore backup v1 atau v2 pada aplikasi schema 5 menggunakan replace-all sehingga daftar anggaran hasil restore kosong. Preview wajib menyebut dampak tersebut sebelum konfirmasi. Safety backup aplikasi schema 5 selalu dibuat sebagai payload v3 sebelum restore v1, v2, maupun v3; pembatalan atau kegagalannya menghentikan restore sehingga anggaran aktif masih dapat dipulihkan.
+Restore backup v1, v2, atau v3 pada aplikasi schema 6 menggunakan replace-all sehingga daftar anggaran hasil restore kosong. Preview wajib menyebut dampak tersebut sebelum konfirmasi. Safety backup aplikasi schema 6 selalu dibuat sebagai payload v4 sebelum restore v1, v2, v3, maupun v4; pembatalan atau kegagalannya menghentikan restore sehingga anggaran aktif masih dapat dipulihkan.
 
-Payload v3 wajib mengulang seluruh validasi header/allocation v2 sebelum memeriksa bagian anggaran berikut:
+Payload v4 wajib mengulang seluruh validasi header/allocation v2 serta validasi `balanceGroup` v3 sebelum memeriksa bagian anggaran berikut:
 
 - exact keys, ID, sequence, timestamp UTC, serta `updatedAtUtc >= createdAtUtc`;
 - `periodKind` dikenal, kedua tanggal Gregorian nyata, `startDay <= endDay`, dan bentuk canonical sesuai jenis;
@@ -332,19 +333,19 @@ Payload v3 wajib mengulang seluruh validasi header/allocation v2 sebelum memerik
 
 Validasi overlap payload tidak boleh pairwise `O(M²)`. Kelompokkan interval berdasarkan `categoryId`, urutkan (`startDay`, `endDay`, `budgetId`), lalu bandingkan interval berurutan. Target kompleksitasnya `O(M log M)` dengan memori `O(M)` untuk `M` mapping.
 
-Guard cakupan adapter backup diperbarui bersama payload v3, schema 5, tabel anggaran, tabel allocation yang diwarisi, dan seluruh kolom persistennya.
+Guard cakupan adapter backup diperbarui bersama payload v4, schema 6, tabel anggaran, tabel allocation yang diwarisi, `balanceGroup`, dan seluruh kolom persistennya.
 
 ## Restore atomik
 
-Restore pada schema 5 dilakukan dalam satu transaksi database setelah payload v1/v2/v3 dinormalisasi ke model terkini. Urutan konseptual:
+Restore pada schema 6 dilakukan dalam satu transaksi database setelah payload v1/v2/v3/v4 dinormalisasi ke model terkini. Urutan konseptual:
 
 1. validasi dan normalisasi payload sebelum transaksi mutasi;
 2. ubah seluruh rekening pada database aktif menjadi nonarsip sementara agar trigger mengizinkan penghapusan ledger;
 3. hapus allocation ledger, header ledger, mapping anggaran, anggaran, anak kategori, induk kategori, lalu rekening;
-4. masukkan seluruh rekening incoming sebagai nonarsip, lalu induk kategori, subkategori, anggaran, mapping, header ledger, dan allocation ledger;
-5. setelah ledger lengkap, pulihkan status arsip rekening incoming;
+4. masukkan seluruh rekening incoming sebagai nonarsip beserta `balanceGroup`, lalu induk kategori, subkategori, anggaran, mapping, header ledger, dan allocation ledger;
+5. setelah ledger lengkap, pulihkan status arsip rekening incoming tanpa mengubah kelompok tersimpannya;
 6. pulihkan sequence rekening, kategori, ledger, serta anggaran;
-7. jalankan verifier warisan schema v4: jumlah allocation kind 0/1 adalah 1–50, kind 2/3 adalah 0, posisi rapat, kategori unik/leaf/jenis cocok, jumlah allocation sama dengan total header, nominal dalam batas, dan saldo rekening arsip valid;
+7. jalankan verifier warisan schema v5: jumlah allocation kind 0/1 adalah 1–50, kind 2/3 adalah 0, posisi rapat, kategori unik/leaf/jenis cocok, jumlah allocation sama dengan total header, `balanceGroup` dikenal, nominal dalam batas, dan saldo rekening arsip valid;
 8. periksa invariant anggaran: foreign key, jumlah row/mapping, minimal satu mapping, tanggal/periode canonical, leaf pengeluaran, overlap, serta sequence;
 9. commit hanya bila seluruh pemeriksaan lulus.
 
@@ -387,8 +388,8 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 
 ### Database dan migrasi
 
-- migrasi v4→v5 menjaga seluruh data allocation dan saldo;
-- migrasi berantai v1→v5, v2→v5, dan v3→v5;
+- migrasi v5→v6 menjaga seluruh data allocation, kelompok rekening, dan saldo;
+- migrasi berantai v1→v6, v2→v6, v3→v6, dan v4→v6;
 - raw `INSERT` maupun `UPDATE` mapping ke kategori root/pemasukan/overlap ditolak trigger;
 - pemindahan tuple mapping tidak salah berkonflik dengan row lamanya;
 - update periode ditolak;
@@ -397,10 +398,10 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 
 ### Backup dan restore
 
-- JSON dan enkripsi round-trip payload v3;
-- fixture v1 dan v2 permanen direstore dengan anggaran kosong dan safety backup v3;
-- v3 menjaga ID, sequence, allocation, periode, kategori arsip, dan seluruh mapping;
-- fixture payload v3 dengan allocation kosong/posisi gap/kategori duplikat atau salah jenis/mismatch total ditolak sebelum mutasi walaupun bagian anggarannya valid;
+- JSON dan enkripsi round-trip payload v4;
+- fixture v1, v2, dan v3 permanen direstore dengan anggaran kosong dan safety backup v4; fixture v1/v2 menghasilkan `balanceGroup = primary`, sedangkan v3 mempertahankan kelompoknya;
+- v4 menjaga ID, sequence, allocation, `balanceGroup`, periode, kategori arsip, dan seluruh mapping;
+- fixture payload v4 dengan allocation kosong/posisi gap/kategori duplikat atau salah jenis/mismatch total/kelompok rekening tidak dikenal ditolak sebelum mutasi walaupun bagian anggarannya valid;
 - invalid kind/tanggal/bentuk periode, struktur asing, mismatch `normalizedName`, urutan/duplikasi `categoryIds`, kategori tidak valid, mapping kosong, serta overlap ditolak sebelum mutasi;
 - batas jumlah record dan total mapping ditolak sebelum alokasi besar;
 - estimator byte memasukkan seluruh record/mapping; plaintext di atas 10 MiB dan container di atas 16 MiB tetap ditolak;
@@ -443,12 +444,12 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 ## Urutan implementasi dan commit
 
 1. `refactor(di): centralize database provider`
-2. `feat(budgets): add persistence and backup v3`
+2. `feat(budgets): add persistence and backup v4`
 3. `feat(budgets): add flexible budget management UI`
 4. `docs: document implemented budget workflow`
 
-Schema v5, migrasi, repository, backup v3, decoder v1/v2, dan seluruh test fondasi berada pada commit fitur yang sama agar tidak ada commit yang meninggalkan backup dalam keadaan tidak lengkap.
+Schema v6, migrasi, repository, backup v4, decoder v1/v2/v3, dan seluruh test fondasi berada pada commit fitur yang sama agar tidak ada commit yang meninggalkan backup dalam keadaan tidak lengkap.
 
 ## Kriteria selesai
 
-Anggaran v1 selesai ketika pengguna dapat membuat, melihat, mengubah, dan menghapus anggaran bulanan, tahunan, maupun kustom dengan banyak subkategori; progres selalu mengikuti nominal allocation pada seluruh rentang; overlap lintas jenis ditolak; histori kategori arsip tetap akurat; backup v1, v2, dan v3 dapat dipulihkan sesuai kontrak; migrasi lama aman; dan alur utama nyaman pada HP referensi.
+Anggaran v1 selesai ketika pengguna dapat membuat, melihat, mengubah, dan menghapus anggaran bulanan, tahunan, maupun kustom dengan banyak subkategori; progres selalu mengikuti nominal allocation pada seluruh rentang; overlap lintas jenis ditolak; histori kategori arsip tetap akurat; backup v1, v2, v3, dan v4 dapat dipulihkan sesuai kontrak; migrasi lama aman; dan alur utama nyaman pada HP referensi.

@@ -17,7 +17,7 @@ void main() {
       () async {
         final document = _backupDocument(createdAtUtc: now);
         final store = _FakeBackupDataStore(
-          databaseSchemaVersion: 4,
+          databaseSchemaVersion: 5,
           documentToExport: document,
         );
         final codec = _testCodec();
@@ -47,7 +47,7 @@ void main() {
       () async {
         final document = _backupDocument(createdAtUtc: now);
         final store = _FakeBackupDataStore(
-          databaseSchemaVersion: 4,
+          databaseSchemaVersion: 5,
           documentToExport: document,
         );
         final codec = _testCodec();
@@ -64,14 +64,14 @@ void main() {
       },
     );
 
-    test('inspect accepts a v1/schema 3 backup on target schema 4', () async {
+    test('inspect accepts a v1/schema 3 backup on target schema 5', () async {
       final document = _backupDocument(
         backupVersion: 1,
         databaseSchemaVersion: 3,
         createdAtUtc: now,
       );
       final store = _FakeBackupDataStore(
-        databaseSchemaVersion: 4,
+        databaseSchemaVersion: 5,
         documentToExport: document,
       );
       final codec = _testCodec();
@@ -86,10 +86,10 @@ void main() {
       expect(store.restoreCalls, 1);
     });
 
-    test('inspect rejects a valid v2 backup on target schema 3', () async {
+    test('inspect rejects a valid v3 backup on target schema 4', () async {
       final document = _backupDocument(createdAtUtc: now);
       final store = _FakeBackupDataStore(
-        databaseSchemaVersion: 3,
+        databaseSchemaVersion: 4,
         documentToExport: document,
       );
       final codec = _testCodec();
@@ -176,7 +176,7 @@ EncryptedBackupCodec _testCodec() {
 
 BackupDocument _backupDocument({
   int backupVersion = currentBackupVersion,
-  int databaseSchemaVersion = 4,
+  int databaseSchemaVersion = 5,
   required DateTime createdAtUtc,
 }) {
   final rowCreatedAt = DateTime.utc(2026, 9, 5, 4, 30);

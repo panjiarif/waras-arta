@@ -19,6 +19,7 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
   final _name = TextEditingController();
   final _balance = TextEditingController(text: '0');
   AccountType _type = AccountType.cash;
+  AccountBalanceGroup _balanceGroup = AccountBalanceGroup.primary;
   DateTime _date = dateOnly(DateTime.now());
 
   @override
@@ -37,6 +38,7 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
           AccountDraft(
             name: _name.text,
             type: _type,
+            balanceGroup: _balanceGroup,
             openingBalance: parseRupiah(_balance.text)!,
             openedAt: _date,
           ),
@@ -102,6 +104,33 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
                     onChanged: (value) {
                       if (value != null) setState(() => _type = value);
                     },
+                  ),
+                  const SizedBox(height: 20),
+                  DropdownButtonFormField<AccountBalanceGroup>(
+                    key: const Key('account-balance-group'),
+                    initialValue: _balanceGroup,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Kelompok saldo',
+                      helperText: _balanceGroup.description,
+                      helperMaxLines: 4,
+                    ),
+                    items: [
+                      for (final group in AccountBalanceGroup.values)
+                        DropdownMenuItem(
+                          value: group,
+                          child: Text(group.label),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _balanceGroup = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  const FormMessage(
+                    'Pengelompokan tidak memindahkan uang. Buat rekening terpisah hanya jika tempat uangnya memang berbeda.',
                   ),
                   const SizedBox(height: 20),
                   TextFormField(

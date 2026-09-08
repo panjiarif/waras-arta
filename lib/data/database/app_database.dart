@@ -12,6 +12,9 @@ class Accounts extends Table {
   TextColumn get name => text().withLength(min: 1, max: 80)();
   TextColumn get normalizedName => text().unique()();
   IntColumn get type => integer()();
+  IntColumn get balanceGroup => integer()
+      .withDefault(const Constant(0))
+      .check(const CustomExpression<bool>('balance_group IN (0, 1)'))();
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -130,7 +133,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -140,6 +143,7 @@ class AppDatabase extends _$AppDatabase {
       await _createCommonSchemaExtras();
       await _createSchemaV3Extras();
       await _createSchemaV4Extras();
+      await _createSchemaV5Extras();
     },
     onUpgrade: (migrator, from, to) async {
       if (from >= to) return;
@@ -150,6 +154,7 @@ class AppDatabase extends _$AppDatabase {
             from1To2: _migrateV1ToV2,
             from2To3: _migrateV2ToV3,
             from3To4: _migrateV3ToV4,
+            from4To5: _migrateV4ToV5,
           );
           await runSteps(migrator, from, to);
 
@@ -164,6 +169,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (to >= 4) {
             await _createSchemaV4Extras();
+          }
+          if (to >= 5) {
+            await _createSchemaV5Extras();
           }
 
           if (to >= 2 && to < 4) {
@@ -292,6 +300,10 @@ class AppDatabase extends _$AppDatabase {
     } finally {
       await customStatement('DROP TABLE IF EXISTS temp.ledger_allocations_v4');
     }
+  }
+
+  Future<void> _migrateV4ToV5(Migrator migrator, Schema5 schema) async {
+    await migrator.addColumn(schema.accounts, schema.accounts.balanceGroup);
   }
 
   Future<void> _seedDefaultCategories() async {
@@ -494,6 +506,14 @@ class AppDatabase extends _$AppDatabase {
     for (final statement in statements) {
       await customStatement(statement);
     }
+  }
+
+  Future<void> _createSchemaV5Extras() async {
+    await customStatement(
+      '''CREATE INDEX IF NOT EXISTS accounts_balance_group_order
+         ON accounts
+           (is_archived, balance_group, normalized_name, id)''',
+    );
   }
 
   /// Verifies allocation invariants that SQLite cannot enforce per row.

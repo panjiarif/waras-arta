@@ -10,27 +10,29 @@ Ini adalah irisan awal menuju versi 0.1 pada [product brief](docs/product-brief.
 
 Yang tersedia:
 
-- Membuat rekening tunai, bank, e-wallet, atau lainnya dengan saldo awal yang dicatat sebagai penyesuaian ledger.
-- Membuka detail rekening, mengubah nama/jenis, serta mengoreksi saldo melalui entri penyesuaian bertanda yang dapat ditelusuri dan tidak masuk ringkasan arus kas.
-- Mengarsipkan rekening bersaldo nol, memulihkannya, atau menghapus permanen rekening yang tidak memiliki referensi ledger tanpa menghapus riwayat secara berantai.
+- Membuat rekening tunai, bank, e-wallet, atau lainnya pada kelompok aktif **Saldo utama** atau **Simpanan & investasi**, dengan saldo awal yang dicatat sebagai penyesuaian ledger.
+- Membuka detail rekening, mengubah nama/jenis/kelompok, serta mengoreksi saldo melalui entri penyesuaian bertanda yang dapat ditelusuri dan tidak masuk ringkasan arus kas.
+- Memisahkan rekening aktif dari **Rekening diarsipkan**; rekening bersaldo nol dapat diarsipkan dan dipulihkan ke kelompok aktif sebelumnya, sedangkan rekening tanpa referensi ledger dapat dihapus permanen tanpa menghapus riwayat secara berantai.
 - Mencatat pemasukan dan pengeluaran dengan 1–50 rincian nominal–subkategori, tanggal kejadian, dan catatan; total split dihitung otomatis.
 - Mengelola kategori pemasukan/pengeluaran dalam hierarki dua tingkat: kelompok dan subkategori.
 - Mengubah nama serta ikon Material kategori, lalu mengarsipkannya tanpa memutus riwayat lama.
-- Transfer satu transaksi antar-rekening sendiri, tidak dihitung sebagai pemasukan/pengeluaran.
+- Transfer satu transaksi antar-rekening sendiri, termasuk lintas kelompok saldo, tidak dihitung sebagai pemasukan/pengeluaran dan tidak mengubah total seluruh rekening.
 - Kalender bulanan Senin–Minggu dengan penanda pemasukan, pengeluaran, serta aktivitas lain per tanggal.
 - Memilih tanggal menampilkan total harian dan seluruh pemasukan, pengeluaran, transfer, serta penyesuaian pada hari tersebut.
 - Pencatatan tanggal lampau melalui kalender atau pemilih tanggal; tombol tambah pada tab kalender otomatis memakai tanggal yang dipilih.
-- Ikhtisar saldo seluruh rekening dan ringkasan bulanan.
+- Ikhtisar saldo utama yang siap digunakan dan ringkasan bulanan; subtotal Saldo utama serta Simpanan & investasi tersedia terpisah pada tab Rekening.
 - Riwayat bulanan yang dimuat bertahap mulai 50 entri.
 - Detail transaksi beserta nama rekening, tanggal kejadian, catatan, waktu pencatatan, dan seluruh rincian split.
 - Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
 - Hapus permanen transaksi biasa melalui dialog konfirmasi.
 - Penyimpanan persisten lokal menggunakan Drift/SQLite.
-- Migrasi schema bertahap v1 sampai v4 yang menjaga transaksi serta saldo lama ketika kategori, siklus rekening, dan alokasi transaksi berevolusi.
+- Migrasi schema bertahap v1 sampai v5 yang menjaga transaksi serta saldo lama ketika kategori, siklus rekening, alokasi transaksi, dan kelompok saldo berevolusi.
 - Backup manual terenkripsi ke file `.warasarta` melalui pemilih dokumen Android; hasil simpan dibuka ulang dan diverifikasi sebelum dianggap berhasil.
 - Restore replace-all dengan pemeriksaan kata sandi, ringkasan isi, konfirmasi, transaksi database atomik, dan safety backup terenkripsi yang wajib disimpan lebih dahulu.
 
-Rekening arsip disembunyikan secara default, tetap dapat ditampilkan dan dipulihkan, serta tidak dapat dipilih untuk transaksi baru. Entri penyesuaian, termasuk saldo awal, bersifat tetap agar jejak perubahan saldo tidak ditulis ulang.
+`Saldo utama` dan `Simpanan & investasi` adalah kelompok rekening aktif, sedangkan arsip merupakan status terpisah. Rekening arsip disembunyikan secara default, tetap dapat ditampilkan, menyimpan kelompok aktif terakhirnya untuk pemulihan, serta tidak dapat dipilih untuk transaksi baru. Entri penyesuaian, termasuk saldo awal, bersifat tetap agar jejak perubahan saldo tidak ditulis ulang.
+
+Backup aktif memakai payload v3/schema v5 dan membawa `balanceGroup` setiap rekening. Restore payload v1/schema 3 atau v2/schema 4 tetap didukung; karena format lama belum mempunyai field tersebut, seluruh rekening lama dipetakan ke `Saldo utama`.
 
 Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, anggaran, tujuan keuangan, diagram, dan utang/piutang.
 

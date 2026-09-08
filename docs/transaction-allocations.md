@@ -2,7 +2,7 @@
 
 ## Status dan tujuan
 
-Dokumen ini adalah kontrak implementasi **Alokasi Transaksi v1**. Fondasi schema v4, payload backup v2, form split, serta presentasi riwayat, kalender, dan detail sudah diterapkan dan dilindungi pengujian otomatis. Smoke test akhir pada HP referensi tetap menjadi gerbang sebelum fitur dianggap siap dipakai sebagai catatan nyata. Fitur ini dikerjakan sebelum anggaran karena nominal per subkategori menjadi sumber data bagi progres anggaran, rincian kategori, dan diagram.
+Dokumen ini adalah kontrak implementasi **Alokasi Transaksi v1**. Fondasi allocation lahir pada schema v4/payload backup v2; form split serta presentasi riwayat, kalender, dan detail sudah diterapkan dan dilindungi pengujian otomatis. Schema aktif kemudian naik ke v5/payload v3 untuk menambahkan kelompok saldo rekening tanpa mengubah bentuk allocation. Smoke test akhir pada HP referensi tetap menjadi gerbang sebelum fitur dianggap siap dipakai sebagai catatan nyata. Fitur ini dikerjakan sebelum anggaran karena nominal per subkategori menjadi sumber data bagi progres anggaran, rincian kategori, dan diagram.
 
 Satu pencatatan pemasukan atau pengeluaran tetap tampil sebagai satu transaksi, tetapi dapat dibagi menjadi beberapa pasangan nominal dan subkategori. Contoh: satu pembayaran Rp17.000 dapat terdiri dari **Makan Rp15.000** dan **Parkir Rp2.000**.
 
@@ -295,19 +295,20 @@ Penghitungan referensi kategori, aturan hapus kategori, dan tampilan histori kat
 
 Indeks awal cukup primary key allocation dan `ledger_allocations_category_entry`. Indeks tambahan untuk filter tanggal+category atau anggaran hanya ditambahkan setelah `EXPLAIN QUERY PLAN` dan benchmark data representatif. Pengujian dilakukan dalam profile mode pada HP Snapdragon 460/RAM 4 GB; debug mode bukan dasar kesimpulan performa.
 
-## Backup payload v2
+## Fondasi backup payload v2 dan evolusi berikutnya
 
 Schema v4 dan dukungan allocation harus dirilis bersama evolusi payload backup agar split tidak pernah hilang saat restore.
 
 Matrix format yang dikunci:
 
-| Payload | Schema sumber | Representasi kategori transaksi | Anggaran |
-| --- | --- | --- | --- |
-| v1 | 3 | satu `categoryId` langsung pada record ledger kind 0/1 | tidak ada |
-| v2 | 4 | `allocations` pada record ledger kind 0/1 | tidak ada |
-| v3 (direncanakan) | 5 (direncanakan) | `allocations` | `data.budgets` |
+| Payload | Schema sumber | Representasi kategori transaksi | Kelompok rekening | Anggaran |
+| --- | --- | --- | --- | --- |
+| v1 | 3 | satu `categoryId` langsung pada record ledger kind 0/1 | tidak ada; decoder memakai `primary` | tidak ada |
+| v2 | 4 | `allocations` pada record ledger kind 0/1 | tidak ada; decoder memakai `primary` | tidak ada |
+| v3 | 5 | `allocations` | `balanceGroup` eksplisit | tidak ada |
+| v4 (direncanakan) | 6 (direncanakan) | `allocations` | `balanceGroup` eksplisit | `data.budgets` |
 
-Versi container enkripsi tetap 1 untuk ketiganya. Perubahan algoritme atau profil kriptografi tidak diperlukan oleh perubahan payload ini.
+Versi container enkripsi tetap 1 untuk seluruh payload tersebut. Perubahan algoritme atau profil kriptografi tidak diperlukan oleh perubahan payload logis ini.
 
 ### Bentuk wire v2
 
@@ -344,11 +345,13 @@ Batas plaintext 10 MiB serta container 16 MiB tetap berlaku. Estimator pra-encod
 - Parser v2 strict terhadap wire baru dan hanya menerima pasangan payload v2/schema 4.
 - Exporter schema 4 selalu menghasilkan payload v2. Model hasil normalisasi v1 tidak boleh diserialisasi kembali dengan label v1 tetapi field v2.
 - Aplikasi schema 3 menolak payload v2. Aplikasi schema 4 menerima v1/v2.
-- Ketika anggaran schema 5 ditambahkan, payload v3 mempertahankan bentuk allocation v2 dan menambahkan anggaran. Aplikasi schema 5 menerima v1/v2/v3; restore v1 atau v2 menghasilkan `budgets = []` dan sequence budget 0, dengan dampaknya dijelaskan pada preview.
+- Parser v3 strict terhadap pasangan payload v3/schema 5 dan mewajibkan `balanceGroup` rekening; exporter schema 5 selalu menghasilkan payload v3.
+- Aplikasi schema 5 menerima v1/v2/v3. Restore v1 atau v2 mempertahankan allocation yang tersedia dan memberi seluruh rekening `balanceGroup = primary`.
+- Ketika Anggaran schema 6 ditambahkan, payload v4 mempertahankan bentuk allocation serta kelompok rekening dan menambahkan anggaran. Aplikasi schema 6 menerima v1/v2/v3/v4; restore v1, v2, atau v3 menghasilkan `budgets = []` dan sequence budget 0, dengan dampaknya dijelaskan pada preview.
 
 ## Restore atomik
 
-Restore schema v4 tetap menggunakan replace-all dan safety backup wajib. Setelah file didekripsi, parser menormalisasi v1 maupun v2 ke model allocation terkini serta memvalidasi seluruh invariant sebelum transaksi mutasi.
+Restore schema v4 tetap menggunakan replace-all dan safety backup wajib. Setelah file didekripsi, parser menormalisasi v1 maupun v2 ke model allocation terkini serta memvalidasi seluruh invariant sebelum transaksi mutasi. Schema aktif v5 mempertahankan alur atomik yang sama, menambahkan validasi `balanceGroup`, dan memberi rekening dari payload v1/v2 kelompok `primary`.
 
 Urutan konseptual schema v4:
 
@@ -361,9 +364,9 @@ Urutan konseptual schema v4:
 7. periksa foreign key, jumlah row, posisi, jenis, category uniqueness, jumlah nominal, saldo arsip, serta sequence;
 8. commit hanya bila semua pemeriksaan lulus.
 
-Urutan konseptual schema v5 mendatang juga harus menghapus `ledger_allocations` dan `budget_categories` sebelum kategori. Insert berlangsung accounts → categories → budgets → budget mappings → ledger headers → allocations, lalu status arsip dan seluruh sequence dipulihkan.
+Urutan konseptual schema v6 mendatang juga harus menghapus `ledger_allocations` dan `budget_categories` sebelum kategori. Insert berlangsung accounts → categories → budgets → budget mappings → ledger headers → allocations, lalu kelompok/status arsip dan seluruh sequence dipulihkan.
 
-Sebelum replace-all v1 maupun v2, aplikasi schema v4 membuat safety backup payload v2 dari keadaan aktif dan mewajibkan penyimpanan serta verifikasi ukuran/SHA-256 berhasil. Pembatalan atau kegagalan safety backup menghentikan restore tanpa perubahan database. Aplikasi schema v5 kelak selalu membuat safety backup payload v3 sebelum restore v1/v2/v3.
+Sebelum replace-all v1 maupun v2, aplikasi schema v4 membuat safety backup payload v2 dari keadaan aktif dan mewajibkan penyimpanan serta verifikasi ukuran/SHA-256 berhasil. Pembatalan atau kegagalan safety backup menghentikan restore tanpa perubahan database. Aplikasi schema v5 saat ini selalu membuat safety backup payload v3 sebelum restore v1/v2/v3; aplikasi schema v6 kelak membuat payload v4 sebelum restore v1/v2/v3/v4.
 
 Kesalahan apa pun di tengah restore harus me-rollback header dan allocation bersama-sama. Tidak boleh ada keadaan berhasil yang kehilangan satu bagian split.
 
@@ -413,9 +416,10 @@ Kesalahan apa pun di tengah restore harus me-rollback header dan allocation bers
 - fixture payload v1 permanen dinormalisasi menjadi satu allocation tanpa mengubah saldo;
 - payload v2 dengan allocation kosong/lebih dari 50 pada kind 0/1, allocation pada kind 2/3, posisi gap/duplikat, category duplikat, jenis kategori salah, mismatch total, batas record, atau struktur asing ditolak sebelum mutasi;
 - estimator byte menghitung allocation; batas plaintext/container tetap ditegakkan;
-- restore v1 dan v2 menjaga ID serta sequence, lalu insert baru tidak bertabrakan;
+- restore v1 dan v2 menjaga ID serta sequence, memberi rekening kelompok `primary`, lalu insert baru tidak bertabrakan;
+- round-trip payload v3 menjaga allocation dan `balanceGroup` tanpa mengubah total header;
 - kegagalan restore setelah sebagian header/allocation ditulis me-rollback seluruh database;
-- safety backup v2 dibuat dan diverifikasi sebelum restore v1/v2;
+- safety backup v3 dibuat dan diverifikasi sebelum restore v1/v2/v3 pada aplikasi schema aktif;
 - guard cakupan gagal bila schema, tabel, atau kolom berubah tanpa evolusi adapter.
 
 ## Di luar ruang lingkup v1
@@ -437,7 +441,7 @@ Kesalahan apa pun di tengah restore harus me-rollback header dan allocation bers
 2. `feat(ledger): normalize allocations and evolve backup v2`
 3. `feat(ledger): add split transaction form and presentation`
 4. `docs: document implemented allocation workflow`
-5. revisi dan implementasikan Anggaran v1 di atas schema v5/payload v3.
+5. revisi dan implementasikan Anggaran v1 di atas schema v6/payload v4.
 
 Schema v4, migrasi, repository, payload v2, decoder v1, restore, guard cakupan, dan test fondasi harus berada dalam satu commit fitur yang utuh. Jangan pernah meninggalkan commit yang dapat menulis allocation tetapi membuat backup tanpa membawanya.
 

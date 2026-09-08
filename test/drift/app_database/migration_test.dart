@@ -12,6 +12,7 @@ import 'generated/schema_v1.dart' as v1;
 import 'generated/schema_v2.dart' as v2;
 import 'generated/schema_v3.dart' as v3;
 import 'generated/schema_v4.dart' as v4;
+import 'generated/schema_v5.dart' as v5;
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -740,6 +741,125 @@ void main() {
     );
   });
 
+  test('migration directly from v1 to v5 preserves ledger and defaults account groups', () async {
+    const accountsV1 = [
+      v1.AccountsData(
+        id: 1,
+        name: 'Dompet lama',
+        normalizedName: 'dompet lama',
+        type: 0,
+        createdAt: 1700000000000,
+      ),
+      v1.AccountsData(
+        id: 2,
+        name: 'Bank lama',
+        normalizedName: 'bank lama',
+        type: 1,
+        createdAt: 1700000000001,
+      ),
+    ];
+    const entriesV1 = [
+      v1.LedgerEntriesData(
+        id: 1,
+        kind: 0,
+        accountId: 1,
+        amount: 100,
+        category: 'Lainnya',
+        note: 'pemasukan lama',
+        occurredDay: 20240101,
+        createdAt: 1700000000010,
+      ),
+      v1.LedgerEntriesData(
+        id: 2,
+        kind: 2,
+        accountId: 1,
+        destinationAccountId: 2,
+        amount: 40,
+        note: 'transfer lama',
+        occurredDay: 20240102,
+        createdAt: 1700000000020,
+      ),
+    ];
+
+    await verifier.testWithDataIntegrity(
+      oldVersion: 1,
+      newVersion: 5,
+      createOld: v1.DatabaseAtV1.new,
+      createNew: v5.DatabaseAtV5.new,
+      openTestedDatabase: AppDatabase.new,
+      createItems: (batch, oldDb) {
+        batch.insertAll(oldDb.accounts, accountsV1);
+        batch.insertAll(oldDb.ledgerEntries, entriesV1);
+      },
+      validateItems: (newDb) async {
+        final accounts = await newDb.select(newDb.accounts).get();
+        accounts.sort((left, right) => left.id.compareTo(right.id));
+        expect(accounts, const [
+          v5.AccountsData(
+            id: 1,
+            name: 'Dompet lama',
+            normalizedName: 'dompet lama',
+            type: 0,
+            balanceGroup: 0,
+            isArchived: 0,
+            createdAt: 1700000000000,
+          ),
+          v5.AccountsData(
+            id: 2,
+            name: 'Bank lama',
+            normalizedName: 'bank lama',
+            type: 1,
+            balanceGroup: 0,
+            isArchived: 0,
+            createdAt: 1700000000001,
+          ),
+        ]);
+
+        final entries = await newDb.select(newDb.ledgerEntries).get();
+        entries.sort((left, right) => left.id.compareTo(right.id));
+        expect(entries, const [
+          v5.LedgerEntriesData(
+            id: 1,
+            kind: 0,
+            accountId: 1,
+            amount: 100,
+            note: 'pemasukan lama',
+            occurredDay: 20240101,
+            createdAt: 1700000000010,
+          ),
+          v5.LedgerEntriesData(
+            id: 2,
+            kind: 2,
+            accountId: 1,
+            destinationAccountId: 2,
+            amount: 40,
+            note: 'transfer lama',
+            occurredDay: 20240102,
+            createdAt: 1700000000020,
+          ),
+        ]);
+        expect(await newDb.select(newDb.ledgerAllocations).get(), const [
+          v5.LedgerAllocationsData(
+            entryId: 1,
+            position: 0,
+            categoryId: 8,
+            amount: 100,
+          ),
+        ]);
+
+        final index = await newDb.customSelect('''
+              SELECT type FROM sqlite_schema
+              WHERE name = 'accounts_balance_group_order'
+            ''').getSingle();
+        expect(index.read<String>('type'), 'index');
+        expect(
+          await newDb.customSelect('PRAGMA foreign_key_check').get(),
+          isEmpty,
+        );
+      },
+    );
+  });
+
   test('migration from v3 to v4 preserves headers, creates allocations, and keeps the id high-water mark', () async {
     const accountsV3 = [
       v3.AccountsData(
@@ -1038,14 +1158,14 @@ void main() {
   });
 
   test(
-    'fresh v4 enforces row rules and exposes cross-row verification',
+    'fresh v5 enforces row rules and exposes cross-row verification',
     () async {
       final db = AppDatabase(NativeDatabase.memory());
       try {
         final version = await db
             .customSelect('PRAGMA user_version')
             .getSingle();
-        expect(version.read<int>('user_version'), 4);
+        expect(version.read<int>('user_version'), 5);
         await db.customStatement('''
         INSERT INTO accounts
           (id, name, normalized_name, type, is_archived, created_at)
@@ -1173,6 +1293,195 @@ void main() {
       }
     },
   );
+
+  test('migration from v4 to v5 preserves account ledger data and defaults balance groups', () async {
+    const accountsV4 = [
+      v4.AccountsData(
+        id: 1,
+        name: 'Bank aktif',
+        normalizedName: 'bank aktif',
+        type: 1,
+        isArchived: 0,
+        createdAt: 1700000000000,
+      ),
+      v4.AccountsData(
+        id: 2,
+        name: 'Dompet arsip',
+        normalizedName: 'dompet arsip',
+        type: 0,
+        isArchived: 1,
+        createdAt: 1700000000001,
+      ),
+    ];
+    const categoriesV4 = [
+      v4.CategoriesData(
+        id: 1,
+        kind: 0,
+        name: 'Gaji',
+        normalizedName: 'gaji',
+        iconKey: 'work',
+        isArchived: 0,
+        sortOrder: 0,
+        systemKey: 'income.salary',
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+      ),
+      v4.CategoriesData(
+        id: 2,
+        parentId: 1,
+        kind: 0,
+        name: 'Umum',
+        normalizedName: 'umum',
+        iconKey: 'work',
+        isArchived: 0,
+        sortOrder: 0,
+        systemKey: 'income.salary.general',
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+      ),
+    ];
+    const entriesV4 = [
+      v4.LedgerEntriesData(
+        id: 5,
+        kind: 0,
+        accountId: 1,
+        amount: 100,
+        note: 'pemasukan lama',
+        occurredDay: 20240101,
+        createdAt: 1700000000010,
+      ),
+      v4.LedgerEntriesData(
+        id: 6,
+        kind: 2,
+        accountId: 1,
+        destinationAccountId: 2,
+        amount: 40,
+        note: 'transfer ke arsip',
+        occurredDay: 20240102,
+        createdAt: 1700000000020,
+      ),
+      v4.LedgerEntriesData(
+        id: 7,
+        kind: 2,
+        accountId: 2,
+        destinationAccountId: 1,
+        amount: 40,
+        note: 'transfer dari arsip',
+        occurredDay: 20240103,
+        createdAt: 1700000000030,
+      ),
+    ];
+    const allocationsV4 = [
+      v4.LedgerAllocationsData(
+        entryId: 5,
+        position: 0,
+        categoryId: 2,
+        amount: 100,
+      ),
+    ];
+
+    await verifier.testWithDataIntegrity(
+      oldVersion: 4,
+      newVersion: 5,
+      createOld: v4.DatabaseAtV4.new,
+      createNew: v5.DatabaseAtV5.new,
+      openTestedDatabase: AppDatabase.new,
+      createItems: (batch, oldDb) {
+        batch.insertAll(oldDb.accounts, accountsV4);
+        batch.insertAll(oldDb.categories, categoriesV4);
+        batch.insertAll(oldDb.ledgerEntries, entriesV4);
+        batch.insertAll(oldDb.ledgerAllocations, allocationsV4);
+      },
+      validateItems: (newDb) async {
+        final accounts = await newDb.select(newDb.accounts).get();
+        accounts.sort((left, right) => left.id.compareTo(right.id));
+        expect(accounts, const [
+          v5.AccountsData(
+            id: 1,
+            name: 'Bank aktif',
+            normalizedName: 'bank aktif',
+            type: 1,
+            balanceGroup: 0,
+            isArchived: 0,
+            createdAt: 1700000000000,
+          ),
+          v5.AccountsData(
+            id: 2,
+            name: 'Dompet arsip',
+            normalizedName: 'dompet arsip',
+            type: 0,
+            balanceGroup: 0,
+            isArchived: 1,
+            createdAt: 1700000000001,
+          ),
+        ]);
+
+        final entries = await newDb.select(newDb.ledgerEntries).get();
+        entries.sort((left, right) => left.id.compareTo(right.id));
+        expect(entries, const [
+          v5.LedgerEntriesData(
+            id: 5,
+            kind: 0,
+            accountId: 1,
+            amount: 100,
+            note: 'pemasukan lama',
+            occurredDay: 20240101,
+            createdAt: 1700000000010,
+          ),
+          v5.LedgerEntriesData(
+            id: 6,
+            kind: 2,
+            accountId: 1,
+            destinationAccountId: 2,
+            amount: 40,
+            note: 'transfer ke arsip',
+            occurredDay: 20240102,
+            createdAt: 1700000000020,
+          ),
+          v5.LedgerEntriesData(
+            id: 7,
+            kind: 2,
+            accountId: 2,
+            destinationAccountId: 1,
+            amount: 40,
+            note: 'transfer dari arsip',
+            occurredDay: 20240103,
+            createdAt: 1700000000030,
+          ),
+        ]);
+
+        expect(await newDb.select(newDb.ledgerAllocations).get(), const [
+          v5.LedgerAllocationsData(
+            entryId: 5,
+            position: 0,
+            categoryId: 2,
+            amount: 100,
+          ),
+        ]);
+
+        final index = await newDb.customSelect('''
+            SELECT type FROM sqlite_schema
+            WHERE name = 'accounts_balance_group_order'
+          ''').getSingle();
+        expect(index.read<String>('type'), 'index');
+
+        await expectLater(
+          newDb.customStatement(
+            'UPDATE accounts SET balance_group = 2 WHERE id = 1',
+          ),
+          throwsA(anything),
+        );
+        final unchanged = await newDb.customSelect('''
+            SELECT balance_group FROM accounts WHERE id = 1
+          ''').getSingle();
+        expect(unchanged.read<int>('balance_group'), 0);
+        expect(
+          await newDb.customSelect('PRAGMA foreign_key_check').get(),
+          isEmpty,
+        );
+      },
+    );
+  });
 
   test(
     'invalid v3 category aborts migration before rebuilding ledger',

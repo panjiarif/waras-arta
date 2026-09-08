@@ -70,6 +70,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           CircleAvatar(
                             radius: 24,
@@ -81,16 +82,24 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                           ),
                           const SizedBox(width: 14),
                           Expanded(
-                            child: Text(
-                              account.name,
-                              key: const Key('account-detail-name'),
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  account.name,
+                                  key: const Key('account-detail-name'),
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                AccountStatusBadge(
+                                  archived: account.isArchived,
+                                ),
+                              ],
                             ),
                           ),
-                          AccountStatusBadge(archived: account.isArchived),
                         ],
                       ),
                       const SizedBox(height: 24),
@@ -104,12 +113,18 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        formatRupiah(account.balance),
-                        key: const Key('account-detail-balance'),
-                        style: const TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w700,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          formatRupiah(account.balance),
+                          key: const Key('account-detail-balance'),
+                          maxLines: 1,
+                          softWrap: false,
+                          style: const TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
@@ -118,6 +133,12 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
               ),
               const SizedBox(height: 20),
               AccountDetailRow(label: 'Jenis', value: account.type.label),
+              AccountDetailRow(
+                label: account.isArchived
+                    ? 'Kelompok saat dipulihkan'
+                    : 'Kelompok saldo',
+                value: account.balanceGroup.label,
+              ),
               AccountDetailRow(
                 label: 'Status',
                 value: account.isArchived ? 'Diarsipkan' : 'Aktif',
@@ -151,7 +172,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                 key: const Key('open-account-edit'),
                 onPressed: busy ? null : () => _openEditor(account.id),
                 icon: const Icon(Icons.edit_outlined),
-                label: const Text('Edit nama dan jenis'),
+                label: const Text('Edit rekening'),
               ),
               if (!account.isArchived) ...[
                 const SizedBox(height: 12),

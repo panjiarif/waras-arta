@@ -6,7 +6,7 @@
 
 - **Status:** Draft
 - **Versi produk awal:** `0.1.0`
-- **Terakhir diperbarui:** 7 September 2026
+- **Terakhir diperbarui:** 8 September 2026
 - **Platform pertama:** Android
 - **Repository:** `waras-arta`
 - **Package Dart:** `waras_arta`
@@ -67,7 +67,7 @@ Karakteristik pengguna:
 
 Dashboard yang menampilkan informasi penting secara cepat, seperti:
 
-- saldo total;
+- saldo utama yang siap digunakan;
 - ringkasan pemasukan dan pengeluaran bulan berjalan;
 - rekening;
 - transaksi terbaru;
@@ -119,16 +119,19 @@ Transfer adalah satu jenis transaksi tersendiri dengan:
 - tanggal;
 - catatan opsional.
 
-Transfer mengurangi saldo rekening asal dan menambah saldo rekening tujuan, tetapi tidak dianggap sebagai pemasukan, pengeluaran, atau pemakaian anggaran.
+Transfer mengurangi saldo rekening asal dan menambah saldo rekening tujuan, tetapi tidak dianggap sebagai pemasukan, pengeluaran, atau pemakaian anggaran. Aturan ini juga berlaku untuk transfer antara **Saldo utama** dan **Simpanan & investasi**: subtotal kedua kelompok berubah, sedangkan total seluruh rekening tetap netral.
 
 ### 5. Rekening
 
 - Mendukung rekening bank, dompet tunai, e-wallet, dan tempat penyimpanan uang lainnya.
-- Menampilkan saldo setiap rekening dan saldo total.
-- Menampilkan detail rekening serta memungkinkan nama dan jenisnya diubah tanpa memutus riwayat.
+- Setiap rekening aktif berada pada tepat satu kelompok `balanceGroup`: **Saldo utama** untuk uang yang siap digunakan atau **Simpanan & investasi** untuk tempat uang nyata yang sengaja dipisahkan.
+- Menampilkan saldo setiap rekening serta subtotal kedua kelompok aktif secara terpisah pada tab Rekening. Ikhtisar menonjolkan subtotal Saldo utama agar dana tersimpan tidak tampak sebagai uang belanja.
+- Menampilkan detail rekening serta memungkinkan nama, jenis, dan kelompok aktifnya diubah tanpa memutus riwayat atau membuat transaksi.
 - Perubahan saldo manual dicatat sebagai transaksi penyesuaian bertanda agar dapat ditelusuri, bukan mengubah saldo secara diam-diam. Penyesuaian tidak dihitung sebagai pemasukan atau pengeluaran.
-- Rekening hanya dapat diarsipkan ketika saldonya nol dan bukan satu-satunya rekening aktif. Rekening arsip disembunyikan secara default, tidak tersedia untuk transaksi baru, dan dapat dipulihkan.
+- **Rekening diarsipkan** adalah status terpisah dari kelompok aktif. Rekening hanya dapat diarsipkan ketika saldonya nol dan bukan satu-satunya rekening aktif; kelompok terakhir tetap disimpan agar pemulihan mengembalikannya ke section semula. Rekening arsip disembunyikan secara default dan tidak tersedia untuk transaksi baru.
 - Hapus permanen hanya berlaku untuk rekening yang tidak memiliki referensi ledger. Transaksi tidak pernah ikut dihapus secara berantai.
+
+Kelompok **Simpanan & investasi** bukan fitur tujuan keuangan atau pelacakan harga aset. Jika dana darurat hanya merupakan alokasi di dalam rekening bank yang sama, pengguna tidak membuat rekening bayangan karena itu akan menggandakan saldo; kebutuhan tersebut tetap ditangani oleh Tujuan Keuangan mendatang.
 
 ### 6. Anggaran
 
@@ -194,7 +197,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 - Setelah konfirmasi restore, aplikasi wajib membuat safety backup terenkripsi dari data aktif dengan kata sandi restore yang sama. File harus selesai ditulis, dibuka ulang, serta cocok dalam jumlah byte dan SHA-256 sebelum replace-all dimulai; pembatalan atau kegagalan penulisan/verifikasi menghentikan restore tanpa mengubah database.
 - Penggantian berlangsung atomik: kegagalan membatalkan seluruh perubahan database.
 - Container v1 hanya menerima profil Argon2id produksi secara persis. Ukuran file terenkripsi dibatasi 16 MiB dan plaintext hasil dekripsi dibatasi 10 MiB.
-- Payload v2 saat ini mencakup rekening, kategori, seluruh header ledger, dan allocation. Ketika anggaran atau fitur data baru ditambahkan, versi format berikutnya harus membawa data tersebut dan menyediakan jalur pembacaan backup lama.
+- Payload v3/schema v5 saat ini mencakup rekening beserta `balanceGroup`, kategori, seluruh header ledger, dan allocation. Payload v1/schema 3 dan v2/schema 4 tetap dapat dibaca dengan `balanceGroup = primary`; Anggaran mendatang menaikkan format ke payload v4/schema v6.
 - Backup adalah snapshot manual, bukan sinkronisasi atau jadwal otomatis. Lokasi cloud dipilih pengguna melalui penyedia dokumen Android; aplikasi tidak mengunggah file sendiri.
 - Ekspor CSV disediakan sebagai laporan terpisah dan bukan format utama restore.
 
@@ -202,23 +205,24 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 
 1. Pemasukan menambah saldo rekening tujuan.
 2. Pengeluaran mengurangi saldo rekening sumber.
-3. Transfer memindahkan saldo antara dua rekening dan bernilai netral terhadap arus kas.
+3. Transfer memindahkan saldo antara dua rekening, termasuk lintas kelompok aktif, dan bernilai netral terhadap arus kas serta total seluruh rekening.
 4. Saldo tidak boleh diedit tanpa catatan; koreksi dibuat sebagai transaksi penyesuaian.
 5. Perhitungan periode menggunakan tanggal kejadian (`occurredAt`), bukan waktu data dibuat (`createdAt`).
 6. Nilai rupiah disimpan sebagai bilangan bulat untuk menghindari kesalahan pembulatan floating-point.
-7. Rekening bersaldo nol dapat diarsipkan selama masih ada rekening aktif lain; rekening arsip tidak dapat dipakai untuk transaksi baru.
-8. Kategori yang sudah digunakan diarsipkan, bukan dihapus, agar referensi transaksi lama tetap utuh.
-9. Perubahan transaksi lama harus menghitung ulang rekening, anggaran, dan ringkasan terkait secara konsisten.
-10. Transaksi lama yang menyentuh rekening arsip tetap dapat dilihat, tetapi hanya dapat diedit atau dihapus setelah rekening dipulihkan.
-11. Rekening hanya dapat dihapus permanen jika tidak memiliki referensi ledger sebagai sumber maupun tujuan; penghapusan tidak pernah melakukan cascade ke transaksi.
-12. Setiap pemasukan/pengeluaran memiliki 1–50 alokasi kategori dengan jumlah nominal persis sama dengan total transaksi; transfer dan penyesuaian saldo tidak memiliki alokasi kategori.
-13. Alokasi kategori hanya mengklasifikasikan transaksi dan tidak mengubah saldo secara terpisah. Saldo serta arus kas menghitung header satu kali, sedangkan laporan kategori dan anggaran menghitung nominal alokasi.
+7. Setiap rekening aktif tepat berada pada kelompok `primary` atau `savingsInvestment`; arsip adalah status terpisah dan menyimpan kelompok terakhir untuk pemulihan.
+8. Rekening bersaldo nol dapat diarsipkan selama masih ada rekening aktif lain; rekening arsip tidak dapat dipakai untuk transaksi baru.
+9. Kategori yang sudah digunakan diarsipkan, bukan dihapus, agar referensi transaksi lama tetap utuh.
+10. Perubahan transaksi lama harus menghitung ulang rekening, anggaran, dan ringkasan terkait secara konsisten.
+11. Transaksi lama yang menyentuh rekening arsip tetap dapat dilihat, tetapi hanya dapat diedit atau dihapus setelah rekening dipulihkan.
+12. Rekening hanya dapat dihapus permanen jika tidak memiliki referensi ledger sebagai sumber maupun tujuan; penghapusan tidak pernah melakukan cascade ke transaksi.
+13. Setiap pemasukan/pengeluaran memiliki 1–50 alokasi kategori dengan jumlah nominal persis sama dengan total transaksi; transfer dan penyesuaian saldo tidak memiliki alokasi kategori.
+14. Alokasi kategori hanya mengklasifikasikan transaksi dan tidak mengubah saldo secara terpisah. Saldo serta arus kas menghitung header satu kali, sedangkan laporan kategori dan anggaran menghitung nominal alokasi.
 
 ## Ruang Lingkup Versi
 
 ### Versi 0.1 — Fondasi/MVP
 
-- rekening;
+- rekening dengan kelompok Saldo utama/Simpanan & investasi serta status arsip terpisah;
 - kategori;
 - pemasukan dan pengeluaran;
 - transfer antar-rekening;
@@ -277,7 +281,7 @@ Keputusan teknis rinci akan dicatat dalam dokumen arsitektur terpisah. Arah awal
 
 MVP dianggap berhasil ketika pengguna dapat:
 
-1. membuat beberapa rekening dan melihat saldo yang benar;
+1. membuat beberapa rekening, mengelompokkannya sebagai Saldo utama atau Simpanan & investasi, dan melihat subtotal serta total yang benar;
 2. mencatat pemasukan, pengeluaran, transfer, serta transaksi pada tanggal lampau;
 3. melihat riwayat, kalender, dan ringkasan bulanan yang konsisten;
 4. menutup dan membuka kembali aplikasi tanpa kehilangan data;
@@ -299,6 +303,7 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Android adalah target pertama.
 - Aplikasi menggunakan pendekatan local-first.
 - Transfer adalah jenis transaksi tersendiri dan netral terhadap pemasukan/pengeluaran.
+- Rekening aktif dibagi menjadi **Saldo utama** dan **Simpanan & investasi**; Ikhtisar menampilkan Saldo utama, sedangkan arsip tetap merupakan status terpisah.
 - Tujuan keuangan dipisahkan dari rekening nyata.
 - Koreksi saldo harus dapat ditelusuri.
 - Backup dan restore merupakan bagian dari produk, bukan fitur tambahan opsional.
@@ -312,6 +317,7 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Hapus rekening permanen hanya berlaku jika tidak ada referensi ledger dan tidak menghapus transaksi secara berantai.
 - Migrasi schema v2 ke v3 menambahkan siklus arsip rekening dan dukungan penyesuaian saldo bertanda tanpa mengubah arus kas lama.
 - Kalender diperkenalkan dengan memakai `occurredDay` dan indeks ledger yang sudah ada tanpa menaikkan schema 3; schema aktif kemudian naik ke v4 untuk allocation transaksi.
+- Schema aktif v5 menambahkan `balanceGroup` rekening. Migrasi memberi seluruh rekening lama nilai `primary`, dan payload backup v3 membawa nilai `primary` atau `savingsInvestment` secara eksplisit.
 - Kalender dibatasi Januari 2000 sampai hari ini, menggunakan pekan Senin–Minggu, dan menyertakan seluruh jenis transaksi pada daftar harian.
 - Backup manual menggunakan file `.warasarta` terenkripsi berbasis kata sandi, sedangkan restore memakai validasi, preview, konfirmasi replace-all, dan transaksi atomik.
 - Enkripsi backup tidak berarti database SQLite aktif sudah terenkripsi; perlindungan database kerja dan PIN/biometrik tetap keputusan terpisah.

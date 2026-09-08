@@ -17,15 +17,19 @@ void main() {
   final february = DateTime(2024, 2);
   final validationError = isA<FinanceValidationException>();
 
-  Future<int> account(String name, {int opening = 0}) =>
-      repository.createAccount(
-        AccountDraft(
-          name: name,
-          type: AccountType.bank,
-          openingBalance: opening,
-          openedAt: january,
-        ),
-      );
+  Future<int> account(
+    String name, {
+    int opening = 0,
+    AccountBalanceGroup balanceGroup = AccountBalanceGroup.primary,
+  }) => repository.createAccount(
+    AccountDraft(
+      name: name,
+      type: AccountType.bank,
+      balanceGroup: balanceGroup,
+      openingBalance: opening,
+      openedAt: january,
+    ),
+  );
 
   EntryDraft entry(
     int accountId, {
@@ -92,6 +96,72 @@ void main() {
     expect(snapshot.totalEntries, 0);
     expect(snapshot.hasMore, isFalse);
     expect(() => snapshot.entries.clear(), throwsUnsupportedError);
+  });
+
+  test('account balance group database ordinals stay stable', () {
+    expect(AccountBalanceGroup.primary.index, 0);
+    expect(AccountBalanceGroup.savingsInvestment.index, 1);
+  });
+
+  test('account balance group round-trips and edits without changing balance or history', () async {
+    final id = await account(
+      'Dana darurat',
+      opening: 250,
+      balanceGroup: AccountBalanceGroup.savingsInvestment,
+    );
+    final before = await repository.getAccountDetails(id);
+
+    expect(before, isNotNull);
+    expect(before?.account.balanceGroup, AccountBalanceGroup.savingsInvestment);
+    expect(before?.account.balance, 250);
+    expect(before?.ledgerEntryCount, 1);
+
+    await repository.updateAccount(
+      id,
+      const AccountUpdateDraft(
+        name: 'Dana darurat utama',
+        type: AccountType.eWallet,
+        balanceGroup: AccountBalanceGroup.primary,
+      ),
+    );
+
+    final after = await repository.getAccountDetails(id);
+    expect(after?.account.name, 'Dana darurat utama');
+    expect(after?.account.type, AccountType.eWallet);
+    expect(after?.account.balanceGroup, AccountBalanceGroup.primary);
+    expect(after?.account.balance, 250);
+    expect(after?.createdAt, before?.createdAt);
+    expect(after?.ledgerEntryCount, 1);
+    expect((await repository.loadMonth(january)).totalEntries, 1);
+  });
+
+  test('transfer from primary to savings changes subtotals but keeps global total neutral', () async {
+    final primaryId = await account('Rekening harian', opening: 1000);
+    final savingsId = await account(
+      'Dana darurat',
+      balanceGroup: AccountBalanceGroup.savingsInvestment,
+    );
+
+    final before = await repository.loadMonth(january);
+    expect(before.primaryBalance, 1000);
+    expect(before.savingsInvestmentBalance, 0);
+    expect(before.totalBalance, 1000);
+
+    await repository.addEntry(
+      EntryDraft.transfer(
+        accountId: primaryId,
+        destinationAccountId: savingsId,
+        amount: 250,
+        occurredAt: DateTime(2024, 1, 15),
+      ),
+    );
+
+    final after = await repository.loadMonth(january);
+    expect(after.primaryBalance, 750);
+    expect(after.savingsInvestmentBalance, 250);
+    expect(after.totalBalance, 1000);
+    expect(after.income, 0);
+    expect(after.expense, 0);
   });
 
   test('empty calendar month and day are immutable', () async {
@@ -1547,6 +1617,7 @@ void main() {
       const AccountUpdateDraft(
         name: '  Bank   harian ',
         type: AccountType.eWallet,
+        balanceGroup: AccountBalanceGroup.primary,
       ),
     );
     final changed = await detailChanged.timeout(const Duration(seconds: 5));
@@ -1563,6 +1634,7 @@ void main() {
         const AccountUpdateDraft(
           name: ' BANK  HARIAN ',
           type: AccountType.cash,
+          balanceGroup: AccountBalanceGroup.primary,
         ),
       ),
       throwsA(validationError),
@@ -1570,7 +1642,11 @@ void main() {
     await expectLater(
       repository.updateAccount(
         id,
-        AccountUpdateDraft(name: 'x' * 81, type: AccountType.bank),
+        AccountUpdateDraft(
+          name: 'x' * 81,
+          type: AccountType.bank,
+          balanceGroup: AccountBalanceGroup.primary,
+        ),
       ),
       throwsA(validationError),
     );
@@ -1711,7 +1787,11 @@ void main() {
     await expectLater(
       repository.updateAccount(
         activeId,
-        const AccountUpdateDraft(name: 'arsip', type: AccountType.cash),
+        const AccountUpdateDraft(
+          name: 'arsip',
+          type: AccountType.cash,
+          balanceGroup: AccountBalanceGroup.primary,
+        ),
       ),
       throwsA(validationError),
     );
@@ -1721,7 +1801,11 @@ void main() {
     );
     await repository.updateAccount(
       id,
-      const AccountUpdateDraft(name: 'Arsip lama', type: AccountType.cash),
+      const AccountUpdateDraft(
+        name: 'Arsip lama',
+        type: AccountType.cash,
+        balanceGroup: AccountBalanceGroup.primary,
+      ),
     );
     expect(
       (await repository.getAccountDetails(id))?.account.name,
@@ -1857,7 +1941,11 @@ void main() {
       await expectLater(
         repository.updateAccount(
           999,
-          const AccountUpdateDraft(name: 'Hilang', type: AccountType.other),
+          const AccountUpdateDraft(
+            name: 'Hilang',
+            type: AccountType.other,
+            balanceGroup: AccountBalanceGroup.primary,
+          ),
         ),
         throwsA(validationError),
       );

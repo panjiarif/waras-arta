@@ -25,8 +25,12 @@ void main() {
       final decrypted = await codec.decrypt(encrypted, password: password);
 
       expect(decrypted.toJson(), original.toJson());
-      expect(decrypted.backupVersion, 2);
-      expect(decrypted.databaseSchemaVersion, 4);
+      expect(decrypted.backupVersion, 3);
+      expect(decrypted.databaseSchemaVersion, 5);
+      expect(
+        decrypted.accounts.single.balanceGroup,
+        AccountBalanceGroup.savingsInvestment,
+      );
       expect(decrypted.ledgerEntries.single.allocations, hasLength(2));
     });
 
@@ -44,6 +48,55 @@ void main() {
       expect(decoded.ledgerEntries[1].allocations, isEmpty);
       expect(decoded.ledgerEntries[2].allocations, isEmpty);
       expect(decoded.toJson(), legacyJson);
+    });
+
+    test('decodes payload v2 accounts as Saldo utama', () {
+      final legacyJson = _legacyV2Json();
+
+      final decoded = BackupDocument.fromJson(legacyJson);
+
+      expect(decoded.backupVersion, 2);
+      expect(decoded.databaseSchemaVersion, 4);
+      expect(decoded.accounts.single.balanceGroup, AccountBalanceGroup.primary);
+      expect(decoded.toJson(), legacyJson);
+    });
+
+    test('keeps account shapes strict across payload versions', () {
+      final missingGroup = _mutableJson(_backupDocument().toJson());
+      final currentData = missingGroup['data']! as Map<String, Object?>;
+      final currentAccounts = currentData['accounts']! as List<Object?>;
+      (currentAccounts.single as Map<String, Object?>).remove('balanceGroup');
+
+      final unknownGroup = _mutableJson(_backupDocument().toJson());
+      final unknownData = unknownGroup['data']! as Map<String, Object?>;
+      final unknownAccounts = unknownData['accounts']! as List<Object?>;
+      (unknownAccounts.single as Map<String, Object?>)['balanceGroup'] =
+          'unknown';
+
+      final addedToLegacy = _legacyV2Json();
+      final legacyData = addedToLegacy['data']! as Map<String, Object?>;
+      final legacyAccounts = legacyData['accounts']! as List<Object?>;
+      (legacyAccounts.single as Map<String, Object?>)['balanceGroup'] =
+          AccountBalanceGroup.primary.name;
+
+      for (final invalid in [missingGroup, unknownGroup, addedToLegacy]) {
+        expect(
+          () => BackupDocument.fromJson(invalid),
+          throwsA(isA<BackupFormatException>()),
+        );
+      }
+    });
+
+    test('legacy payload cannot silently drop a non-primary group', () {
+      final legacyLabeledDocument = _backupDocument(
+        backupVersion: 2,
+        databaseSchemaVersion: 4,
+      );
+
+      expect(
+        legacyLabeledDocument.toJson,
+        throwsA(isA<BackupValidationException>()),
+      );
     });
 
     test('routes payload parsers by an exact version and schema pair', () {
@@ -64,16 +117,21 @@ void main() {
 
     test('uses an explicit restore compatibility matrix', () {
       final legacy = BackupDocument.fromJson(_legacyV1Json());
+      final allocationLegacy = BackupDocument.fromJson(_legacyV2Json());
       final current = _backupDocument();
 
       expect(canRestoreBackupDocumentToSchema(legacy, 3), isTrue);
       expect(canRestoreBackupDocumentToSchema(legacy, 4), isTrue);
+      expect(canRestoreBackupDocumentToSchema(legacy, 5), isTrue);
+      expect(canRestoreBackupDocumentToSchema(allocationLegacy, 3), isFalse);
+      expect(canRestoreBackupDocumentToSchema(allocationLegacy, 4), isTrue);
+      expect(canRestoreBackupDocumentToSchema(allocationLegacy, 5), isTrue);
       expect(canRestoreBackupDocumentToSchema(current, 3), isFalse);
-      expect(canRestoreBackupDocumentToSchema(current, 4), isTrue);
-      expect(canRestoreBackupDocumentToSchema(current, 5), isFalse);
+      expect(canRestoreBackupDocumentToSchema(current, 4), isFalse);
+      expect(canRestoreBackupDocumentToSchema(current, 5), isTrue);
     });
 
-    test('keeps v1 and v2 ledger shapes strict and separate', () {
+    test('keeps v1 and v3 ledger shapes strict and separate', () {
       final legacy = _mutableJson(_legacyV1Json());
       final legacyData = legacy['data']! as Map<String, Object?>;
       final legacyEntries = legacyData['ledgerEntries']! as List<Object?>;
@@ -95,7 +153,7 @@ void main() {
       );
     });
 
-    test('validates v2 allocation count, positions, uniqueness, and sum', () {
+    test('validates v3 allocation count, positions, uniqueness, and sum', () {
       Map<String, Object?> firstEntry(Map<String, Object?> document) {
         final data = document['data']! as Map<String, Object?>;
         final entries = data['ledgerEntries']! as List<Object?>;
@@ -158,7 +216,7 @@ void main() {
 
     test('rejects a document above the total allocation record limit', () {
       final oversized = BackupDocument(
-        databaseSchemaVersion: 4,
+        databaseSchemaVersion: 5,
         createdAtUtc: DateTime.utc(2026, 9, 6),
         sequences: const BackupSequences(
           accounts: 0,
@@ -715,12 +773,26 @@ Map<String, Object?> _legacyV1Json() => <String, Object?>{
   },
 };
 
+Map<String, Object?> _legacyV2Json() {
+  final json = _mutableJson(_backupDocument().toJson());
+  json['backupVersion'] = 2;
+  json['databaseSchemaVersion'] = 4;
+  final data = json['data']! as Map<String, Object?>;
+  final accounts = data['accounts']! as List<Object?>;
+  for (final value in accounts) {
+    (value as Map<String, Object?>).remove('balanceGroup');
+  }
+  return json;
+}
+
 BackupDocument _backupDocument({
-  int databaseSchemaVersion = 4,
+  int backupVersion = currentBackupVersion,
+  int databaseSchemaVersion = 5,
   bool split = true,
 }) {
   final createdAt = DateTime.utc(2026, 9, 5, 4, 30);
   return BackupDocument(
+    backupVersion: backupVersion,
     databaseSchemaVersion: databaseSchemaVersion,
     createdAtUtc: DateTime.utc(2026, 9, 6, 7, 30),
     sequences: const BackupSequences(
@@ -734,6 +806,7 @@ BackupDocument _backupDocument({
         name: 'Dompet Rahasia',
         normalizedName: 'dompet rahasia',
         type: AccountType.cash,
+        balanceGroup: AccountBalanceGroup.savingsInvestment,
         isArchived: false,
         createdAtUtc: createdAt,
       ),

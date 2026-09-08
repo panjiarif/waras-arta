@@ -82,6 +82,40 @@ void main() {
     },
   );
 
+  testWidgets('account form creates a savings and investment account', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+
+    await tester.tap(find.byKey(const Key('accounts-tab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('primary-action')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('account-name')),
+      'Dana darurat',
+    );
+    await tester.ensureVisible(find.byKey(const Key('account-balance-group')));
+    await tester.tap(find.byKey(const Key('account-balance-group')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Simpanan & investasi').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('save-account')));
+    await tester.tap(find.byKey(const Key('save-account')));
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.savedAccount?.balanceGroup,
+      AccountBalanceGroup.savingsInvestment,
+    );
+    expect(
+      repository.accounts.last.balanceGroup,
+      AccountBalanceGroup.savingsInvestment,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('account detail edits name and type without changing balance', (
     tester,
   ) async {
@@ -104,6 +138,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bank').last);
     await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('account-edit-balance-group')),
+    );
+    await tester.tap(find.byKey(const Key('account-edit-balance-group')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Simpanan & investasi').last);
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('save-account-edit')));
     await tester.tap(find.byKey(const Key('save-account-edit')));
     await tester.pumpAndSettle();
@@ -111,6 +152,15 @@ void main() {
     expect(repository.updatedAccountId, 1);
     expect(repository.updatedAccount?.name, 'Bank Harian');
     expect(repository.updatedAccount?.type, AccountType.bank);
+    expect(
+      repository.updatedAccount?.balanceGroup,
+      AccountBalanceGroup.savingsInvestment,
+    );
+    expect(repository.accounts.first.balance, 100000);
+    expect(
+      repository.accounts.first.balanceGroup,
+      AccountBalanceGroup.savingsInvestment,
+    );
     expect(find.text('Bank Harian'), findsOneWidget);
     expect(find.text('Rp 100.000'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -179,9 +229,20 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('account-2')), findsNothing);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('show-archived-accounts')),
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(find.byKey(const Key('show-archived-accounts')));
     await tester.tap(find.byKey(const Key('show-archived-accounts')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('account-2')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('account-2')),
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('account-2')));
 
     await tester.tap(find.byKey(const ValueKey('account-2')));
     await tester.pumpAndSettle();
@@ -195,6 +256,91 @@ void main() {
     expect(find.text('Aktif'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'overview excludes savings while accounts show both subtotals and archived details',
+    (tester) async {
+      final repository = _UiRepository();
+      repository.accounts.addAll(const [
+        FinanceAccount(
+          id: 1,
+          name: 'Dompet harian',
+          type: AccountType.cash,
+          balance: 100000,
+        ),
+        FinanceAccount(
+          id: 2,
+          name: 'Dana darurat',
+          type: AccountType.bank,
+          balance: 40000,
+          balanceGroup: AccountBalanceGroup.savingsInvestment,
+        ),
+        FinanceAccount(
+          id: 3,
+          name: 'Investasi lama',
+          type: AccountType.other,
+          balance: 0,
+          balanceGroup: AccountBalanceGroup.savingsInvestment,
+          isArchived: true,
+        ),
+      ]);
+      await pumpApp(tester, repository);
+
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('primary-balance-total')))
+            .data,
+        'Rp 100.000',
+      );
+
+      await tester.tap(find.byKey(const Key('accounts-tab')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('primary-accounts-total')),
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('primary-accounts-total')))
+            .data,
+        'Rp 100.000',
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('savings-investment-total')),
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('savings-investment-total')))
+            .data,
+        'Rp 40.000',
+      );
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('show-archived-accounts')),
+        240,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('show-archived-accounts')),
+      );
+      await tester.tap(find.byKey(const Key('show-archived-accounts')));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('account-3')),
+        240,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('account-3')));
+      await tester.tap(find.byKey(const ValueKey('account-3')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detail rekening'), findsOneWidget);
+      expect(find.text('Investasi lama'), findsOneWidget);
+      expect(find.text('Kelompok saat dipulihkan'), findsOneWidget);
+      expect(find.text('Simpanan & investasi'), findsOneWidget);
+      expect(find.text('Diarsipkan'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('last active account stays active and shows archive error', (
     tester,
@@ -891,6 +1037,90 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'account groups and details fit narrow enlarged text with long values',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final repository = _UiRepository();
+      repository.accounts.addAll(const [
+        FinanceAccount(
+          id: 1,
+          name: 'Rekening kebutuhan sehari-hari dengan nama sangat panjang',
+          type: AccountType.bank,
+          balance: maxAmount,
+        ),
+        FinanceAccount(
+          id: 2,
+          name: 'Rekening simpanan dan investasi jangka sangat panjang',
+          type: AccountType.other,
+          balance: maxAmount - 1,
+          balanceGroup: AccountBalanceGroup.savingsInvestment,
+        ),
+        FinanceAccount(
+          id: 3,
+          name: 'Rekening investasi lama yang sudah tidak digunakan',
+          type: AccountType.other,
+          balance: 0,
+          balanceGroup: AccountBalanceGroup.savingsInvestment,
+          isArchived: true,
+        ),
+      ]);
+      await pumpApp(tester, repository);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const Key('accounts-tab')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('account-section-stacked-Saldo utama')),
+        findsOneWidget,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('account-1')),
+        240,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(
+        find.text('Rekening kebutuhan sehari-hari dengan nama sangat panjang'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('account-detail-balance')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('savings-investment-total')),
+        240,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('account-section-stacked-Simpanan & investasi'),
+        ),
+        findsOneWidget,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('show-archived-accounts')),
+        240,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.byKey(const Key('show-archived-accounts')));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('account-3')),
+        240,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.byKey(const ValueKey('account-3')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('split total and controls fit a narrow screen with large text', (
     tester,
@@ -1982,6 +2212,7 @@ class _UiRepository implements FinanceRepository {
         name: draft.name,
         type: draft.type,
         balance: draft.openingBalance,
+        balanceGroup: draft.balanceGroup,
       ),
     );
     _changes.add(null);
@@ -2011,6 +2242,7 @@ class _UiRepository implements FinanceRepository {
       accounts[index],
       name: draft.name.trim(),
       type: draft.type,
+      balanceGroup: draft.balanceGroup,
     );
     _changes.add(null);
   }
@@ -2333,12 +2565,14 @@ FinanceAccount _copyUiAccount(
   FinanceAccount account, {
   String? name,
   AccountType? type,
+  AccountBalanceGroup? balanceGroup,
   int? balance,
   bool? isArchived,
 }) => FinanceAccount(
   id: account.id,
   name: name ?? account.name,
   type: type ?? account.type,
+  balanceGroup: balanceGroup ?? account.balanceGroup,
   balance: balance ?? account.balance,
   isArchived: isArchived ?? account.isArchived,
 );

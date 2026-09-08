@@ -44,6 +44,7 @@ class _AccountEditFormState extends ConsumerState<_AccountEditForm> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late AccountType _type;
+  late AccountBalanceGroup _balanceGroup;
   bool _dirty = false;
   bool _allowPop = false;
   bool _confirmingDiscard = false;
@@ -53,6 +54,7 @@ class _AccountEditFormState extends ConsumerState<_AccountEditForm> {
     super.initState();
     _name = TextEditingController(text: widget.account.name);
     _type = widget.account.type;
+    _balanceGroup = widget.account.balanceGroup;
     _name.addListener(_markDirty);
     ref.read(accountActionsProvider.notifier).clearError();
   }
@@ -75,7 +77,11 @@ class _AccountEditFormState extends ConsumerState<_AccountEditForm> {
         .read(accountActionsProvider.notifier)
         .updateAccount(
           widget.account.id,
-          AccountUpdateDraft(name: _name.text, type: _type),
+          AccountUpdateDraft(
+            name: _name.text,
+            type: _type,
+            balanceGroup: _balanceGroup,
+          ),
         );
     if (!saved || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -99,7 +105,7 @@ class _AccountEditFormState extends ConsumerState<_AccountEditForm> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Buang perubahan rekening?'),
-        content: const Text('Nama atau jenis rekening belum disimpan.'),
+        content: const Text('Nama, jenis, atau kelompok saldo belum disimpan.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -149,7 +155,7 @@ class _AccountEditFormState extends ConsumerState<_AccountEditForm> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Perubahan nama dan jenis langsung digunakan pada seluruh riwayat tanpa mengubah saldo.',
+                    'Perubahan identitas dan kelompok langsung digunakan pada seluruh riwayat tanpa mengubah saldo.',
                   ),
                   if (widget.account.isArchived) ...[
                     const SizedBox(height: 16),
@@ -188,6 +194,38 @@ class _AccountEditFormState extends ConsumerState<_AccountEditForm> {
                         });
                       }
                     },
+                  ),
+                  const SizedBox(height: 20),
+                  DropdownButtonFormField<AccountBalanceGroup>(
+                    key: const Key('account-edit-balance-group'),
+                    initialValue: _balanceGroup,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Kelompok saldo',
+                      helperText: widget.account.isArchived
+                          ? 'Rekening akan kembali ke kelompok ini saat dipulihkan.'
+                          : _balanceGroup.description,
+                      helperMaxLines: 4,
+                    ),
+                    items: [
+                      for (final group in AccountBalanceGroup.values)
+                        DropdownMenuItem(
+                          value: group,
+                          child: Text(group.label),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null && value != _balanceGroup) {
+                        setState(() {
+                          _balanceGroup = value;
+                          _dirty = true;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  const FormMessage(
+                    'Pengelompokan tidak memindahkan uang. Buat rekening terpisah hanya jika tempat uangnya memang berbeda.',
                   ),
                   if (action.error != null) ...[
                     const SizedBox(height: 20),

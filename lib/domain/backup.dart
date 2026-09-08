@@ -2,7 +2,7 @@ import 'finance.dart';
 
 const warasArtaBackupFormat = 'waras-arta-backup';
 const oldestSupportedBackupVersion = 1;
-const currentBackupVersion = 2;
+const currentBackupVersion = 3;
 const maxBackupAccountRecords = 2000;
 const maxBackupCategoryRecords = 20000;
 const maxBackupLedgerRecords = 100000;
@@ -39,6 +39,11 @@ class BackupDocument {
         backupVersion: backupVersion,
       ),
       2 => _readBackupDocumentV2(
+        json,
+        format: format,
+        backupVersion: backupVersion,
+      ),
+      3 => _readBackupDocumentV3(
         json,
         format: format,
         backupVersion: backupVersion,
@@ -86,7 +91,7 @@ class BackupDocument {
         data,
         'accounts',
         'data.accounts',
-        BackupAccount.fromJson,
+        _readLegacyBackupAccount,
         maximumLength: maxBackupAccountRecords,
       ),
       categories: _readObjectList(
@@ -109,6 +114,59 @@ class BackupDocument {
   }
 
   static BackupDocument _readBackupDocumentV2(
+    Map<String, Object?> json, {
+    required String format,
+    required int backupVersion,
+  }) {
+    _requireExactKeys(json, const {
+      'format',
+      'backupVersion',
+      'databaseSchemaVersion',
+      'createdAtUtc',
+      'sequences',
+      'data',
+    }, 'backup');
+    final data = _readObject(json, 'data', 'data');
+    _requireExactKeys(data, const {
+      'accounts',
+      'categories',
+      'ledgerEntries',
+    }, 'data');
+    final databaseSchemaVersion = _readInt(
+      json,
+      'databaseSchemaVersion',
+      'databaseSchemaVersion',
+    );
+    _requireBackupVersionSchemaPair(backupVersion, databaseSchemaVersion);
+    final document = BackupDocument(
+      format: format,
+      backupVersion: backupVersion,
+      databaseSchemaVersion: databaseSchemaVersion,
+      createdAtUtc: _readDateTime(json, 'createdAtUtc', 'createdAtUtc'),
+      sequences: BackupSequences.fromJson(
+        _readObject(json, 'sequences', 'sequences'),
+      ),
+      accounts: _readObjectList(
+        data,
+        'accounts',
+        'data.accounts',
+        _readLegacyBackupAccount,
+        maximumLength: maxBackupAccountRecords,
+      ),
+      categories: _readObjectList(
+        data,
+        'categories',
+        'data.categories',
+        BackupCategory.fromJson,
+        maximumLength: maxBackupCategoryRecords,
+      ),
+      ledgerEntries: _readBackupLedgerEntriesV2(data),
+    );
+    validateBackupDocument(document);
+    return document;
+  }
+
+  static BackupDocument _readBackupDocumentV3(
     Map<String, Object?> json, {
     required String format,
     required int backupVersion,
@@ -185,6 +243,16 @@ class BackupDocument {
         switch (backupVersion) {
           1 => _writeBackupLedgerEntryV1,
           2 => _writeBackupLedgerEntryV2,
+          3 => _writeBackupLedgerEntryV2,
+          _ => throw const BackupFormatException(
+            'Versi backup belum didukung oleh aplikasi ini.',
+          ),
+        };
+    final Map<String, Object?> Function(BackupAccount) encodeAccount =
+        switch (backupVersion) {
+          1 => _writeLegacyBackupAccount,
+          2 => _writeLegacyBackupAccount,
+          3 => (item) => item.toJson(),
           _ => throw const BackupFormatException(
             'Versi backup belum didukung oleh aplikasi ini.',
           ),
@@ -196,7 +264,7 @@ class BackupDocument {
       'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
       'sequences': sequences.toJson(),
       'data': {
-        'accounts': accounts.map((item) => item.toJson()).toList(),
+        'accounts': accounts.map(encodeAccount).toList(),
         'categories': categories.map((item) => item.toJson()).toList(),
         'ledgerEntries': ledgerEntries.map(encodeLedgerEntry).toList(),
       },
@@ -212,6 +280,10 @@ bool canRestoreBackupDocumentToSchema(
   4 =>
     (document.backupVersion == 1 && document.databaseSchemaVersion == 3) ||
         (document.backupVersion == 2 && document.databaseSchemaVersion == 4),
+  5 =>
+    (document.backupVersion == 1 && document.databaseSchemaVersion == 3) ||
+        (document.backupVersion == 2 && document.databaseSchemaVersion == 4) ||
+        (document.backupVersion == 3 && document.databaseSchemaVersion == 5),
   _ => false,
 };
 
@@ -270,6 +342,7 @@ class BackupAccount {
     required this.name,
     required this.normalizedName,
     required this.type,
+    this.balanceGroup = AccountBalanceGroup.primary,
     required this.isArchived,
     required this.createdAtUtc,
   });
@@ -280,6 +353,7 @@ class BackupAccount {
       'name',
       'normalizedName',
       'type',
+      'balanceGroup',
       'isArchived',
       'createdAtUtc',
     }, 'account');
@@ -292,6 +366,12 @@ class BackupAccount {
         'account.normalizedName',
       ),
       type: _readEnum(json, 'type', 'account.type', AccountType.values),
+      balanceGroup: _readEnum(
+        json,
+        'balanceGroup',
+        'account.balanceGroup',
+        AccountBalanceGroup.values,
+      ),
       isArchived: _readBool(json, 'isArchived', 'account.isArchived'),
       createdAtUtc: _readDateTime(json, 'createdAtUtc', 'account.createdAtUtc'),
     );
@@ -301,6 +381,7 @@ class BackupAccount {
   final String name;
   final String normalizedName;
   final AccountType type;
+  final AccountBalanceGroup balanceGroup;
   final bool isArchived;
   final DateTime createdAtUtc;
 
@@ -309,10 +390,44 @@ class BackupAccount {
     'name': name,
     'normalizedName': normalizedName,
     'type': type.name,
+    'balanceGroup': balanceGroup.name,
     'isArchived': isArchived,
     'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
   };
 }
+
+BackupAccount _readLegacyBackupAccount(Map<String, Object?> json) {
+  _requireExactKeys(json, const {
+    'id',
+    'name',
+    'normalizedName',
+    'type',
+    'isArchived',
+    'createdAtUtc',
+  }, 'account');
+  return BackupAccount(
+    id: _readInt(json, 'id', 'account.id'),
+    name: _readString(json, 'name', 'account.name'),
+    normalizedName: _readString(
+      json,
+      'normalizedName',
+      'account.normalizedName',
+    ),
+    type: _readEnum(json, 'type', 'account.type', AccountType.values),
+    balanceGroup: AccountBalanceGroup.primary,
+    isArchived: _readBool(json, 'isArchived', 'account.isArchived'),
+    createdAtUtc: _readDateTime(json, 'createdAtUtc', 'account.createdAtUtc'),
+  );
+}
+
+Map<String, Object?> _writeLegacyBackupAccount(BackupAccount account) => {
+  'id': account.id,
+  'name': account.name,
+  'normalizedName': account.normalizedName,
+  'type': account.type.name,
+  'isArchived': account.isArchived,
+  'createdAtUtc': account.createdAtUtc.toUtc().toIso8601String(),
+};
 
 class BackupCategory {
   const BackupCategory({
@@ -593,7 +708,8 @@ bool _isSupportedBackupVersionSchemaPair(
   int databaseSchemaVersion,
 ) =>
     (backupVersion == 1 && databaseSchemaVersion == 3) ||
-    (backupVersion == 2 && databaseSchemaVersion == 4);
+    (backupVersion == 2 && databaseSchemaVersion == 4) ||
+    (backupVersion == 3 && databaseSchemaVersion == 5);
 
 void _requireBackupVersionSchemaPair(
   int backupVersion,
@@ -642,6 +758,10 @@ void validateBackupDocument(
     _positiveId(account.id, 'ID rekening');
     if (!accountIds.add(account.id)) _invalid('ID rekening duplikat.');
     _canonicalName(account.name, account.normalizedName, 'Nama rekening');
+    if (document.backupVersion < 3 &&
+        account.balanceGroup != AccountBalanceGroup.primary) {
+      _invalid('Backup versi lama hanya mendukung rekening Saldo utama.');
+    }
     if (!normalizedAccountNames.add(account.normalizedName)) {
       _invalid('Nama rekening duplikat.');
     }

@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
-import '../../ledger/view_models/ledger_view_model.dart';
 
 final currentDateProvider = Provider<DateTime>((ref) {
   return dateOnly(DateTime.now());

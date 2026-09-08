@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../domain/finance.dart';
 import '../../../domain/finance_repository.dart';
-import '../../ledger/view_models/ledger_view_model.dart';
 
 typedef CategoryTreeQuery = ({CategoryKind kind, bool includeArchived});
 

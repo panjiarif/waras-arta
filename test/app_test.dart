@@ -6,10 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:waras_arta/app/app.dart';
+import 'package:waras_arta/app/providers.dart';
 import 'package:waras_arta/domain/finance.dart';
 import 'package:waras_arta/domain/finance_repository.dart';
 import 'package:waras_arta/features/calendar/view_models/calendar_view_model.dart';
-import 'package:waras_arta/features/ledger/view_models/ledger_view_model.dart';
 import 'package:waras_arta/features/ledger/views/category_selection_field.dart';
 
 void main() {

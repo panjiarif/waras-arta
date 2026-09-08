@@ -6,6 +6,62 @@ import 'app_database.steps.dart';
 
 part 'app_database.g.dart';
 
+String _civilYearSql(String column) => 'CAST(($column) / 10000 AS INTEGER)';
+
+String _civilMonthSql(String column) =>
+    '(CAST(($column) / 100 AS INTEGER) % 100)';
+
+String _civilDaySql(String column) => '(($column) % 100)';
+
+String _daysInCivilMonthSql(String column) =>
+    '''
+  CASE ${_civilMonthSql(column)}
+    WHEN 1 THEN 31
+    WHEN 2 THEN CASE
+      WHEN (${_civilYearSql(column)} % 400 = 0)
+        OR (${_civilYearSql(column)} % 4 = 0
+          AND ${_civilYearSql(column)} % 100 <> 0)
+      THEN 29 ELSE 28 END
+    WHEN 3 THEN 31
+    WHEN 4 THEN 30
+    WHEN 5 THEN 31
+    WHEN 6 THEN 30
+    WHEN 7 THEN 31
+    WHEN 8 THEN 31
+    WHEN 9 THEN 30
+    WHEN 10 THEN 31
+    WHEN 11 THEN 30
+    WHEN 12 THEN 31
+    ELSE 0
+  END
+''';
+
+String _validCivilDaySql(String column) =>
+    '''
+  ($column) BETWEEN 20000101 AND 99991231
+  AND ${_civilMonthSql(column)} BETWEEN 1 AND 12
+  AND ${_civilDaySql(column)} BETWEEN 1
+    AND (${_daysInCivilMonthSql(column)})
+''';
+
+String _canonicalBudgetPeriodSql({
+  required String kind,
+  required String startDay,
+  required String endDay,
+}) =>
+    '''
+  (($kind) = 0
+    AND ${_civilDaySql(startDay)} = 1
+    AND CAST(($startDay) / 100 AS INTEGER)
+      = CAST(($endDay) / 100 AS INTEGER)
+    AND ${_civilDaySql(endDay)} = (${_daysInCivilMonthSql(startDay)}))
+  OR (($kind) = 1
+    AND (($startDay) % 10000) = 101
+    AND (($endDay) % 10000) = 1231
+    AND ${_civilYearSql(startDay)} = ${_civilYearSql(endDay)})
+  OR (($kind) = 2)
+''';
+
 @DataClassName('AccountRow')
 class Accounts extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -119,7 +175,132 @@ class LedgerAllocations extends Table {
   ];
 }
 
-@DriftDatabase(tables: [Accounts, Categories, LedgerEntries, LedgerAllocations])
+@DataClassName('BudgetRow')
+class Budgets extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get periodKind => integer()();
+  IntColumn get startDay => integer()();
+  IntColumn get endDay => integer()();
+  TextColumn get name => text().withLength(min: 1, max: 80)();
+  TextColumn get normalizedName => text().withLength(min: 1, max: 80)();
+  IntColumn get limitAmount => integer()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  List<String> get customConstraints => [
+    'CHECK (period_kind BETWEEN 0 AND 2)',
+    '''CHECK (
+      start_day BETWEEN 20000101 AND 99991231
+      AND (CAST(start_day / 100 AS INTEGER) % 100) BETWEEN 1 AND 12
+      AND (start_day % 100) BETWEEN 1 AND CASE
+        (CAST(start_day / 100 AS INTEGER) % 100)
+        WHEN 1 THEN 31
+        WHEN 2 THEN CASE
+          WHEN (CAST(start_day / 10000 AS INTEGER) % 400 = 0)
+            OR (CAST(start_day / 10000 AS INTEGER) % 4 = 0
+              AND CAST(start_day / 10000 AS INTEGER) % 100 <> 0)
+          THEN 29 ELSE 28 END
+        WHEN 3 THEN 31
+        WHEN 4 THEN 30
+        WHEN 5 THEN 31
+        WHEN 6 THEN 30
+        WHEN 7 THEN 31
+        WHEN 8 THEN 31
+        WHEN 9 THEN 30
+        WHEN 10 THEN 31
+        WHEN 11 THEN 30
+        WHEN 12 THEN 31
+        ELSE 0
+      END
+    )''',
+    '''CHECK (
+      end_day BETWEEN 20000101 AND 99991231
+      AND (CAST(end_day / 100 AS INTEGER) % 100) BETWEEN 1 AND 12
+      AND (end_day % 100) BETWEEN 1 AND CASE
+        (CAST(end_day / 100 AS INTEGER) % 100)
+        WHEN 1 THEN 31
+        WHEN 2 THEN CASE
+          WHEN (CAST(end_day / 10000 AS INTEGER) % 400 = 0)
+            OR (CAST(end_day / 10000 AS INTEGER) % 4 = 0
+              AND CAST(end_day / 10000 AS INTEGER) % 100 <> 0)
+          THEN 29 ELSE 28 END
+        WHEN 3 THEN 31
+        WHEN 4 THEN 30
+        WHEN 5 THEN 31
+        WHEN 6 THEN 30
+        WHEN 7 THEN 31
+        WHEN 8 THEN 31
+        WHEN 9 THEN 30
+        WHEN 10 THEN 31
+        WHEN 11 THEN 30
+        WHEN 12 THEN 31
+        ELSE 0
+      END
+    )''',
+    'CHECK (start_day <= end_day)',
+    '''CHECK (
+      (period_kind = 0
+        AND (start_day % 100) = 1
+        AND CAST(start_day / 100 AS INTEGER)
+          = CAST(end_day / 100 AS INTEGER)
+        AND (end_day % 100) = CASE
+          (CAST(start_day / 100 AS INTEGER) % 100)
+          WHEN 1 THEN 31
+          WHEN 2 THEN CASE
+            WHEN (CAST(start_day / 10000 AS INTEGER) % 400 = 0)
+              OR (CAST(start_day / 10000 AS INTEGER) % 4 = 0
+                AND CAST(start_day / 10000 AS INTEGER) % 100 <> 0)
+            THEN 29 ELSE 28 END
+          WHEN 3 THEN 31
+          WHEN 4 THEN 30
+          WHEN 5 THEN 31
+          WHEN 6 THEN 30
+          WHEN 7 THEN 31
+          WHEN 8 THEN 31
+          WHEN 9 THEN 30
+          WHEN 10 THEN 31
+          WHEN 11 THEN 30
+          WHEN 12 THEN 31
+          ELSE 0
+        END)
+      OR (period_kind = 1
+        AND (start_day % 10000) = 101
+        AND (end_day % 10000) = 1231
+        AND CAST(start_day / 10000 AS INTEGER)
+          = CAST(end_day / 10000 AS INTEGER))
+      OR period_kind = 2
+    )''',
+    'CHECK (limit_amount BETWEEN 1 AND 999999999999)',
+    'CHECK (length(trim(name)) BETWEEN 1 AND 80)',
+    'CHECK (length(trim(normalized_name)) BETWEEN 1 AND 80)',
+    'CHECK (updated_at >= created_at)',
+  ];
+}
+
+@DataClassName('BudgetCategoryRow')
+class BudgetCategories extends Table {
+  @ReferenceName('categoryAssignments')
+  IntColumn get budgetId =>
+      integer().references(Budgets, #id, onDelete: KeyAction.cascade)();
+  @ReferenceName('budgetAssignments')
+  IntColumn get categoryId =>
+      integer().references(Categories, #id, onDelete: KeyAction.restrict)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {budgetId, categoryId};
+}
+
+@DriftDatabase(
+  tables: [
+    Accounts,
+    Categories,
+    LedgerEntries,
+    LedgerAllocations,
+    Budgets,
+    BudgetCategories,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
     : super(
@@ -133,7 +314,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -144,6 +325,7 @@ class AppDatabase extends _$AppDatabase {
       await _createSchemaV3Extras();
       await _createSchemaV4Extras();
       await _createSchemaV5Extras();
+      await _createSchemaV6Extras();
     },
     onUpgrade: (migrator, from, to) async {
       if (from >= to) return;
@@ -155,6 +337,7 @@ class AppDatabase extends _$AppDatabase {
             from2To3: _migrateV2ToV3,
             from3To4: _migrateV3ToV4,
             from4To5: _migrateV4ToV5,
+            from5To6: _migrateV5ToV6,
           );
           await runSteps(migrator, from, to);
 
@@ -173,6 +356,9 @@ class AppDatabase extends _$AppDatabase {
           if (to >= 5) {
             await _createSchemaV5Extras();
           }
+          if (to >= 6) {
+            await _createSchemaV6Extras();
+          }
 
           if (to >= 2 && to < 4) {
             final invalid = await customSelect('''
@@ -189,6 +375,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (to >= 4) {
             await verifyLedgerAllocationIntegrity();
+          }
+          if (to >= 6) {
+            await verifyBudgetIntegrity();
           }
           final foreignKeyErrors = await customSelect(
             'PRAGMA foreign_key_check',
@@ -304,6 +493,11 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> _migrateV4ToV5(Migrator migrator, Schema5 schema) async {
     await migrator.addColumn(schema.accounts, schema.accounts.balanceGroup);
+  }
+
+  Future<void> _migrateV5ToV6(Migrator migrator, Schema6 schema) async {
+    await migrator.createTable(schema.budgets);
+    await migrator.createTable(schema.budgetCategories);
   }
 
   Future<void> _seedDefaultCategories() async {
@@ -516,6 +710,80 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  Future<void> _createSchemaV6Extras() async {
+    const statements = [
+      '''CREATE UNIQUE INDEX IF NOT EXISTS budgets_unique_period_name
+         ON budgets (start_day, end_day, normalized_name)''',
+      '''CREATE INDEX IF NOT EXISTS budgets_kind_period_order
+         ON budgets
+           (period_kind, start_day, end_day, normalized_name, id)''',
+      '''CREATE INDEX IF NOT EXISTS budget_categories_category_budget
+         ON budget_categories (category_id, budget_id)''',
+      '''CREATE TRIGGER IF NOT EXISTS budget_categories_validate_insert
+         BEFORE INSERT ON budget_categories
+         WHEN NOT EXISTS (
+           SELECT 1
+           FROM categories AS category
+           JOIN categories AS parent ON parent.id = category.parent_id
+           WHERE category.id = NEW.category_id
+             AND category.kind = 1
+             AND category.parent_id IS NOT NULL
+             AND parent.kind = 1
+             AND parent.parent_id IS NULL)
+         BEGIN SELECT RAISE(ABORT, 'invalid budget category'); END''',
+      '''CREATE TRIGGER IF NOT EXISTS budget_categories_validate_update
+         BEFORE UPDATE OF category_id ON budget_categories
+         WHEN NOT EXISTS (
+           SELECT 1
+           FROM categories AS category
+           JOIN categories AS parent ON parent.id = category.parent_id
+           WHERE category.id = NEW.category_id
+             AND category.kind = 1
+             AND category.parent_id IS NOT NULL
+             AND parent.kind = 1
+             AND parent.parent_id IS NULL)
+         BEGIN SELECT RAISE(ABORT, 'invalid budget category'); END''',
+      '''CREATE TRIGGER IF NOT EXISTS budget_categories_overlap_insert
+         BEFORE INSERT ON budget_categories
+         WHEN EXISTS (
+           SELECT 1
+           FROM budgets AS candidate
+           JOIN budget_categories AS existing_assignment
+             ON existing_assignment.category_id = NEW.category_id
+           JOIN budgets AS existing
+             ON existing.id = existing_assignment.budget_id
+           WHERE candidate.id = NEW.budget_id
+             AND candidate.start_day <= existing.end_day
+             AND existing.start_day <= candidate.end_day)
+         BEGIN SELECT RAISE(ABORT, 'overlapping budget category'); END''',
+      '''CREATE TRIGGER IF NOT EXISTS budget_categories_overlap_update
+         BEFORE UPDATE OF budget_id, category_id ON budget_categories
+         WHEN EXISTS (
+           SELECT 1
+           FROM budgets AS candidate
+           JOIN budget_categories AS existing_assignment
+             ON existing_assignment.category_id = NEW.category_id
+           JOIN budgets AS existing
+             ON existing.id = existing_assignment.budget_id
+           WHERE candidate.id = NEW.budget_id
+             AND NOT (
+               existing_assignment.budget_id = OLD.budget_id
+               AND existing_assignment.category_id = OLD.category_id)
+             AND candidate.start_day <= existing.end_day
+             AND existing.start_day <= candidate.end_day)
+         BEGIN SELECT RAISE(ABORT, 'overlapping budget category'); END''',
+      '''CREATE TRIGGER IF NOT EXISTS budgets_immutable_period
+         BEFORE UPDATE OF period_kind, start_day, end_day ON budgets
+         WHEN NEW.period_kind <> OLD.period_kind
+           OR NEW.start_day <> OLD.start_day
+           OR NEW.end_day <> OLD.end_day
+         BEGIN SELECT RAISE(ABORT, 'immutable budget period'); END''',
+    ];
+    for (final statement in statements) {
+      await customStatement(statement);
+    }
+  }
+
   /// Verifies allocation invariants that SQLite cannot enforce per row.
   ///
   /// Call this inside the same transaction as ledger writes. Passing an
@@ -580,6 +848,115 @@ class AppDatabase extends _$AppDatabase {
     ).getSingle();
     if (invalidReferences.read<int>('amount') != 0) {
       throw StateError('Integritas relasi alokasi tidak valid.');
+    }
+  }
+
+  /// Verifies budget invariants that cannot be expressed by row constraints.
+  ///
+  /// Call this inside the same transaction as budget writes. Passing a
+  /// [budgetId] limits row and mapping checks to that budget. Overlap checks
+  /// still compare it with every other budget.
+  Future<void> verifyBudgetIntegrity({int? budgetId}) async {
+    if (budgetId != null && budgetId < 1) {
+      throw ArgumentError.value(budgetId, 'budgetId', 'must be positive');
+    }
+    final definitionFilter = budgetId == null ? '' : 'AND budget.id = ?';
+    final assignmentFilter = budgetId == null
+        ? ''
+        : 'AND assignment.budget_id = ?';
+    final overlapFilter = budgetId == null
+        ? ''
+        : 'AND (left_budget.id = ? OR right_budget.id = ?)';
+
+    final invalidDefinitions = await customSelect(
+      '''
+        SELECT COUNT(*) AS amount
+        FROM budgets AS budget
+        WHERE NOT (
+          budget.period_kind BETWEEN 0 AND 2
+          AND ${_validCivilDaySql('budget.start_day')}
+          AND ${_validCivilDaySql('budget.end_day')}
+          AND budget.start_day <= budget.end_day
+          AND (${_canonicalBudgetPeriodSql(kind: 'budget.period_kind', startDay: 'budget.start_day', endDay: 'budget.end_day')})
+          AND budget.limit_amount BETWEEN 1 AND 999999999999
+          AND length(trim(budget.name)) BETWEEN 1 AND 80
+          AND length(trim(budget.normalized_name)) BETWEEN 1 AND 80
+          AND budget.updated_at >= budget.created_at
+        )
+        $definitionFilter
+      ''',
+      variables: budgetId == null ? const [] : [Variable.withInt(budgetId)],
+      readsFrom: {budgets},
+    ).getSingle();
+    if (invalidDefinitions.read<int>('amount') != 0) {
+      throw StateError('Definisi anggaran tidak valid.');
+    }
+
+    final missingAssignments = await customSelect(
+      '''
+        SELECT COUNT(*) AS amount
+        FROM budgets AS budget
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM budget_categories AS assignment
+          WHERE assignment.budget_id = budget.id
+        )
+        $definitionFilter
+      ''',
+      variables: budgetId == null ? const [] : [Variable.withInt(budgetId)],
+      readsFrom: {budgets, budgetCategories},
+    ).getSingle();
+    if (missingAssignments.read<int>('amount') != 0) {
+      throw StateError('Anggaran wajib memiliki minimal satu kategori.');
+    }
+
+    final invalidAssignments = await customSelect(
+      '''
+        SELECT COUNT(*) AS amount
+        FROM budget_categories AS assignment
+        LEFT JOIN budgets AS budget ON budget.id = assignment.budget_id
+        LEFT JOIN categories AS category ON category.id = assignment.category_id
+        LEFT JOIN categories AS parent ON parent.id = category.parent_id
+        WHERE (
+          budget.id IS NULL
+          OR category.id IS NULL
+          OR category.kind <> 1
+          OR category.parent_id IS NULL
+          OR parent.id IS NULL
+          OR parent.kind <> 1
+          OR parent.parent_id IS NOT NULL
+        )
+        $assignmentFilter
+      ''',
+      variables: budgetId == null ? const [] : [Variable.withInt(budgetId)],
+      readsFrom: {budgets, budgetCategories, categories},
+    ).getSingle();
+    if (invalidAssignments.read<int>('amount') != 0) {
+      throw StateError('Integritas kategori anggaran tidak valid.');
+    }
+
+    final overlappingAssignments = await customSelect(
+      '''
+        SELECT COUNT(*) AS amount
+        FROM budget_categories AS left_assignment
+        JOIN budgets AS left_budget
+          ON left_budget.id = left_assignment.budget_id
+        JOIN budget_categories AS right_assignment
+          ON right_assignment.category_id = left_assignment.category_id
+         AND right_assignment.budget_id > left_assignment.budget_id
+        JOIN budgets AS right_budget
+          ON right_budget.id = right_assignment.budget_id
+        WHERE left_budget.start_day <= right_budget.end_day
+          AND right_budget.start_day <= left_budget.end_day
+        $overlapFilter
+      ''',
+      variables: budgetId == null
+          ? const []
+          : [Variable.withInt(budgetId), Variable.withInt(budgetId)],
+      readsFrom: {budgets, budgetCategories},
+    ).getSingle();
+    if (overlappingAssignments.read<int>('amount') != 0) {
+      throw StateError('Kategori anggaran memiliki periode yang beririsan.');
     }
   }
 }

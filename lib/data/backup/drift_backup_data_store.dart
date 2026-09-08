@@ -2,14 +2,15 @@ import 'package:drift/drift.dart';
 
 import '../../domain/backup.dart';
 import '../../domain/backup_repository.dart';
+import '../../domain/budget.dart';
 import '../../domain/finance.dart';
 import '../database/app_database.dart';
 
 // Deliberately independent from AppDatabase.schemaVersion. A database or
 // backup-format change must first extend the DTO, export, restore, and decoder
 // migration before these adapter coverage pins are updated.
-const _encodedBackupVersion = 3;
-const _encodedDatabaseSchemaVersion = 5;
+const _encodedBackupVersion = 4;
+const _encodedDatabaseSchemaVersion = 6;
 const _encodedTableColumns = <String, Set<String>>{
   'accounts': {
     'id',
@@ -44,6 +45,18 @@ const _encodedTableColumns = <String, Set<String>>{
     'created_at',
   },
   'ledger_allocations': {'entry_id', 'position', 'category_id', 'amount'},
+  'budgets': {
+    'id',
+    'period_kind',
+    'start_day',
+    'end_day',
+    'name',
+    'normalized_name',
+    'limit_amount',
+    'created_at',
+    'updated_at',
+  },
+  'budget_categories': {'budget_id', 'category_id'},
 };
 
 class DriftBackupDataStore implements BackupDataStore {
@@ -76,6 +89,15 @@ class DriftBackupDataStore implements BackupDataStore {
                   (row) => OrderingTerm.asc(row.position),
                 ]))
                 .get();
+        final budgets = await (_db.select(
+          _db.budgets,
+        )..orderBy([(row) => OrderingTerm.asc(row.id)])).get();
+        final budgetCategories =
+            await (_db.select(_db.budgetCategories)..orderBy([
+                  (row) => OrderingTerm.asc(row.budgetId),
+                  (row) => OrderingTerm.asc(row.categoryId),
+                ]))
+                .get();
         final ledgerIds = ledgerEntries.map((row) => row.id).toSet();
         if (ledgerAllocations.any(
           (allocation) => !ledgerIds.contains(allocation.entryId),
@@ -90,10 +112,25 @@ class DriftBackupDataStore implements BackupDataStore {
               .putIfAbsent(allocation.entryId, () => [])
               .add(allocation);
         }
+        final budgetIds = budgets.map((row) => row.id).toSet();
+        if (budgetCategories.any(
+          (mapping) => !budgetIds.contains(mapping.budgetId),
+        )) {
+          throw const BackupPersistenceException(
+            'Kategori anggaran tidak mempunyai anggaran yang valid.',
+          );
+        }
+        final categoryIdsByBudget = <int, List<int>>{};
+        for (final mapping in budgetCategories) {
+          categoryIdsByBudget
+              .putIfAbsent(mapping.budgetId, () => [])
+              .add(mapping.categoryId);
+        }
         final sequences = await _readSequences(
           maximumAccountId: _maximum(accounts.map((row) => row.id)),
           maximumCategoryId: _maximum(categories.map((row) => row.id)),
           maximumLedgerId: _maximum(ledgerEntries.map((row) => row.id)),
+          maximumBudgetId: _maximum(budgets.map((row) => row.id)),
         );
 
         final document = BackupDocument(
@@ -105,6 +142,10 @@ class DriftBackupDataStore implements BackupDataStore {
           ledgerEntries: ledgerEntries.map(
             (row) =>
                 _backupLedgerEntry(row, allocationsByEntry[row.id] ?? const []),
+          ),
+          budgets: budgets.map(
+            (row) =>
+                _backupBudget(row, categoryIdsByBudget[row.id] ?? const []),
           ),
         );
         validateBackupDocument(document, requireSequenceHeadroom: false);
@@ -164,6 +205,8 @@ class DriftBackupDataStore implements BackupDataStore {
             .write(const AccountsCompanion(isArchived: Value(false)));
         await _db.delete(_db.ledgerAllocations).go();
         await _db.delete(_db.ledgerEntries).go();
+        await _db.delete(_db.budgetCategories).go();
+        await _db.delete(_db.budgets).go();
         await (_db.delete(
           _db.categories,
         )..where((row) => row.parentId.isNotNull())).go();
@@ -227,6 +270,25 @@ class DriftBackupDataStore implements BackupDataStore {
                 amount: allocation.amount,
               ),
         ];
+        final budgetRows = [
+          for (final budget in document.budgets)
+            BudgetRow(
+              id: budget.id,
+              periodKind: budget.periodKind.index,
+              startDay: budget.startDay,
+              endDay: budget.endDay,
+              name: budget.name,
+              normalizedName: budget.normalizedName,
+              limitAmount: budget.limitAmount,
+              createdAt: budget.createdAtUtc,
+              updatedAt: budget.updatedAtUtc,
+            ),
+        ];
+        final budgetCategoryRows = [
+          for (final budget in document.budgets)
+            for (final categoryId in budget.categoryIds)
+              BudgetCategoryRow(budgetId: budget.id, categoryId: categoryId),
+        ];
 
         await _db.batch((batch) {
           if (accountRows.isNotEmpty) {
@@ -237,6 +299,12 @@ class DriftBackupDataStore implements BackupDataStore {
           }
           if (categoryChildren.isNotEmpty) {
             batch.insertAll(_db.categories, categoryChildren);
+          }
+          if (budgetRows.isNotEmpty) {
+            batch.insertAll(_db.budgets, budgetRows);
+          }
+          if (budgetCategoryRows.isNotEmpty) {
+            batch.insertAll(_db.budgetCategories, budgetCategoryRows);
           }
           if (ledgerRows.isNotEmpty) {
             batch.insertAll(_db.ledgerEntries, ledgerRows);
@@ -273,11 +341,12 @@ class DriftBackupDataStore implements BackupDataStore {
     required int maximumAccountId,
     required int maximumCategoryId,
     required int maximumLedgerId,
+    required int maximumBudgetId,
   }) async {
     final rows = await _db.customSelect('''
       SELECT name, COALESCE(seq, 0) AS seq
       FROM sqlite_sequence
-      WHERE name IN ('accounts', 'categories', 'ledger_entries')
+      WHERE name IN ('accounts', 'categories', 'ledger_entries', 'budgets')
     ''').get();
     final values = {
       for (final row in rows) row.read<String>('name'): row.read<int>('seq'),
@@ -286,22 +355,29 @@ class DriftBackupDataStore implements BackupDataStore {
       accounts: _atLeast(values['accounts'] ?? 0, maximumAccountId),
       categories: _atLeast(values['categories'] ?? 0, maximumCategoryId),
       ledgerEntries: _atLeast(values['ledger_entries'] ?? 0, maximumLedgerId),
+      budgets: _atLeast(values['budgets'] ?? 0, maximumBudgetId),
     );
   }
 
   Future<void> _writeSequences(BackupSequences sequences) async {
     await _db.customStatement('''
       DELETE FROM sqlite_sequence
-      WHERE name IN ('accounts', 'categories', 'ledger_entries')
+      WHERE name IN ('accounts', 'categories', 'ledger_entries', 'budgets')
     ''');
     await _db.customStatement(
       '''
         INSERT INTO sqlite_sequence (name, seq) VALUES
           ('accounts', ?),
           ('categories', ?),
-          ('ledger_entries', ?)
+          ('ledger_entries', ?),
+          ('budgets', ?)
       ''',
-      [sequences.accounts, sequences.categories, sequences.ledgerEntries],
+      [
+        sequences.accounts,
+        sequences.categories,
+        sequences.ledgerEntries,
+        sequences.budgets,
+      ],
     );
   }
 
@@ -320,16 +396,25 @@ class DriftBackupDataStore implements BackupDataStore {
         (SELECT COUNT(*) FROM accounts) AS account_count,
         (SELECT COUNT(*) FROM categories) AS category_count,
         (SELECT COUNT(*) FROM ledger_entries) AS ledger_count,
-        (SELECT COUNT(*) FROM ledger_allocations) AS allocation_count
+        (SELECT COUNT(*) FROM ledger_allocations) AS allocation_count,
+        (SELECT COUNT(*) FROM budgets) AS budget_count,
+        (SELECT COUNT(*) FROM budget_categories) AS budget_category_count
     ''').getSingle();
     final expectedAllocationCount = document.ledgerEntries.fold<int>(
       0,
       (count, entry) => count + entry.allocations.length,
     );
+    final expectedBudgetCategoryCount = document.budgets.fold<int>(
+      0,
+      (count, budget) => count + budget.categoryIds.length,
+    );
     if (counts.read<int>('account_count') != document.accounts.length ||
         counts.read<int>('category_count') != document.categories.length ||
         counts.read<int>('ledger_count') != document.ledgerEntries.length ||
-        counts.read<int>('allocation_count') != expectedAllocationCount) {
+        counts.read<int>('allocation_count') != expectedAllocationCount ||
+        counts.read<int>('budget_count') != document.budgets.length ||
+        counts.read<int>('budget_category_count') !=
+            expectedBudgetCategoryCount) {
       throw const BackupValidationException(
         'Jumlah data hasil restore tidak sesuai dengan backup.',
       );
@@ -340,6 +425,14 @@ class DriftBackupDataStore implements BackupDataStore {
     } on StateError catch (error) {
       throw BackupValidationException(
         'Rincian allocation hasil restore tidak valid.',
+        cause: error,
+      );
+    }
+    try {
+      await _db.verifyBudgetIntegrity();
+    } on StateError catch (error) {
+      throw BackupValidationException(
+        'Rincian anggaran hasil restore tidak valid.',
         cause: error,
       );
     }
@@ -381,10 +474,12 @@ class DriftBackupDataStore implements BackupDataStore {
       maximumAccountId: _maximum(document.accounts.map((row) => row.id)),
       maximumCategoryId: _maximum(document.categories.map((row) => row.id)),
       maximumLedgerId: _maximum(document.ledgerEntries.map((row) => row.id)),
+      maximumBudgetId: _maximum(document.budgets.map((row) => row.id)),
     );
     if (restoredSequences.accounts != document.sequences.accounts ||
         restoredSequences.categories != document.sequences.categories ||
-        restoredSequences.ledgerEntries != document.sequences.ledgerEntries) {
+        restoredSequences.ledgerEntries != document.sequences.ledgerEntries ||
+        restoredSequences.budgets != document.sequences.budgets) {
       throw const BackupValidationException(
         'Urutan ID hasil restore tidak sesuai dengan backup.',
       );
@@ -414,6 +509,20 @@ class DriftBackupDataStore implements BackupDataStore {
     createdAtUtc: row.createdAt.toUtc(),
     updatedAtUtc: row.updatedAt.toUtc(),
   );
+
+  static BackupBudget _backupBudget(BudgetRow row, Iterable<int> categoryIds) =>
+      BackupBudget(
+        id: row.id,
+        periodKind: BudgetPeriodKind.values[row.periodKind],
+        startDay: row.startDay,
+        endDay: row.endDay,
+        name: row.name,
+        normalizedName: row.normalizedName,
+        limitAmount: row.limitAmount,
+        categoryIds: categoryIds,
+        createdAtUtc: row.createdAt.toUtc(),
+        updatedAtUtc: row.updatedAt.toUtc(),
+      );
 
   static BackupLedgerEntry _backupLedgerEntry(
     LedgerRow row,

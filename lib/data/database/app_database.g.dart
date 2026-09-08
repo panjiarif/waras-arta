@@ -1979,6 +1979,798 @@ class LedgerAllocationsCompanion extends UpdateCompanion<LedgerAllocationRow> {
   }
 }
 
+class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BudgetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _periodKindMeta = const VerificationMeta(
+    'periodKind',
+  );
+  @override
+  late final GeneratedColumn<int> periodKind = GeneratedColumn<int>(
+    'period_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startDayMeta = const VerificationMeta(
+    'startDay',
+  );
+  @override
+  late final GeneratedColumn<int> startDay = GeneratedColumn<int>(
+    'start_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endDayMeta = const VerificationMeta('endDay');
+  @override
+  late final GeneratedColumn<int> endDay = GeneratedColumn<int>(
+    'end_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 80,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _normalizedNameMeta = const VerificationMeta(
+    'normalizedName',
+  );
+  @override
+  late final GeneratedColumn<String> normalizedName = GeneratedColumn<String>(
+    'normalized_name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 80,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _limitAmountMeta = const VerificationMeta(
+    'limitAmount',
+  );
+  @override
+  late final GeneratedColumn<int> limitAmount = GeneratedColumn<int>(
+    'limit_amount',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    periodKind,
+    startDay,
+    endDay,
+    name,
+    normalizedName,
+    limitAmount,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'budgets';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BudgetRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('period_kind')) {
+      context.handle(
+        _periodKindMeta,
+        periodKind.isAcceptableOrUnknown(data['period_kind']!, _periodKindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_periodKindMeta);
+    }
+    if (data.containsKey('start_day')) {
+      context.handle(
+        _startDayMeta,
+        startDay.isAcceptableOrUnknown(data['start_day']!, _startDayMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startDayMeta);
+    }
+    if (data.containsKey('end_day')) {
+      context.handle(
+        _endDayMeta,
+        endDay.isAcceptableOrUnknown(data['end_day']!, _endDayMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_endDayMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('normalized_name')) {
+      context.handle(
+        _normalizedNameMeta,
+        normalizedName.isAcceptableOrUnknown(
+          data['normalized_name']!,
+          _normalizedNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_normalizedNameMeta);
+    }
+    if (data.containsKey('limit_amount')) {
+      context.handle(
+        _limitAmountMeta,
+        limitAmount.isAcceptableOrUnknown(
+          data['limit_amount']!,
+          _limitAmountMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_limitAmountMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BudgetRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BudgetRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      periodKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}period_kind'],
+      )!,
+      startDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}start_day'],
+      )!,
+      endDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}end_day'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      normalizedName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}normalized_name'],
+      )!,
+      limitAmount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}limit_amount'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $BudgetsTable createAlias(String alias) {
+    return $BudgetsTable(attachedDatabase, alias);
+  }
+}
+
+class BudgetRow extends DataClass implements Insertable<BudgetRow> {
+  final int id;
+  final int periodKind;
+  final int startDay;
+  final int endDay;
+  final String name;
+  final String normalizedName;
+  final int limitAmount;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const BudgetRow({
+    required this.id,
+    required this.periodKind,
+    required this.startDay,
+    required this.endDay,
+    required this.name,
+    required this.normalizedName,
+    required this.limitAmount,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['period_kind'] = Variable<int>(periodKind);
+    map['start_day'] = Variable<int>(startDay);
+    map['end_day'] = Variable<int>(endDay);
+    map['name'] = Variable<String>(name);
+    map['normalized_name'] = Variable<String>(normalizedName);
+    map['limit_amount'] = Variable<int>(limitAmount);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  BudgetsCompanion toCompanion(bool nullToAbsent) {
+    return BudgetsCompanion(
+      id: Value(id),
+      periodKind: Value(periodKind),
+      startDay: Value(startDay),
+      endDay: Value(endDay),
+      name: Value(name),
+      normalizedName: Value(normalizedName),
+      limitAmount: Value(limitAmount),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory BudgetRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BudgetRow(
+      id: serializer.fromJson<int>(json['id']),
+      periodKind: serializer.fromJson<int>(json['periodKind']),
+      startDay: serializer.fromJson<int>(json['startDay']),
+      endDay: serializer.fromJson<int>(json['endDay']),
+      name: serializer.fromJson<String>(json['name']),
+      normalizedName: serializer.fromJson<String>(json['normalizedName']),
+      limitAmount: serializer.fromJson<int>(json['limitAmount']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'periodKind': serializer.toJson<int>(periodKind),
+      'startDay': serializer.toJson<int>(startDay),
+      'endDay': serializer.toJson<int>(endDay),
+      'name': serializer.toJson<String>(name),
+      'normalizedName': serializer.toJson<String>(normalizedName),
+      'limitAmount': serializer.toJson<int>(limitAmount),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  BudgetRow copyWith({
+    int? id,
+    int? periodKind,
+    int? startDay,
+    int? endDay,
+    String? name,
+    String? normalizedName,
+    int? limitAmount,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => BudgetRow(
+    id: id ?? this.id,
+    periodKind: periodKind ?? this.periodKind,
+    startDay: startDay ?? this.startDay,
+    endDay: endDay ?? this.endDay,
+    name: name ?? this.name,
+    normalizedName: normalizedName ?? this.normalizedName,
+    limitAmount: limitAmount ?? this.limitAmount,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  BudgetRow copyWithCompanion(BudgetsCompanion data) {
+    return BudgetRow(
+      id: data.id.present ? data.id.value : this.id,
+      periodKind: data.periodKind.present
+          ? data.periodKind.value
+          : this.periodKind,
+      startDay: data.startDay.present ? data.startDay.value : this.startDay,
+      endDay: data.endDay.present ? data.endDay.value : this.endDay,
+      name: data.name.present ? data.name.value : this.name,
+      normalizedName: data.normalizedName.present
+          ? data.normalizedName.value
+          : this.normalizedName,
+      limitAmount: data.limitAmount.present
+          ? data.limitAmount.value
+          : this.limitAmount,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BudgetRow(')
+          ..write('id: $id, ')
+          ..write('periodKind: $periodKind, ')
+          ..write('startDay: $startDay, ')
+          ..write('endDay: $endDay, ')
+          ..write('name: $name, ')
+          ..write('normalizedName: $normalizedName, ')
+          ..write('limitAmount: $limitAmount, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    periodKind,
+    startDay,
+    endDay,
+    name,
+    normalizedName,
+    limitAmount,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BudgetRow &&
+          other.id == this.id &&
+          other.periodKind == this.periodKind &&
+          other.startDay == this.startDay &&
+          other.endDay == this.endDay &&
+          other.name == this.name &&
+          other.normalizedName == this.normalizedName &&
+          other.limitAmount == this.limitAmount &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
+  final Value<int> id;
+  final Value<int> periodKind;
+  final Value<int> startDay;
+  final Value<int> endDay;
+  final Value<String> name;
+  final Value<String> normalizedName;
+  final Value<int> limitAmount;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const BudgetsCompanion({
+    this.id = const Value.absent(),
+    this.periodKind = const Value.absent(),
+    this.startDay = const Value.absent(),
+    this.endDay = const Value.absent(),
+    this.name = const Value.absent(),
+    this.normalizedName = const Value.absent(),
+    this.limitAmount = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  BudgetsCompanion.insert({
+    this.id = const Value.absent(),
+    required int periodKind,
+    required int startDay,
+    required int endDay,
+    required String name,
+    required String normalizedName,
+    required int limitAmount,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+  }) : periodKind = Value(periodKind),
+       startDay = Value(startDay),
+       endDay = Value(endDay),
+       name = Value(name),
+       normalizedName = Value(normalizedName),
+       limitAmount = Value(limitAmount),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<BudgetRow> custom({
+    Expression<int>? id,
+    Expression<int>? periodKind,
+    Expression<int>? startDay,
+    Expression<int>? endDay,
+    Expression<String>? name,
+    Expression<String>? normalizedName,
+    Expression<int>? limitAmount,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (periodKind != null) 'period_kind': periodKind,
+      if (startDay != null) 'start_day': startDay,
+      if (endDay != null) 'end_day': endDay,
+      if (name != null) 'name': name,
+      if (normalizedName != null) 'normalized_name': normalizedName,
+      if (limitAmount != null) 'limit_amount': limitAmount,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  BudgetsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? periodKind,
+    Value<int>? startDay,
+    Value<int>? endDay,
+    Value<String>? name,
+    Value<String>? normalizedName,
+    Value<int>? limitAmount,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return BudgetsCompanion(
+      id: id ?? this.id,
+      periodKind: periodKind ?? this.periodKind,
+      startDay: startDay ?? this.startDay,
+      endDay: endDay ?? this.endDay,
+      name: name ?? this.name,
+      normalizedName: normalizedName ?? this.normalizedName,
+      limitAmount: limitAmount ?? this.limitAmount,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (periodKind.present) {
+      map['period_kind'] = Variable<int>(periodKind.value);
+    }
+    if (startDay.present) {
+      map['start_day'] = Variable<int>(startDay.value);
+    }
+    if (endDay.present) {
+      map['end_day'] = Variable<int>(endDay.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (normalizedName.present) {
+      map['normalized_name'] = Variable<String>(normalizedName.value);
+    }
+    if (limitAmount.present) {
+      map['limit_amount'] = Variable<int>(limitAmount.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BudgetsCompanion(')
+          ..write('id: $id, ')
+          ..write('periodKind: $periodKind, ')
+          ..write('startDay: $startDay, ')
+          ..write('endDay: $endDay, ')
+          ..write('name: $name, ')
+          ..write('normalizedName: $normalizedName, ')
+          ..write('limitAmount: $limitAmount, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BudgetCategoriesTable extends BudgetCategories
+    with TableInfo<$BudgetCategoriesTable, BudgetCategoryRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BudgetCategoriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _budgetIdMeta = const VerificationMeta(
+    'budgetId',
+  );
+  @override
+  late final GeneratedColumn<int> budgetId = GeneratedColumn<int>(
+    'budget_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES budgets (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _categoryIdMeta = const VerificationMeta(
+    'categoryId',
+  );
+  @override
+  late final GeneratedColumn<int> categoryId = GeneratedColumn<int>(
+    'category_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES categories (id) ON DELETE RESTRICT',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [budgetId, categoryId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'budget_categories';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BudgetCategoryRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('budget_id')) {
+      context.handle(
+        _budgetIdMeta,
+        budgetId.isAcceptableOrUnknown(data['budget_id']!, _budgetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_budgetIdMeta);
+    }
+    if (data.containsKey('category_id')) {
+      context.handle(
+        _categoryIdMeta,
+        categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {budgetId, categoryId};
+  @override
+  BudgetCategoryRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BudgetCategoryRow(
+      budgetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}budget_id'],
+      )!,
+      categoryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}category_id'],
+      )!,
+    );
+  }
+
+  @override
+  $BudgetCategoriesTable createAlias(String alias) {
+    return $BudgetCategoriesTable(attachedDatabase, alias);
+  }
+}
+
+class BudgetCategoryRow extends DataClass
+    implements Insertable<BudgetCategoryRow> {
+  final int budgetId;
+  final int categoryId;
+  const BudgetCategoryRow({required this.budgetId, required this.categoryId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['budget_id'] = Variable<int>(budgetId);
+    map['category_id'] = Variable<int>(categoryId);
+    return map;
+  }
+
+  BudgetCategoriesCompanion toCompanion(bool nullToAbsent) {
+    return BudgetCategoriesCompanion(
+      budgetId: Value(budgetId),
+      categoryId: Value(categoryId),
+    );
+  }
+
+  factory BudgetCategoryRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BudgetCategoryRow(
+      budgetId: serializer.fromJson<int>(json['budgetId']),
+      categoryId: serializer.fromJson<int>(json['categoryId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'budgetId': serializer.toJson<int>(budgetId),
+      'categoryId': serializer.toJson<int>(categoryId),
+    };
+  }
+
+  BudgetCategoryRow copyWith({int? budgetId, int? categoryId}) =>
+      BudgetCategoryRow(
+        budgetId: budgetId ?? this.budgetId,
+        categoryId: categoryId ?? this.categoryId,
+      );
+  BudgetCategoryRow copyWithCompanion(BudgetCategoriesCompanion data) {
+    return BudgetCategoryRow(
+      budgetId: data.budgetId.present ? data.budgetId.value : this.budgetId,
+      categoryId: data.categoryId.present
+          ? data.categoryId.value
+          : this.categoryId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BudgetCategoryRow(')
+          ..write('budgetId: $budgetId, ')
+          ..write('categoryId: $categoryId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(budgetId, categoryId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BudgetCategoryRow &&
+          other.budgetId == this.budgetId &&
+          other.categoryId == this.categoryId);
+}
+
+class BudgetCategoriesCompanion extends UpdateCompanion<BudgetCategoryRow> {
+  final Value<int> budgetId;
+  final Value<int> categoryId;
+  final Value<int> rowid;
+  const BudgetCategoriesCompanion({
+    this.budgetId = const Value.absent(),
+    this.categoryId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BudgetCategoriesCompanion.insert({
+    required int budgetId,
+    required int categoryId,
+    this.rowid = const Value.absent(),
+  }) : budgetId = Value(budgetId),
+       categoryId = Value(categoryId);
+  static Insertable<BudgetCategoryRow> custom({
+    Expression<int>? budgetId,
+    Expression<int>? categoryId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (budgetId != null) 'budget_id': budgetId,
+      if (categoryId != null) 'category_id': categoryId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BudgetCategoriesCompanion copyWith({
+    Value<int>? budgetId,
+    Value<int>? categoryId,
+    Value<int>? rowid,
+  }) {
+    return BudgetCategoriesCompanion(
+      budgetId: budgetId ?? this.budgetId,
+      categoryId: categoryId ?? this.categoryId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (budgetId.present) {
+      map['budget_id'] = Variable<int>(budgetId.value);
+    }
+    if (categoryId.present) {
+      map['category_id'] = Variable<int>(categoryId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BudgetCategoriesCompanion(')
+          ..write('budgetId: $budgetId, ')
+          ..write('categoryId: $categoryId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1987,6 +2779,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LedgerEntriesTable ledgerEntries = $LedgerEntriesTable(this);
   late final $LedgerAllocationsTable ledgerAllocations =
       $LedgerAllocationsTable(this);
+  late final $BudgetsTable budgets = $BudgetsTable(this);
+  late final $BudgetCategoriesTable budgetCategories = $BudgetCategoriesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1996,6 +2792,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     categories,
     ledgerEntries,
     ledgerAllocations,
+    budgets,
+    budgetCategories,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -2005,6 +2803,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('ledger_allocations', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'budgets',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('budget_categories', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -2506,6 +3311,24 @@ final class $$CategoriesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$BudgetCategoriesTable, List<BudgetCategoryRow>>
+  _budgetAssignmentsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.budgetCategories,
+    aliasName: 'categories__id__budget_categories__category_id',
+  );
+
+  $$BudgetCategoriesTableProcessedTableManager get budgetAssignments {
+    final manager = $$BudgetCategoriesTableTableManager(
+      $_db,
+      $_db.budgetCategories,
+    ).filter((f) => f.categoryId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_budgetAssignmentsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$CategoriesTableFilterComposer
@@ -2606,6 +3429,31 @@ class $$CategoriesTableFilterComposer
           }) => $$LedgerAllocationsTableFilterComposer(
             $db: $db,
             $table: $db.ledgerAllocations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> budgetAssignments(
+    Expression<bool> Function($$BudgetCategoriesTableFilterComposer f) f,
+  ) {
+    final $$BudgetCategoriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.budgetCategories,
+      getReferencedColumn: (t) => t.categoryId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BudgetCategoriesTableFilterComposer(
+            $db: $db,
+            $table: $db.budgetCategories,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -2790,6 +3638,31 @@ class $$CategoriesTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> budgetAssignments<T extends Object>(
+    Expression<T> Function($$BudgetCategoriesTableAnnotationComposer a) f,
+  ) {
+    final $$BudgetCategoriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.budgetCategories,
+      getReferencedColumn: (t) => t.categoryId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BudgetCategoriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.budgetCategories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$CategoriesTableTableManager
@@ -2805,7 +3678,11 @@ class $$CategoriesTableTableManager
           $$CategoriesTableUpdateCompanionBuilder,
           (CategoryRow, $$CategoriesTableReferences),
           CategoryRow,
-          PrefetchHooks Function({bool parentId, bool allocationEntries})
+          PrefetchHooks Function({
+            bool parentId,
+            bool allocationEntries,
+            bool budgetAssignments,
+          })
         > {
   $$CategoriesTableTableManager(_$AppDatabase db, $CategoriesTable table)
     : super(
@@ -2879,11 +3756,16 @@ class $$CategoriesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({parentId = false, allocationEntries = false}) {
+              ({
+                parentId = false,
+                allocationEntries = false,
+                budgetAssignments = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (allocationEntries) db.ledgerAllocations,
+                    if (budgetAssignments) db.budgetCategories,
                   ],
                   addJoins:
                       <
@@ -2938,6 +3820,27 @@ class $$CategoriesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (budgetAssignments)
+                        await $_getPrefetchedData<
+                          CategoryRow,
+                          $CategoriesTable,
+                          BudgetCategoryRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$CategoriesTableReferences
+                              ._budgetAssignmentsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$CategoriesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).budgetAssignments,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.categoryId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -2958,7 +3861,11 @@ typedef $$CategoriesTableProcessedTableManager =
       $$CategoriesTableUpdateCompanionBuilder,
       (CategoryRow, $$CategoriesTableReferences),
       CategoryRow,
-      PrefetchHooks Function({bool parentId, bool allocationEntries})
+      PrefetchHooks Function({
+        bool parentId,
+        bool allocationEntries,
+        bool budgetAssignments,
+      })
     >;
 typedef $$LedgerEntriesTableCreateCompanionBuilder =
     LedgerEntriesCompanion Function({
@@ -3921,6 +4828,737 @@ typedef $$LedgerAllocationsTableProcessedTableManager =
       LedgerAllocationRow,
       PrefetchHooks Function({bool entryId, bool categoryId})
     >;
+typedef $$BudgetsTableCreateCompanionBuilder = BudgetsCompanion Function({
+  Value<int> id,
+  required int periodKind,
+  required int startDay,
+  required int endDay,
+  required String name,
+  required String normalizedName,
+  required int limitAmount,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+});
+typedef $$BudgetsTableUpdateCompanionBuilder = BudgetsCompanion Function({
+  Value<int> id,
+  Value<int> periodKind,
+  Value<int> startDay,
+  Value<int> endDay,
+  Value<String> name,
+  Value<String> normalizedName,
+  Value<int> limitAmount,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+});
+
+final class $$BudgetsTableReferences
+    extends BaseReferences<_$AppDatabase, $BudgetsTable, BudgetRow> {
+  $$BudgetsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$BudgetCategoriesTable, List<BudgetCategoryRow>>
+  _categoryAssignmentsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.budgetCategories,
+    aliasName: 'budgets__id__budget_categories__budget_id',
+  );
+
+  $$BudgetCategoriesTableProcessedTableManager get categoryAssignments {
+    final manager = $$BudgetCategoriesTableTableManager(
+      $_db,
+      $_db.budgetCategories,
+    ).filter((f) => f.budgetId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _categoryAssignmentsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$BudgetsTableFilterComposer
+    extends Composer<_$AppDatabase, $BudgetsTable> {
+  $$BudgetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get periodKind => $composableBuilder(
+    column: $table.periodKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startDay => $composableBuilder(
+    column: $table.startDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get endDay => $composableBuilder(
+    column: $table.endDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get normalizedName => $composableBuilder(
+    column: $table.normalizedName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get limitAmount => $composableBuilder(
+    column: $table.limitAmount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> categoryAssignments(
+    Expression<bool> Function($$BudgetCategoriesTableFilterComposer f) f,
+  ) {
+    final $$BudgetCategoriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.budgetCategories,
+      getReferencedColumn: (t) => t.budgetId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BudgetCategoriesTableFilterComposer(
+            $db: $db,
+            $table: $db.budgetCategories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$BudgetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $BudgetsTable> {
+  $$BudgetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get periodKind => $composableBuilder(
+    column: $table.periodKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startDay => $composableBuilder(
+    column: $table.startDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get endDay => $composableBuilder(
+    column: $table.endDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get normalizedName => $composableBuilder(
+    column: $table.normalizedName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get limitAmount => $composableBuilder(
+    column: $table.limitAmount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BudgetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BudgetsTable> {
+  $$BudgetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get periodKind => $composableBuilder(
+    column: $table.periodKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get startDay =>
+      $composableBuilder(column: $table.startDay, builder: (column) => column);
+
+  GeneratedColumn<int> get endDay =>
+      $composableBuilder(column: $table.endDay, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get normalizedName => $composableBuilder(
+    column: $table.normalizedName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get limitAmount => $composableBuilder(
+    column: $table.limitAmount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> categoryAssignments<T extends Object>(
+    Expression<T> Function($$BudgetCategoriesTableAnnotationComposer a) f,
+  ) {
+    final $$BudgetCategoriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.budgetCategories,
+      getReferencedColumn: (t) => t.budgetId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BudgetCategoriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.budgetCategories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$BudgetsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BudgetsTable,
+          BudgetRow,
+          $$BudgetsTableFilterComposer,
+          $$BudgetsTableOrderingComposer,
+          $$BudgetsTableAnnotationComposer,
+          $$BudgetsTableCreateCompanionBuilder,
+          $$BudgetsTableUpdateCompanionBuilder,
+          (BudgetRow, $$BudgetsTableReferences),
+          BudgetRow,
+          PrefetchHooks Function({bool categoryAssignments})
+        > {
+  $$BudgetsTableTableManager(_$AppDatabase db, $BudgetsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BudgetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BudgetsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BudgetsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> periodKind = const Value.absent(),
+                Value<int> startDay = const Value.absent(),
+                Value<int> endDay = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> normalizedName = const Value.absent(),
+                Value<int> limitAmount = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => BudgetsCompanion(
+                id: id,
+                periodKind: periodKind,
+                startDay: startDay,
+                endDay: endDay,
+                name: name,
+                normalizedName: normalizedName,
+                limitAmount: limitAmount,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int periodKind,
+                required int startDay,
+                required int endDay,
+                required String name,
+                required String normalizedName,
+                required int limitAmount,
+                required DateTime createdAt,
+                required DateTime updatedAt,
+              }) => BudgetsCompanion.insert(
+                id: id,
+                periodKind: periodKind,
+                startDay: startDay,
+                endDay: endDay,
+                name: name,
+                normalizedName: normalizedName,
+                limitAmount: limitAmount,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$BudgetsTable, BudgetRow>(table),
+                  $$BudgetsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({categoryAssignments = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (categoryAssignments) db.budgetCategories,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (categoryAssignments)
+                    await $_getPrefetchedData<
+                      BudgetRow,
+                      $BudgetsTable,
+                      BudgetCategoryRow
+                    >(
+                      currentTable: table,
+                      referencedTable: $$BudgetsTableReferences
+                          ._categoryAssignmentsTable(db),
+                      managerFromTypedResult: (p0) => $$BudgetsTableReferences(
+                        db,
+                        table,
+                        p0,
+                      ).categoryAssignments,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.budgetId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$BudgetsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BudgetsTable,
+      BudgetRow,
+      $$BudgetsTableFilterComposer,
+      $$BudgetsTableOrderingComposer,
+      $$BudgetsTableAnnotationComposer,
+      $$BudgetsTableCreateCompanionBuilder,
+      $$BudgetsTableUpdateCompanionBuilder,
+      (BudgetRow, $$BudgetsTableReferences),
+      BudgetRow,
+      PrefetchHooks Function({bool categoryAssignments})
+    >;
+typedef $$BudgetCategoriesTableCreateCompanionBuilder =
+    BudgetCategoriesCompanion Function({
+      required int budgetId,
+      required int categoryId,
+      Value<int> rowid,
+    });
+typedef $$BudgetCategoriesTableUpdateCompanionBuilder =
+    BudgetCategoriesCompanion Function({
+      Value<int> budgetId,
+      Value<int> categoryId,
+      Value<int> rowid,
+    });
+
+final class $$BudgetCategoriesTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $BudgetCategoriesTable,
+          BudgetCategoryRow
+        > {
+  $$BudgetCategoriesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $BudgetsTable _budgetIdTable(_$AppDatabase db) =>
+      db.budgets.createAlias('budget_categories__budget_id__budgets__id');
+
+  $$BudgetsTableProcessedTableManager get budgetId {
+    final $_column = $_itemColumn<int>('budget_id')!;
+
+    final manager = $$BudgetsTableTableManager(
+      $_db,
+      $_db.budgets,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_budgetIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $CategoriesTable _categoryIdTable(_$AppDatabase db) => db.categories
+      .createAlias('budget_categories__category_id__categories__id');
+
+  $$CategoriesTableProcessedTableManager get categoryId {
+    final $_column = $_itemColumn<int>('category_id')!;
+
+    final manager = $$CategoriesTableTableManager(
+      $_db,
+      $_db.categories,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_categoryIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$BudgetCategoriesTableFilterComposer
+    extends Composer<_$AppDatabase, $BudgetCategoriesTable> {
+  $$BudgetCategoriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$BudgetsTableFilterComposer get budgetId {
+    final $$BudgetsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.budgetId,
+      referencedTable: $db.budgets,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BudgetsTableFilterComposer(
+            $db: $db,
+            $table: $db.budgets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CategoriesTableFilterComposer get categoryId {
+    final $$CategoriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableFilterComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BudgetCategoriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $BudgetCategoriesTable> {
+  $$BudgetCategoriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$BudgetsTableOrderingComposer get budgetId {
+    final $$BudgetsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.budgetId,
+      referencedTable: $db.budgets,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BudgetsTableOrderingComposer(
+            $db: $db,
+            $table: $db.budgets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CategoriesTableOrderingComposer get categoryId {
+    final $$CategoriesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableOrderingComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BudgetCategoriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BudgetCategoriesTable> {
+  $$BudgetCategoriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$BudgetsTableAnnotationComposer get budgetId {
+    final $$BudgetsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.budgetId,
+      referencedTable: $db.budgets,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BudgetsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.budgets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CategoriesTableAnnotationComposer get categoryId {
+    final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$BudgetCategoriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BudgetCategoriesTable,
+          BudgetCategoryRow,
+          $$BudgetCategoriesTableFilterComposer,
+          $$BudgetCategoriesTableOrderingComposer,
+          $$BudgetCategoriesTableAnnotationComposer,
+          $$BudgetCategoriesTableCreateCompanionBuilder,
+          $$BudgetCategoriesTableUpdateCompanionBuilder,
+          (BudgetCategoryRow, $$BudgetCategoriesTableReferences),
+          BudgetCategoryRow,
+          PrefetchHooks Function({bool budgetId, bool categoryId})
+        > {
+  $$BudgetCategoriesTableTableManager(
+    _$AppDatabase db,
+    $BudgetCategoriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BudgetCategoriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BudgetCategoriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BudgetCategoriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> budgetId = const Value.absent(),
+                Value<int> categoryId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BudgetCategoriesCompanion(
+                budgetId: budgetId,
+                categoryId: categoryId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required int budgetId,
+                required int categoryId,
+                Value<int> rowid = const Value.absent(),
+              }) => BudgetCategoriesCompanion.insert(
+                budgetId: budgetId,
+                categoryId: categoryId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$BudgetCategoriesTable, BudgetCategoryRow>(table),
+                  $$BudgetCategoriesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({budgetId = false, categoryId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (budgetId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.budgetId,
+                        referencedTable: $$BudgetCategoriesTableReferences
+                            ._budgetIdTable(db),
+                        referencedColumn: $$BudgetCategoriesTableReferences
+                            ._budgetIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+                    if (categoryId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.categoryId,
+                        referencedTable: $$BudgetCategoriesTableReferences
+                            ._categoryIdTable(db),
+                        referencedColumn: $$BudgetCategoriesTableReferences
+                            ._categoryIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$BudgetCategoriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BudgetCategoriesTable,
+      BudgetCategoryRow,
+      $$BudgetCategoriesTableFilterComposer,
+      $$BudgetCategoriesTableOrderingComposer,
+      $$BudgetCategoriesTableAnnotationComposer,
+      $$BudgetCategoriesTableCreateCompanionBuilder,
+      $$BudgetCategoriesTableUpdateCompanionBuilder,
+      (BudgetCategoryRow, $$BudgetCategoriesTableReferences),
+      BudgetCategoryRow,
+      PrefetchHooks Function({bool budgetId, bool categoryId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3933,4 +5571,8 @@ class $AppDatabaseManager {
       $$LedgerEntriesTableTableManager(_db, _db.ledgerEntries);
   $$LedgerAllocationsTableTableManager get ledgerAllocations =>
       $$LedgerAllocationsTableTableManager(_db, _db.ledgerAllocations);
+  $$BudgetsTableTableManager get budgets =>
+      $$BudgetsTableTableManager(_db, _db.budgets);
+  $$BudgetCategoriesTableTableManager get budgetCategories =>
+      $$BudgetCategoriesTableTableManager(_db, _db.budgetCategories);
 }

@@ -21,6 +21,7 @@ class BackupRestorePlan {
 
   final BackupDocument document;
   BackupSummary get summary => document.summary;
+  bool get clearsBudgets => document.backupVersion < 4;
 }
 
 abstract interface class BackupOperations {

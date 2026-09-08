@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:waras_arta/data/backup/drift_backup_data_store.dart';
 import 'package:waras_arta/data/database/app_database.dart';
 import 'package:waras_arta/data/repositories/drift_finance_repository.dart';
+import 'package:waras_arta/data/repositories/drift_budget_repository.dart';
 import 'package:waras_arta/domain/backup.dart';
+import 'package:waras_arta/domain/budget.dart';
 import 'package:waras_arta/domain/finance.dart';
 
 void main() {
@@ -17,6 +19,8 @@ void main() {
   late AppDatabase targetDb;
   late DriftFinanceRepository sourceFinance;
   late DriftFinanceRepository targetFinance;
+  late DriftBudgetRepository sourceBudget;
+  late DriftBudgetRepository targetBudget;
   late DriftBackupDataStore sourceStore;
   late DriftBackupDataStore targetStore;
 
@@ -36,6 +40,8 @@ void main() {
     targetDb = AppDatabase(NativeDatabase.memory());
     sourceFinance = DriftFinanceRepository(sourceDb);
     targetFinance = DriftFinanceRepository(targetDb);
+    sourceBudget = DriftBudgetRepository(sourceDb);
+    targetBudget = DriftBudgetRepository(targetDb);
     sourceStore = DriftBackupDataStore(sourceDb);
     targetStore = DriftBackupDataStore(targetDb);
   });
@@ -75,7 +81,7 @@ void main() {
   );
 
   test(
-    'JSON v3 split round-trip preserves account groups and ID sequences',
+    'JSON v4 round-trip preserves budgets, account groups, and ID sequences',
     () async {
       final walletId = await createAccount(
         sourceFinance,
@@ -108,6 +114,14 @@ void main() {
           ],
           note: 'Gaji tambahan',
           occurredAt: occurredAt,
+        ),
+      );
+      final budgetId = await sourceBudget.createBudget(
+        BudgetDraft(
+          period: BudgetPeriod.monthly(2024, 3),
+          name: 'Makan Maret',
+          limitAmount: 500,
+          categoryIds: const [10],
         ),
       );
       await sourceFinance.addEntry(
@@ -158,6 +172,9 @@ void main() {
       );
       expect(decoded.summary.categoryCount, 23);
       expect(decoded.summary.ledgerEntryCount, 5);
+      expect(decoded.summary.budgetCount, 1);
+      expect(decoded.budgets.single.id, budgetId);
+      expect(decoded.budgets.single.categoryIds, [10]);
       final split = decoded.ledgerEntries.singleWhere(
         (entry) => entry.note == 'Gaji tambahan',
       );
@@ -171,6 +188,7 @@ void main() {
         decoded.sequences.ledgerEntries,
         greaterThan(_maximumLedgerId(decoded)),
       );
+      expect(decoded.sequences.budgets, budgetId);
 
       for (var index = 0; index < 12; index++) {
         final id = await createAccount(targetFinance, 'Target $index');
@@ -204,10 +222,19 @@ void main() {
         income(nextAccountId, 1, note: 'Sesudah restore'),
       );
       expect(nextLedgerId, decoded.sequences.ledgerEntries + 1);
+      final nextBudgetId = await targetBudget.createBudget(
+        BudgetDraft(
+          period: BudgetPeriod.monthly(2024, 4),
+          name: 'Makan April',
+          limitAmount: 500,
+          categoryIds: const [10],
+        ),
+      );
+      expect(nextBudgetId, decoded.sequences.budgets + 1);
     },
   );
 
-  test('restores payload v1/schema 3 into schema 5 allocations', () async {
+  test('restores payload v1/schema 3 into schema 6 allocations', () async {
     final accountId = await createAccount(sourceFinance, 'Sumber lama');
     await sourceFinance.addEntry(income(accountId, 125, note: 'Transaksi v1'));
     final current = await sourceStore.exportDocument(
@@ -218,6 +245,9 @@ void main() {
     legacyJson['backupVersion'] = 1;
     legacyJson['databaseSchemaVersion'] = 3;
     final data = legacyJson['data']! as Map<String, Object?>;
+    data.remove('budgets');
+    final sequences = legacyJson['sequences']! as Map<String, Object?>;
+    sequences.remove('budgets');
     final accounts = data['accounts']! as List<Object?>;
     for (final value in accounts) {
       (value as Map<String, Object?>).remove('balanceGroup');
@@ -237,8 +267,9 @@ void main() {
       createdAtUtc: createdAtUtc,
     );
 
-    expect(restored.backupVersion, 3);
-    expect(restored.databaseSchemaVersion, 5);
+    expect(restored.backupVersion, 4);
+    expect(restored.databaseSchemaVersion, 6);
+    expect(restored.budgets, isEmpty);
     expect(restored.accounts.single.balanceGroup, AccountBalanceGroup.primary);
     final restoredEntry = restored.ledgerEntries.single;
     expect(restoredEntry.id, legacy.ledgerEntries.single.id);
@@ -264,6 +295,9 @@ void main() {
     legacyJson['backupVersion'] = 2;
     legacyJson['databaseSchemaVersion'] = 4;
     final data = legacyJson['data']! as Map<String, Object?>;
+    data.remove('budgets');
+    final sequences = legacyJson['sequences']! as Map<String, Object?>;
+    sequences.remove('budgets');
     final accounts = data['accounts']! as List<Object?>;
     for (final value in accounts) {
       (value as Map<String, Object?>).remove('balanceGroup');
@@ -278,10 +312,48 @@ void main() {
     expect(details?.account.balanceGroup, AccountBalanceGroup.primary);
   });
 
-  test('backup adapter coverage pins schema v5 tables and persistent columns', () async {
+  test('restores payload v3/schema 5 and clears current budgets', () async {
+    final accountId = await createAccount(
+      sourceFinance,
+      'Simpanan v3',
+      balanceGroup: AccountBalanceGroup.savingsInvestment,
+    );
+    await sourceFinance.addEntry(income(accountId, 250));
+    final current = await sourceStore.exportDocument(
+      createdAtUtc: createdAtUtc,
+    );
+    final legacyJson = (jsonDecode(jsonEncode(current.toJson())) as Map)
+        .cast<String, Object?>();
+    legacyJson['backupVersion'] = 3;
+    legacyJson['databaseSchemaVersion'] = 5;
+    final data = legacyJson['data']! as Map<String, Object?>;
+    data.remove('budgets');
+    final sequences = legacyJson['sequences']! as Map<String, Object?>;
+    sequences.remove('budgets');
+    final legacy = BackupDocument.fromJson(legacyJson);
+
+    await targetBudget.createBudget(
+      BudgetDraft(
+        period: BudgetPeriod.monthly(2026, 9),
+        name: 'Akan dikosongkan',
+        limitAmount: 100,
+        categoryIds: const [10],
+      ),
+    );
+    await targetStore.restoreDocument(legacy);
+
+    expect(await targetDb.select(targetDb.budgets).get(), isEmpty);
+    final details = await targetFinance.getAccountDetails(accountId);
+    expect(
+      details?.account.balanceGroup,
+      AccountBalanceGroup.savingsInvestment,
+    );
+  });
+
+  test('backup adapter coverage pins schema v6 tables and persistent columns', () async {
     expect(
       sourceDb.schemaVersion,
-      5,
+      6,
       reason:
           'A database schema bump must update the backup DTO, encoder, restore, '
           'decoder migration, and coverage guard before this expectation.',
@@ -328,6 +400,18 @@ void main() {
           'created_at',
         },
         'ledger_allocations': {'entry_id', 'position', 'category_id', 'amount'},
+        'budgets': {
+          'id',
+          'period_kind',
+          'start_day',
+          'end_day',
+          'name',
+          'normalized_name',
+          'limit_amount',
+          'created_at',
+          'updated_at',
+        },
+        'budget_categories': {'budget_id', 'category_id'},
       },
       reason:
           'Every persistent table and column must be represented by the backup '
@@ -337,8 +421,8 @@ void main() {
     final document = await sourceStore.exportDocument(
       createdAtUtc: createdAtUtc,
     );
-    expect(document.backupVersion, 3);
-    expect(document.databaseSchemaVersion, 5);
+    expect(document.backupVersion, 4);
+    expect(document.databaseSchemaVersion, 6);
   });
 
   test('export fails closed for an uncovered database schema', () async {
@@ -470,6 +554,14 @@ void main() {
           occurredAt: occurredAt,
         ),
       );
+      await sourceBudget.createBudget(
+        BudgetDraft(
+          period: BudgetPeriod.monthly(2024, 3),
+          name: 'Anggaran masuk',
+          limitAmount: 100,
+          categoryIds: const [10],
+        ),
+      );
       final incoming = await sourceStore.exportDocument(
         createdAtUtc: createdAtUtc,
       );
@@ -480,6 +572,14 @@ void main() {
         balanceGroup: AccountBalanceGroup.savingsInvestment,
       );
       await targetFinance.addEntry(income(oldId, 10, note: 'Harus tetap ada'));
+      await targetBudget.createBudget(
+        BudgetDraft(
+          period: BudgetPeriod.monthly(2024, 2),
+          name: 'Anggaran lama',
+          limitAmount: 75,
+          categoryIds: const [10],
+        ),
+      );
       final before = await targetStore.exportDocument(
         createdAtUtc: createdAtUtc,
       );

@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../core/formatters.dart';
 import '../domain/finance.dart';
 import '../features/backup/views/backup_screen.dart';
+import '../features/budgets/views/budget_detail_screen.dart';
+import '../features/budgets/views/budget_form_screen.dart';
+import '../features/budgets/views/budget_list_screen.dart';
 import '../features/categories/views/category_form_screen.dart';
 import '../features/categories/views/category_list_screen.dart';
 import '../features/ledger/views/account_adjustment_screen.dart';
@@ -24,6 +27,36 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'backup',
             builder: (context, state) => const BackupScreen(),
+          ),
+          GoRoute(
+            path: 'budgets',
+            builder: (context, state) => const BudgetListScreen(),
+            routes: [
+              GoRoute(
+                path: 'new',
+                builder: (context, state) => const BudgetFormScreen(),
+              ),
+              GoRoute(
+                path: ':budgetId',
+                builder: (context, state) => BudgetDetailScreen(
+                  budgetId:
+                      int.tryParse(state.pathParameters['budgetId'] ?? '') ??
+                      -1,
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    builder: (context, state) => BudgetEditScreen(
+                      budgetId:
+                          int.tryParse(
+                            state.pathParameters['budgetId'] ?? '',
+                          ) ??
+                          -1,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           GoRoute(
             path: 'accounts/new',

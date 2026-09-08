@@ -62,7 +62,7 @@ class BackupScreen extends ConsumerWidget {
                 title: 'Buat backup terenkripsi',
                 description:
                     'Menyimpan seluruh rekening, kategori, transaksi, transfer, '
-                    'dan penyesuaian saldo dalam satu file .warasarta.',
+                    'penyesuaian saldo, dan anggaran dalam satu file .warasarta.',
                 buttonKey: const Key('create-backup'),
                 buttonLabel: 'Buat backup',
                 onPressed: state.isBusy
@@ -85,10 +85,9 @@ class BackupScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               const FormMessage(
-                'Backup hanya memuat data yang ada saat file dibuat. Setelah '
-                'fitur seperti anggaran tersedia, backup baru akan memakai '
-                'format baru untuk menyimpannya; backup lama tetap dirancang '
-                'agar dapat dipulihkan dengan data fitur baru kosong.',
+                'Backup hanya memuat data yang ada saat file dibuat. Buat '
+                'backup baru setelah mengubah transaksi, rekening, kategori, '
+                'atau anggaran penting.',
               ),
             ],
           ),
@@ -454,6 +453,26 @@ Future<bool> _showRestoreConfirmation(
                   label: 'Transaksi',
                   value: '${summary.ledgerEntryCount}',
                 ),
+                _PreviewRow(label: 'Anggaran', value: '${summary.budgetCount}'),
+                if (plan.clearsBudgets) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    key: const Key('legacy-backup-budget-warning'),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Backup versi lama ini belum memuat anggaran. Setelah '
+                      'restore, daftar anggaran akan kosong.',
+                      style: TextStyle(
+                        color: colors.onErrorContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 Text(
                   'Seluruh data saat ini akan diganti oleh isi backup. '

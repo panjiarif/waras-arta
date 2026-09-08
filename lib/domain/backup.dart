@@ -1,13 +1,17 @@
+import 'budget.dart';
 import 'finance.dart';
 
 const warasArtaBackupFormat = 'waras-arta-backup';
 const oldestSupportedBackupVersion = 1;
-const currentBackupVersion = 3;
+const currentBackupVersion = 4;
 const maxBackupAccountRecords = 2000;
 const maxBackupCategoryRecords = 20000;
 const maxBackupLedgerRecords = 100000;
 const maxBackupLedgerAllocationRecords = 200000;
 const maxBackupLedgerAllocationsPerEntry = 50;
+const maxBackupBudgetRecords = 10000;
+const maxBackupBudgetCategoryRecords = 100000;
+const maxBackupCategoriesPerBudget = 20000;
 const maxBackupRecordId = 1000000000000;
 const minimumRestoredIdHeadroom = 1000000;
 
@@ -21,10 +25,12 @@ class BackupDocument {
     required Iterable<BackupAccount> accounts,
     required Iterable<BackupCategory> categories,
     required Iterable<BackupLedgerEntry> ledgerEntries,
+    Iterable<BackupBudget> budgets = const [],
   }) : createdAtUtc = createdAtUtc.toUtc(),
        accounts = List.unmodifiable(accounts),
        categories = List.unmodifiable(categories),
-       ledgerEntries = List.unmodifiable(ledgerEntries);
+       ledgerEntries = List.unmodifiable(ledgerEntries),
+       budgets = List.unmodifiable(budgets);
 
   factory BackupDocument.fromJson(Map<String, Object?> json) {
     final format = _readString(json, 'format', 'format');
@@ -44,6 +50,11 @@ class BackupDocument {
         backupVersion: backupVersion,
       ),
       3 => _readBackupDocumentV3(
+        json,
+        format: format,
+        backupVersion: backupVersion,
+      ),
+      4 => _readBackupDocumentV4(
         json,
         format: format,
         backupVersion: backupVersion,
@@ -108,6 +119,7 @@ class BackupDocument {
         _readBackupLedgerEntryV1,
         maximumLength: maxBackupLedgerRecords,
       ),
+      budgets: const [],
     );
     validateBackupDocument(document);
     return document;
@@ -161,6 +173,7 @@ class BackupDocument {
         maximumLength: maxBackupCategoryRecords,
       ),
       ledgerEntries: _readBackupLedgerEntriesV2(data),
+      budgets: const [],
     );
     validateBackupDocument(document);
     return document;
@@ -214,6 +227,62 @@ class BackupDocument {
         maximumLength: maxBackupCategoryRecords,
       ),
       ledgerEntries: _readBackupLedgerEntriesV2(data),
+      budgets: const [],
+    );
+    validateBackupDocument(document);
+    return document;
+  }
+
+  static BackupDocument _readBackupDocumentV4(
+    Map<String, Object?> json, {
+    required String format,
+    required int backupVersion,
+  }) {
+    _requireExactKeys(json, const {
+      'format',
+      'backupVersion',
+      'databaseSchemaVersion',
+      'createdAtUtc',
+      'sequences',
+      'data',
+    }, 'backup');
+    final data = _readObject(json, 'data', 'data');
+    _requireExactKeys(data, const {
+      'accounts',
+      'categories',
+      'ledgerEntries',
+      'budgets',
+    }, 'data');
+    final databaseSchemaVersion = _readInt(
+      json,
+      'databaseSchemaVersion',
+      'databaseSchemaVersion',
+    );
+    _requireBackupVersionSchemaPair(backupVersion, databaseSchemaVersion);
+    final document = BackupDocument(
+      format: format,
+      backupVersion: backupVersion,
+      databaseSchemaVersion: databaseSchemaVersion,
+      createdAtUtc: _readDateTime(json, 'createdAtUtc', 'createdAtUtc'),
+      sequences: BackupSequences.fromJsonV4(
+        _readObject(json, 'sequences', 'sequences'),
+      ),
+      accounts: _readObjectList(
+        data,
+        'accounts',
+        'data.accounts',
+        BackupAccount.fromJson,
+        maximumLength: maxBackupAccountRecords,
+      ),
+      categories: _readObjectList(
+        data,
+        'categories',
+        'data.categories',
+        BackupCategory.fromJson,
+        maximumLength: maxBackupCategoryRecords,
+      ),
+      ledgerEntries: _readBackupLedgerEntriesV2(data),
+      budgets: _readBackupBudgetsV4(data),
     );
     validateBackupDocument(document);
     return document;
@@ -227,6 +296,7 @@ class BackupDocument {
   final List<BackupAccount> accounts;
   final List<BackupCategory> categories;
   final List<BackupLedgerEntry> ledgerEntries;
+  final List<BackupBudget> budgets;
 
   BackupSummary get summary => BackupSummary(
     createdAtUtc: createdAtUtc,
@@ -235,6 +305,7 @@ class BackupDocument {
     categoryCount: categories.length,
     archivedCategoryCount: categories.where((item) => item.isArchived).length,
     ledgerEntryCount: ledgerEntries.length,
+    budgetCount: budgets.length,
   );
 
   Map<String, Object?> toJson() {
@@ -244,6 +315,7 @@ class BackupDocument {
           1 => _writeBackupLedgerEntryV1,
           2 => _writeBackupLedgerEntryV2,
           3 => _writeBackupLedgerEntryV2,
+          4 => _writeBackupLedgerEntryV2,
           _ => throw const BackupFormatException(
             'Versi backup belum didukung oleh aplikasi ini.',
           ),
@@ -253,6 +325,7 @@ class BackupDocument {
           1 => _writeLegacyBackupAccount,
           2 => _writeLegacyBackupAccount,
           3 => (item) => item.toJson(),
+          4 => (item) => item.toJson(),
           _ => throw const BackupFormatException(
             'Versi backup belum didukung oleh aplikasi ini.',
           ),
@@ -262,11 +335,13 @@ class BackupDocument {
       'backupVersion': backupVersion,
       'databaseSchemaVersion': databaseSchemaVersion,
       'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
-      'sequences': sequences.toJson(),
+      'sequences': sequences.toJson(includeBudgets: backupVersion >= 4),
       'data': {
         'accounts': accounts.map(encodeAccount).toList(),
         'categories': categories.map((item) => item.toJson()).toList(),
         'ledgerEntries': ledgerEntries.map(encodeLedgerEntry).toList(),
+        if (backupVersion >= 4)
+          'budgets': budgets.map((item) => item.toJson()).toList(),
       },
     };
   }
@@ -284,6 +359,11 @@ bool canRestoreBackupDocumentToSchema(
     (document.backupVersion == 1 && document.databaseSchemaVersion == 3) ||
         (document.backupVersion == 2 && document.databaseSchemaVersion == 4) ||
         (document.backupVersion == 3 && document.databaseSchemaVersion == 5),
+  6 =>
+    (document.backupVersion == 1 && document.databaseSchemaVersion == 3) ||
+        (document.backupVersion == 2 && document.databaseSchemaVersion == 4) ||
+        (document.backupVersion == 3 && document.databaseSchemaVersion == 5) ||
+        (document.backupVersion == 4 && document.databaseSchemaVersion == 6),
   _ => false,
 };
 
@@ -295,6 +375,7 @@ class BackupSummary {
     required this.categoryCount,
     required this.archivedCategoryCount,
     required this.ledgerEntryCount,
+    this.budgetCount = 0,
   });
 
   final DateTime createdAtUtc;
@@ -303,6 +384,7 @@ class BackupSummary {
   final int categoryCount;
   final int archivedCategoryCount;
   final int ledgerEntryCount;
+  final int budgetCount;
 }
 
 class BackupSequences {
@@ -310,6 +392,7 @@ class BackupSequences {
     required this.accounts,
     required this.categories,
     required this.ledgerEntries,
+    this.budgets = 0,
   });
 
   factory BackupSequences.fromJson(Map<String, Object?> json) {
@@ -322,17 +405,119 @@ class BackupSequences {
       accounts: _readInt(json, 'accounts', 'sequences.accounts'),
       categories: _readInt(json, 'categories', 'sequences.categories'),
       ledgerEntries: _readInt(json, 'ledgerEntries', 'sequences.ledgerEntries'),
+      budgets: 0,
+    );
+  }
+
+  factory BackupSequences.fromJsonV4(Map<String, Object?> json) {
+    _requireExactKeys(json, const {
+      'accounts',
+      'categories',
+      'ledgerEntries',
+      'budgets',
+    }, 'sequences');
+    return BackupSequences(
+      accounts: _readInt(json, 'accounts', 'sequences.accounts'),
+      categories: _readInt(json, 'categories', 'sequences.categories'),
+      ledgerEntries: _readInt(json, 'ledgerEntries', 'sequences.ledgerEntries'),
+      budgets: _readInt(json, 'budgets', 'sequences.budgets'),
     );
   }
 
   final int accounts;
   final int categories;
   final int ledgerEntries;
+  final int budgets;
 
-  Map<String, Object?> toJson() => {
+  Map<String, Object?> toJson({bool includeBudgets = true}) => {
     'accounts': accounts,
     'categories': categories,
     'ledgerEntries': ledgerEntries,
+    if (includeBudgets) 'budgets': budgets,
+  };
+}
+
+class BackupBudget {
+  BackupBudget({
+    required this.id,
+    required this.periodKind,
+    required this.startDay,
+    required this.endDay,
+    required this.name,
+    required this.normalizedName,
+    required this.limitAmount,
+    required Iterable<int> categoryIds,
+    required this.createdAtUtc,
+    required this.updatedAtUtc,
+  }) : categoryIds = List.unmodifiable(categoryIds);
+
+  factory BackupBudget.fromJson(Map<String, Object?> json) {
+    _requireExactKeys(json, const {
+      'id',
+      'periodKind',
+      'startDay',
+      'endDay',
+      'name',
+      'normalizedName',
+      'limitAmount',
+      'categoryIds',
+      'createdAtUtc',
+      'updatedAtUtc',
+    }, 'budget');
+    final rawCategoryIds = _readList(
+      json,
+      'categoryIds',
+      'budget.categoryIds',
+      maximumLength: maxBackupCategoriesPerBudget,
+    );
+    return BackupBudget(
+      id: _readInt(json, 'id', 'budget.id'),
+      periodKind: _readEnum(
+        json,
+        'periodKind',
+        'budget.periodKind',
+        BudgetPeriodKind.values,
+      ),
+      startDay: _readInt(json, 'startDay', 'budget.startDay'),
+      endDay: _readInt(json, 'endDay', 'budget.endDay'),
+      name: _readString(json, 'name', 'budget.name'),
+      normalizedName: _readString(
+        json,
+        'normalizedName',
+        'budget.normalizedName',
+      ),
+      limitAmount: _readInt(json, 'limitAmount', 'budget.limitAmount'),
+      categoryIds: [
+        for (var index = 0; index < rawCategoryIds.length; index++)
+          _asInt(rawCategoryIds[index], 'budget.categoryIds[$index]'),
+      ],
+      createdAtUtc: _readDateTime(json, 'createdAtUtc', 'budget.createdAtUtc'),
+      updatedAtUtc: _readDateTime(json, 'updatedAtUtc', 'budget.updatedAtUtc'),
+    );
+  }
+
+  final int id;
+  final BudgetPeriodKind periodKind;
+  final int startDay;
+  final int endDay;
+  final String name;
+  final String normalizedName;
+  final int limitAmount;
+  final List<int> categoryIds;
+  final DateTime createdAtUtc;
+  final DateTime updatedAtUtc;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'periodKind': periodKind.name,
+    'startDay': startDay,
+    'endDay': endDay,
+    'name': name,
+    'normalizedName': normalizedName,
+    'limitAmount': limitAmount,
+    'categoryIds': categoryIds,
+    'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
+    'updatedAtUtc': updatedAtUtc.toUtc().toIso8601String(),
   };
 }
 
@@ -677,6 +862,30 @@ List<BackupLedgerEntry> _readBackupLedgerEntriesV2(Map<String, Object?> data) {
   return entries;
 }
 
+List<BackupBudget> _readBackupBudgetsV4(Map<String, Object?> data) {
+  final values = _readList(
+    data,
+    'budgets',
+    'data.budgets',
+    maximumLength: maxBackupBudgetRecords,
+  );
+  final budgets = <BackupBudget>[];
+  var categoryCount = 0;
+  for (var index = 0; index < values.length; index++) {
+    final budget = BackupBudget.fromJson(
+      _asObject(values[index], 'data.budgets[$index]'),
+    );
+    categoryCount += budget.categoryIds.length;
+    if (categoryCount > maxBackupBudgetCategoryRecords) {
+      throw const BackupFormatException(
+        'Jumlah kategori anggaran pada backup melebihi batas versi aplikasi ini.',
+      );
+    }
+    budgets.add(budget);
+  }
+  return budgets;
+}
+
 Map<String, Object?> _writeBackupLedgerEntryV1(BackupLedgerEntry entry) => {
   'id': entry.id,
   'kind': entry.kind.name,
@@ -709,7 +918,8 @@ bool _isSupportedBackupVersionSchemaPair(
 ) =>
     (backupVersion == 1 && databaseSchemaVersion == 3) ||
     (backupVersion == 2 && databaseSchemaVersion == 4) ||
-    (backupVersion == 3 && databaseSchemaVersion == 5);
+    (backupVersion == 3 && databaseSchemaVersion == 5) ||
+    (backupVersion == 4 && databaseSchemaVersion == 6);
 
 void _requireBackupVersionSchemaPair(
   int backupVersion,
@@ -745,11 +955,21 @@ void validateBackupDocument(
     0,
     (count, entry) => count + entry.allocations.length,
   );
+  final budgetCategoryCount = document.budgets.fold<int>(
+    0,
+    (count, budget) => count + budget.categoryIds.length,
+  );
   if (document.accounts.length > maxBackupAccountRecords ||
       document.categories.length > maxBackupCategoryRecords ||
       document.ledgerEntries.length > maxBackupLedgerRecords ||
-      allocationCount > maxBackupLedgerAllocationRecords) {
+      allocationCount > maxBackupLedgerAllocationRecords ||
+      document.budgets.length > maxBackupBudgetRecords ||
+      budgetCategoryCount > maxBackupBudgetCategoryRecords) {
     _invalid('Jumlah data pada backup melebihi batas versi aplikasi ini.');
+  }
+  if (document.backupVersion < 4 &&
+      (document.budgets.isNotEmpty || document.sequences.budgets != 0)) {
+    _invalid('Backup versi lama tidak boleh memuat anggaran.');
   }
 
   final accountIds = <int>{};
@@ -835,6 +1055,77 @@ void validateBackupDocument(
   for (final kind in CategoryKind.values) {
     if ((effectiveLeaves[kind] ?? 0) < 1) {
       _invalid('Backup harus memiliki subkategori ${kind.name} yang aktif.');
+    }
+  }
+
+  final budgetIds = <int>{};
+  final uniqueBudgetNames = <String>{};
+  final intervalsByCategory = <int, List<_BackupBudgetInterval>>{};
+  for (final budget in document.budgets) {
+    _positiveId(budget.id, 'ID anggaran');
+    if (!budgetIds.add(budget.id)) _invalid('ID anggaran duplikat.');
+    _canonicalName(budget.name, budget.normalizedName, 'Nama anggaran');
+    if (budget.limitAmount < 1 || budget.limitAmount > maxAmount) {
+      _invalid('Batas anggaran tidak valid.');
+    }
+    try {
+      BudgetPeriod(
+        kind: budget.periodKind,
+        startDay: budget.startDay,
+        endDay: budget.endDay,
+      );
+    } on BudgetValidationException {
+      _invalid('Periode anggaran tidak valid.');
+    }
+    final uniqueNameKey =
+        '${budget.startDay}|${budget.endDay}|${budget.normalizedName}';
+    if (!uniqueBudgetNames.add(uniqueNameKey)) {
+      _invalid('Nama anggaran duplikat pada periode yang sama.');
+    }
+    _utcTimestamp(budget.createdAtUtc, 'Waktu pembuatan anggaran');
+    _utcTimestamp(budget.updatedAtUtc, 'Waktu perubahan anggaran');
+    if (budget.updatedAtUtc.isBefore(budget.createdAtUtc)) {
+      _invalid('Waktu perubahan anggaran tidak valid.');
+    }
+    if (budget.categoryIds.isEmpty ||
+        budget.categoryIds.length > maxBackupCategoriesPerBudget) {
+      _invalid('Anggaran wajib memiliki subkategori pengeluaran.');
+    }
+    var previousCategoryId = 0;
+    for (final categoryId in budget.categoryIds) {
+      if (categoryId <= previousCategoryId) {
+        _invalid('Urutan subkategori anggaran tidak valid.');
+      }
+      previousCategoryId = categoryId;
+      final category = categoriesById[categoryId];
+      if (category == null ||
+          category.parentId == null ||
+          category.kind != CategoryKind.expense) {
+        _invalid('Subkategori anggaran tidak valid.');
+      }
+      intervalsByCategory
+          .putIfAbsent(categoryId, () => [])
+          .add(
+            _BackupBudgetInterval(
+              budgetId: budget.id,
+              startDay: budget.startDay,
+              endDay: budget.endDay,
+            ),
+          );
+    }
+  }
+  for (final intervals in intervalsByCategory.values) {
+    intervals.sort((left, right) {
+      final start = left.startDay.compareTo(right.startDay);
+      if (start != 0) return start;
+      final end = left.endDay.compareTo(right.endDay);
+      if (end != 0) return end;
+      return left.budgetId.compareTo(right.budgetId);
+    });
+    for (var index = 1; index < intervals.length; index++) {
+      if (intervals[index].startDay <= intervals[index - 1].endDay) {
+        _invalid('Subkategori berada pada anggaran yang periodenya beririsan.');
+      }
     }
   }
 
@@ -956,6 +1247,24 @@ void validateBackupDocument(
     'transaksi',
     requireHeadroom: requireSequenceHeadroom,
   );
+  _sequence(
+    document.sequences.budgets,
+    _maxId(budgetIds),
+    'anggaran',
+    requireHeadroom: requireSequenceHeadroom,
+  );
+}
+
+class _BackupBudgetInterval {
+  const _BackupBudgetInterval({
+    required this.budgetId,
+    required this.startDay,
+    required this.endDay,
+  });
+
+  final int budgetId;
+  final int startDay;
+  final int endDay;
 }
 
 class BackupException implements Exception {
@@ -1125,6 +1434,11 @@ String? _readNullableString(
 
 int _readInt(Map<String, Object?> json, String key, String path) {
   final value = json[key];
+  if (value is int) return value;
+  throw BackupFormatException('Field $path tidak valid.');
+}
+
+int _asInt(Object? value, String path) {
   if (value is int) return value;
   throw BackupFormatException('Field $path tidak valid.');
 }

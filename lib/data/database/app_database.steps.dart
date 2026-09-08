@@ -714,11 +714,235 @@ i1.GeneratedColumn<int> _column_22(String aliasedName) =>
       $customConstraints: 'NOT NULL DEFAULT 0 CHECK (balance_group IN (0, 1))',
       defaultValue: const i1.CustomExpression('0'),
     );
+
+final class Schema6 extends i0.VersionedSchema {
+  Schema6({required super.database}) : super(version: 6);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    accounts,
+    categories,
+    ledgerEntries,
+    ledgerAllocations,
+    budgets,
+    budgetCategories,
+  ];
+  late final Shape6 accounts = Shape6(
+    source: i0.VersionedTable(
+      entityName: 'accounts',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'CHECK(type BETWEEN 0 AND 3)',
+        'CHECK(length(trim(name)) BETWEEN 1 AND 80)',
+        'CHECK(length(trim(normalized_name)) > 0)',
+      ],
+      columns: [
+        _column_0,
+        _column_1,
+        _column_2,
+        _column_3,
+        _column_22,
+        _column_9,
+        _column_4,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape1 categories = Shape1(
+    source: i0.VersionedTable(
+      entityName: 'categories',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'CHECK(kind IN (0, 1))',
+        'CHECK(parent_id IS NULL OR parent_id <> id)',
+        'CHECK(length(trim(name)) BETWEEN 1 AND 80)',
+        'CHECK(length(trim(normalized_name)) BETWEEN 1 AND 80)',
+        'CHECK(length(trim(icon_key)) BETWEEN 1 AND 40)',
+        'CHECK(sort_order BETWEEN 0 AND 1000000)',
+        'CHECK(system_key IS NULL OR length(trim(system_key)) BETWEEN 1 AND 80)',
+      ],
+      columns: [
+        _column_0,
+        _column_5,
+        _column_6,
+        _column_1,
+        _column_7,
+        _column_8,
+        _column_9,
+        _column_10,
+        _column_11,
+        _column_4,
+        _column_12,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape4 ledgerEntries = Shape4(
+    source: i0.VersionedTable(
+      entityName: 'ledger_entries',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'CHECK(kind BETWEEN 0 AND 3)',
+        'CHECK((kind IN (0, 1, 2) AND amount BETWEEN 1 AND 999999999999)OR(kind = 3 AND amount BETWEEN -999999999999 AND 999999999999 AND amount <> 0))',
+        'CHECK(occurred_day BETWEEN 20000101 AND 99991231)',
+        'CHECK(length(note) <= 500)',
+        'CHECK((kind IN (0, 1) AND destination_account_id IS NULL)OR(kind = 2 AND destination_account_id IS NOT NULL AND destination_account_id <> account_id)OR(kind = 3 AND destination_account_id IS NULL))',
+      ],
+      columns: [
+        _column_0,
+        _column_6,
+        _column_13,
+        _column_14,
+        _column_15,
+        _column_17,
+        _column_18,
+        _column_4,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape5 ledgerAllocations = Shape5(
+    source: i0.VersionedTable(
+      entityName: 'ledger_allocations',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'PRIMARY KEY(entry_id, position)',
+        'UNIQUE(entry_id, category_id)',
+        'CHECK(position BETWEEN 0 AND 49)',
+        'CHECK(amount BETWEEN 1 AND 999999999999)',
+      ],
+      columns: [_column_19, _column_20, _column_21, _column_15],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape7 budgets = Shape7(
+    source: i0.VersionedTable(
+      entityName: 'budgets',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'CHECK(period_kind BETWEEN 0 AND 2)',
+        'CHECK(start_day BETWEEN 20000101 AND 99991231 AND(CAST(start_day / 100 AS INTEGER) % 100)BETWEEN 1 AND 12 AND(start_day % 100)BETWEEN 1 AND CASE(CAST(start_day / 100 AS INTEGER) % 100)WHEN 1 THEN 31 WHEN 2 THEN CASE WHEN(CAST(start_day / 10000 AS INTEGER) % 400 = 0)OR(CAST(start_day / 10000 AS INTEGER) % 4 = 0 AND CAST(start_day / 10000 AS INTEGER) % 100 <> 0)THEN 29 ELSE 28 END WHEN 3 THEN 31 WHEN 4 THEN 30 WHEN 5 THEN 31 WHEN 6 THEN 30 WHEN 7 THEN 31 WHEN 8 THEN 31 WHEN 9 THEN 30 WHEN 10 THEN 31 WHEN 11 THEN 30 WHEN 12 THEN 31 ELSE 0 END)',
+        'CHECK(end_day BETWEEN 20000101 AND 99991231 AND(CAST(end_day / 100 AS INTEGER) % 100)BETWEEN 1 AND 12 AND(end_day % 100)BETWEEN 1 AND CASE(CAST(end_day / 100 AS INTEGER) % 100)WHEN 1 THEN 31 WHEN 2 THEN CASE WHEN(CAST(end_day / 10000 AS INTEGER) % 400 = 0)OR(CAST(end_day / 10000 AS INTEGER) % 4 = 0 AND CAST(end_day / 10000 AS INTEGER) % 100 <> 0)THEN 29 ELSE 28 END WHEN 3 THEN 31 WHEN 4 THEN 30 WHEN 5 THEN 31 WHEN 6 THEN 30 WHEN 7 THEN 31 WHEN 8 THEN 31 WHEN 9 THEN 30 WHEN 10 THEN 31 WHEN 11 THEN 30 WHEN 12 THEN 31 ELSE 0 END)',
+        'CHECK(start_day <= end_day)',
+        'CHECK((period_kind = 0 AND(start_day % 100)= 1 AND CAST(start_day / 100 AS INTEGER) = CAST(end_day / 100 AS INTEGER) AND(end_day % 100)= CASE(CAST(start_day / 100 AS INTEGER) % 100)WHEN 1 THEN 31 WHEN 2 THEN CASE WHEN(CAST(start_day / 10000 AS INTEGER) % 400 = 0)OR(CAST(start_day / 10000 AS INTEGER) % 4 = 0 AND CAST(start_day / 10000 AS INTEGER) % 100 <> 0)THEN 29 ELSE 28 END WHEN 3 THEN 31 WHEN 4 THEN 30 WHEN 5 THEN 31 WHEN 6 THEN 30 WHEN 7 THEN 31 WHEN 8 THEN 31 WHEN 9 THEN 30 WHEN 10 THEN 31 WHEN 11 THEN 30 WHEN 12 THEN 31 ELSE 0 END)OR(period_kind = 1 AND(start_day % 10000)= 101 AND(end_day % 10000)= 1231 AND CAST(start_day / 10000 AS INTEGER) = CAST(end_day / 10000 AS INTEGER))OR period_kind = 2)',
+        'CHECK(limit_amount BETWEEN 1 AND 999999999999)',
+        'CHECK(length(trim(name)) BETWEEN 1 AND 80)',
+        'CHECK(length(trim(normalized_name)) BETWEEN 1 AND 80)',
+        'CHECK(updated_at >= created_at)',
+      ],
+      columns: [
+        _column_0,
+        _column_23,
+        _column_24,
+        _column_25,
+        _column_1,
+        _column_7,
+        _column_26,
+        _column_4,
+        _column_12,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape8 budgetCategories = Shape8(
+    source: i0.VersionedTable(
+      entityName: 'budget_categories',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(budget_id, category_id)'],
+      columns: [_column_27, _column_21],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+}
+
+class Shape7 extends i0.VersionedTable {
+  Shape7({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<int> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get periodKind =>
+      columnsByName['period_kind']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get startDay =>
+      columnsByName['start_day']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get endDay =>
+      columnsByName['end_day']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get name =>
+      columnsByName['name']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get normalizedName =>
+      columnsByName['normalized_name']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get limitAmount =>
+      columnsByName['limit_amount']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get updatedAt =>
+      columnsByName['updated_at']! as i1.GeneratedColumn<int>;
+}
+
+i1.GeneratedColumn<int> _column_23(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'period_kind',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<int> _column_24(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'start_day',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<int> _column_25(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'end_day',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<int> _column_26(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'limit_amount',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NOT NULL',
+    );
+
+class Shape8 extends i0.VersionedTable {
+  Shape8({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<int> get budgetId =>
+      columnsByName['budget_id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get categoryId =>
+      columnsByName['category_id']! as i1.GeneratedColumn<int>;
+}
+
+i1.GeneratedColumn<int> _column_27(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'budget_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NOT NULL REFERENCES budgets(id)ON DELETE CASCADE',
+    );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
   required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
   required Future<void> Function(i1.Migrator m, Schema5 schema) from4To5,
+  required Future<void> Function(i1.Migrator m, Schema6 schema) from5To6,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -742,6 +966,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from4To5(migrator, schema);
         return 5;
+      case 5:
+        final schema = Schema6(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from5To6(migrator, schema);
+        return 6;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -753,11 +982,13 @@ i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
   required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
   required Future<void> Function(i1.Migrator m, Schema5 schema) from4To5,
+  required Future<void> Function(i1.Migrator m, Schema6 schema) from5To6,
 }) => i0.VersionedSchema.stepByStepHelper(
   step: migrationSteps(
     from1To2: from1To2,
     from2To3: from2To3,
     from3To4: from3To4,
     from4To5: from4To5,
+    from5To6: from5To6,
   ),
 );

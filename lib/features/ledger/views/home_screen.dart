@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
+import '../../budgets/views/active_budget_summary_card.dart';
 import '../../calendar/view_models/calendar_view_model.dart';
 import '../../calendar/views/calendar_view.dart';
 import '../view_models/ledger_view_model.dart';
@@ -113,11 +114,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             tooltip: 'Menu lainnya',
             onSelected: (action) {
               switch (action) {
+                case _HomeMenuAction.budgets:
+                  context.push('/budgets');
                 case _HomeMenuAction.backup:
                   context.push('/backup');
               }
             },
             itemBuilder: (context) => const [
+              PopupMenuItem(
+                key: Key('manage-budgets-menu'),
+                value: _HomeMenuAction.budgets,
+                child: ListTile(
+                  leading: Icon(Icons.savings_outlined),
+                  title: Text('Kelola anggaran'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
               PopupMenuItem(
                 value: _HomeMenuAction.backup,
                 child: ListTile(
@@ -248,6 +260,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ),
         const SizedBox(height: 16),
         _BalanceCard(total: data.primaryBalance, count: primaryAccounts.length),
+        const SizedBox(height: 16),
+        const ActiveBudgetSummaryCard(),
         const SizedBox(height: 24),
       ] else ...[
         Text(
@@ -422,7 +436,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 }
 
-enum _HomeMenuAction { backup }
+enum _HomeMenuAction { budgets, backup }
 
 enum _HomeTab { overview, history, calendar, accounts }
 

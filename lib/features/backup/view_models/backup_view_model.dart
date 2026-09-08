@@ -10,6 +10,7 @@ import '../../../data/backup/encrypted_backup_codec.dart';
 import '../../../domain/backup.dart';
 import '../../../domain/backup_repository.dart';
 import '../../calendar/view_models/calendar_view_model.dart';
+import '../../budgets/view_models/budget_view_model.dart';
 import '../../categories/view_models/category_view_model.dart';
 import '../../ledger/view_models/ledger_view_model.dart';
 
@@ -155,6 +156,11 @@ class BackupController extends Notifier<BackupState> {
       ref.invalidate(categoryTreeProvider);
       ref.invalidate(calendarMonthProvider);
       ref.invalidate(selectedCalendarDayEntriesProvider);
+      ref.invalidate(budgetSnapshotProvider);
+      ref.invalidate(budgetDetailsProvider);
+      ref.invalidate(budgetConflictsProvider);
+      ref.invalidate(activeBudgetSummaryProvider);
+      ref.invalidate(upcomingBudgetSummaryProvider);
       state = const BackupState();
       return BackupActionOutcome.success;
     } catch (error) {

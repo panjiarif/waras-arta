@@ -7,11 +7,14 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:waras_arta/app/app.dart';
 import 'package:waras_arta/app/providers.dart';
+import 'package:waras_arta/domain/budget.dart';
 import 'package:waras_arta/domain/finance.dart';
 import 'package:waras_arta/domain/finance_repository.dart';
 import 'package:waras_arta/features/calendar/view_models/calendar_view_model.dart';
 import 'package:waras_arta/features/ledger/views/category_selection_field.dart';
 import 'package:waras_arta/features/ledger/views/compact_transaction_row.dart';
+
+import 'features/budgets/fake_budget_repository.dart';
 
 void main() {
   setUpAll(() => initializeDateFormatting('id_ID'));
@@ -20,12 +23,16 @@ void main() {
     WidgetTester tester,
     _UiRepository repository, {
     DateTime? today,
+    FakeBudgetRepository? budgetRepository,
   }) async {
+    final budgets = budgetRepository ?? FakeBudgetRepository();
     addTearDown(repository.dispose);
+    addTearDown(budgets.dispose);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           financeRepositoryProvider.overrideWithValue(repository),
+          budgetRepositoryProvider.overrideWithValue(budgets),
           if (today != null) currentDateProvider.overrideWithValue(today),
         ],
         child: const WarasArtaApp(),
@@ -172,6 +179,13 @@ void main() {
   ) async {
     final repository = _UiRepository(withAccounts: true);
     await pumpApp(tester, repository);
+    await tester.scrollUntilVisible(
+      find.text(
+        'Tidak termasuk transfer dan penyesuaian saldo, termasuk saldo awal.',
+      ),
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(
       find.text(
         'Tidak termasuk transfer dan penyesuaian saldo, termasuk saldo awal.',
@@ -1937,6 +1951,237 @@ void main() {
     expect(
       find.text('Catatan panjang untuk menguji kartu pada perangkat sempit.'),
       findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'budget summary, grouped list, filters, and detail fit narrow enlarged text',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final active = fakeBudgetProgress(
+        id: 1,
+        name: 'Kebutuhan keluarga harian dengan nama sangat panjang',
+        limitAmount: maxAmount,
+        spentAmount: maxAmount,
+        categories: [
+          fakeBudgetCategory(
+            name: 'Belanja kebutuhan rumah tangga sangat panjang',
+          ),
+        ],
+      );
+      final upcoming = fakeBudgetProgress(
+        id: 2,
+        name: 'Rencana tahunan',
+        period: BudgetPeriod.yearly(2027),
+      );
+      final budgets = FakeBudgetRepository(items: [active, upcoming]);
+      await pumpApp(
+        tester,
+        _UiRepository(withAccounts: true),
+        today: DateTime(2026, 2, 10),
+        budgetRepository: budgets,
+      );
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('active-budget-summary')),
+        160,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-summary-item-1')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const Key('more-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('manage-budgets-menu')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('budget-status-filter')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('budget-group-20260201-20260228')),
+        findsOneWidget,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('budget-name-1')),
+        160,
+        scrollable: find.descendant(
+          of: find.byKey(const PageStorageKey('budget-list')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('budget-name-1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('budget-detail-progress')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('budget-detail-category-10')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('budget-status-upcoming')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('budget-card-2')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('budget-kind-filter')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ListTile>(find.byKey(const ValueKey('budget-kind-all')))
+            .selected,
+        isTrue,
+      );
+      await tester.tap(find.byKey(const ValueKey('budget-kind-monthly')));
+      await tester.pumpAndSettle();
+      expect(find.text('Tidak ada hasil untuk filter ini'), findsOneWidget);
+      expect(
+        find.byKey(const Key('budget-reset-filters'), skipOffstage: false),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('budget-kind-filter')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ListTile>(find.byKey(const ValueKey('budget-kind-monthly')))
+            .selected,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'budget create, edit, and delete keep transactions out of scope',
+    (tester) async {
+      final budgets = FakeBudgetRepository();
+      await pumpApp(
+        tester,
+        _UiRepository(withAccounts: true),
+        today: DateTime(2026, 2, 10),
+        budgetRepository: budgets,
+      );
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('create-budget-from-summary')),
+        180,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.byKey(const Key('create-budget-from-summary')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('budget-name')),
+        'Makan kantor',
+      );
+      await tester.enterText(find.byKey(const Key('budget-limit')), '750000');
+      await tester.ensureVisible(
+        find.byKey(const Key('budget-category-picker')),
+      );
+      await tester.tap(find.byKey(const Key('budget-category-picker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('budget-category-10')));
+      await tester.tap(find.byKey(const Key('budget-categories-done')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('save-budget')));
+      await tester.tap(find.byKey(const Key('save-budget')));
+      await tester.pumpAndSettle();
+
+      expect(budgets.createdDraft?.name, 'Makan kantor');
+      expect(budgets.createdDraft?.limitAmount, 750000);
+      expect(budgets.createdDraft?.period, BudgetPeriod.monthly(2026, 2));
+      expect(budgets.createdDraft?.categoryIds, {10});
+
+      await tester.tap(find.byKey(const Key('more-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('manage-budgets-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-budget-1')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('open-budget-edit')));
+      await tester.tap(find.byKey(const Key('open-budget-edit')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('budget-name')),
+        'Makan kantor revisi',
+      );
+      await tester.ensureVisible(find.byKey(const Key('save-budget')));
+      await tester.tap(find.byKey(const Key('save-budget')));
+      await tester.pumpAndSettle();
+      expect(budgets.updatedId, 1);
+      expect(budgets.updatedDraft?.name, 'Makan kantor revisi');
+      expect(find.text('Makan kantor revisi'), findsWidgets);
+
+      await tester.ensureVisible(find.byKey(const Key('delete-budget')));
+      await tester.tap(find.byKey(const Key('delete-budget')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining(
+          'tidak menghapus kategori, rekening, atau transaksi',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('confirm-delete-budget')));
+      await tester.pumpAndSettle();
+      expect(budgets.deletedId, 1);
+      expect(find.byKey(const Key('budget-empty-title')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('selected category conflict blocks a budget update', (
+    tester,
+  ) async {
+    final progress = fakeBudgetProgress(id: 7);
+    final budgets = FakeBudgetRepository(
+      items: [progress],
+      conflicts: {
+        10: [
+          BudgetConflict(
+            categoryId: 10,
+            budgetId: 99,
+            budgetName: 'Anggaran lain',
+            period: BudgetPeriod.monthly(2026, 2),
+          ),
+        ],
+      },
+    );
+    await pumpApp(
+      tester,
+      _UiRepository(withAccounts: true),
+      today: DateTime(2026, 2, 10),
+      budgetRepository: budgets,
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('budget-summary-item-7')),
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.byKey(const ValueKey('budget-summary-item-7')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('edit-budget')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('kategori bertabrakan'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const Key('save-budget')));
+    await tester.tap(find.byKey(const Key('save-budget')));
+    await tester.pump();
+    expect(budgets.updatedDraft, isNull);
+    expect(
+      find.text('Lepaskan kategori yang bertabrakan sebelum menyimpan.'),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });

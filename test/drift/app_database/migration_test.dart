@@ -13,6 +13,7 @@ import 'generated/schema_v2.dart' as v2;
 import 'generated/schema_v3.dart' as v3;
 import 'generated/schema_v4.dart' as v4;
 import 'generated/schema_v5.dart' as v5;
+import 'generated/schema_v6.dart' as v6;
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -1158,14 +1159,14 @@ void main() {
   });
 
   test(
-    'fresh v5 enforces row rules and exposes cross-row verification',
+    'fresh v6 enforces row rules and exposes cross-row verification',
     () async {
       final db = AppDatabase(NativeDatabase.memory());
       try {
         final version = await db
             .customSelect('PRAGMA user_version')
             .getSingle();
-        expect(version.read<int>('user_version'), 5);
+        expect(version.read<int>('user_version'), 6);
         await db.customStatement('''
         INSERT INTO accounts
           (id, name, normalized_name, type, is_archived, created_at)
@@ -1293,6 +1294,283 @@ void main() {
       }
     },
   );
+
+  test('fresh v6 enforces budget periods, mappings, and relations', () async {
+    final db = AppDatabase(NativeDatabase.memory());
+    try {
+      final version = await db.customSelect('PRAGMA user_version').getSingle();
+      expect(version.read<int>('user_version'), 6);
+
+      Future<void> insertBudget({
+        required int id,
+        required int periodKind,
+        required int startDay,
+        required int endDay,
+        required String name,
+        int limitAmount = 100000,
+        int createdAt = 1700000000000,
+        int updatedAt = 1700000000000,
+      }) => db.customStatement(
+        '''
+          INSERT INTO budgets (
+            id, period_kind, start_day, end_day, name, normalized_name,
+            limit_amount, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        [
+          id,
+          periodKind,
+          startDay,
+          endDay,
+          name,
+          name.toLowerCase(),
+          limitAmount,
+          createdAt,
+          updatedAt,
+        ],
+      );
+
+      await insertBudget(
+        id: 1,
+        periodKind: 0,
+        startDay: 20260101,
+        endDay: 20260131,
+        name: 'Makan Januari',
+      );
+      await insertBudget(
+        id: 2,
+        periodKind: 0,
+        startDay: 20260201,
+        endDay: 20260228,
+        name: 'Makan Februari',
+      );
+      await insertBudget(
+        id: 3,
+        periodKind: 2,
+        startDay: 20260131,
+        endDay: 20260202,
+        name: 'Akhir pekan',
+      );
+      await insertBudget(
+        id: 4,
+        periodKind: 1,
+        startDay: 20260101,
+        endDay: 20261231,
+        name: 'Kesehatan tahunan',
+      );
+      await insertBudget(
+        id: 5,
+        periodKind: 2,
+        startDay: 20000229,
+        endDay: 20000229,
+        name: 'Hari kabisat',
+      );
+      await insertBudget(
+        id: 6,
+        periodKind: 2,
+        startDay: 99991231,
+        endDay: 99991231,
+        name: 'Batas tanggal',
+      );
+
+      await expectLater(
+        insertBudget(
+          id: 20,
+          periodKind: 2,
+          startDay: 20250229,
+          endDay: 20250229,
+          name: 'Tanggal semu',
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertBudget(
+          id: 21,
+          periodKind: 2,
+          startDay: 21000229,
+          endDay: 21000229,
+          name: 'Bukan kabisat',
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertBudget(
+          id: 22,
+          periodKind: 2,
+          startDay: 20260431,
+          endDay: 20260431,
+          name: 'Hari April semu',
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertBudget(
+          id: 23,
+          periodKind: 3,
+          startDay: 20260301,
+          endDay: 20260301,
+          name: 'Jenis asing',
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertBudget(
+          id: 24,
+          periodKind: 0,
+          startDay: 20260102,
+          endDay: 20260131,
+          name: 'Bulan tidak canonical',
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertBudget(
+          id: 25,
+          periodKind: 1,
+          startDay: 20260102,
+          endDay: 20261231,
+          name: 'Tahun tidak canonical',
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertBudget(
+          id: 26,
+          periodKind: 2,
+          startDay: 20260302,
+          endDay: 20260301,
+          name: 'Rentang terbalik',
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertBudget(
+          id: 27,
+          periodKind: 2,
+          startDay: 20260301,
+          endDay: 20260301,
+          name: 'Batas nol',
+          limitAmount: 0,
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertBudget(
+          id: 28,
+          periodKind: 2,
+          startDay: 20260101,
+          endDay: 20260131,
+          name: 'MAKAN JANUARI',
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertBudget(
+          id: 29,
+          periodKind: 2,
+          startDay: 20260301,
+          endDay: 20260301,
+          name: 'Jam mundur',
+          createdAt: 1700000000001,
+          updatedAt: 1700000000000,
+        ),
+        throwsA(anything),
+      );
+
+      await db.customStatement('''
+        INSERT INTO budget_categories (budget_id, category_id)
+        VALUES (1, 10), (2, 10), (3, 12), (4, 14), (5, 16), (6, 18)
+      ''');
+      await db.customStatement('''
+        UPDATE budget_categories
+        SET budget_id = budget_id, category_id = category_id
+        WHERE budget_id = 1 AND category_id = 10
+      ''');
+
+      await expectLater(
+        db.customStatement('''
+          INSERT INTO budget_categories (budget_id, category_id)
+          VALUES (3, 10)
+        '''),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement('''
+          UPDATE budget_categories SET category_id = 10
+          WHERE budget_id = 3 AND category_id = 12
+        '''),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement('''
+          UPDATE budget_categories SET budget_id = 3
+          WHERE budget_id = 2 AND category_id = 10
+        '''),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement('''
+          UPDATE budget_categories SET category_id = 9
+          WHERE budget_id = 3 AND category_id = 12
+        '''),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement('''
+          INSERT INTO budget_categories (budget_id, category_id)
+          VALUES (3, 9)
+        '''),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement('''
+          INSERT INTO budget_categories (budget_id, category_id)
+          VALUES (3, 2)
+        '''),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement(
+          'UPDATE budgets SET end_day = 20260203 WHERE id = 3',
+        ),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement('DELETE FROM categories WHERE id = 10'),
+        throwsA(anything),
+      );
+
+      await db.verifyBudgetIntegrity();
+      await insertBudget(
+        id: 7,
+        periodKind: 2,
+        startDay: 20260301,
+        endDay: 20260301,
+        name: 'Tanpa kategori',
+      );
+      await expectLater(
+        db.verifyBudgetIntegrity(budgetId: 7),
+        throwsA(isA<StateError>()),
+      );
+      await db.customStatement('DELETE FROM budgets WHERE id = 7');
+
+      await db.customStatement('DELETE FROM budgets WHERE id = 1');
+      final cascade = await db.customSelect('''
+        SELECT COUNT(*) AS amount
+        FROM budget_categories
+        WHERE budget_id = 1
+      ''').getSingle();
+      expect(cascade.read<int>('amount'), 0);
+      final preservedCategory = await db.customSelect('''
+        SELECT COUNT(*) AS amount FROM categories WHERE id = 10
+      ''').getSingle();
+      expect(preservedCategory.read<int>('amount'), 1);
+      await db.verifyBudgetIntegrity();
+      expect(await db.customSelect('PRAGMA foreign_key_check').get(), isEmpty);
+    } finally {
+      await db.close();
+    }
+  });
 
   test('migration from v4 to v5 preserves account ledger data and defaults balance groups', () async {
     const accountsV4 = [
@@ -1475,6 +1753,171 @@ void main() {
             SELECT balance_group FROM accounts WHERE id = 1
           ''').getSingle();
         expect(unchanged.read<int>('balance_group'), 0);
+        expect(
+          await newDb.customSelect('PRAGMA foreign_key_check').get(),
+          isEmpty,
+        );
+      },
+    );
+  });
+
+  test('migration from v5 to v6 preserves existing finance data', () async {
+    const accountsV5 = [
+      v5.AccountsData(
+        id: 1,
+        name: 'Dana darurat',
+        normalizedName: 'dana darurat',
+        type: 1,
+        balanceGroup: 1,
+        isArchived: 0,
+        createdAt: 1700000000000,
+      ),
+    ];
+    const categoriesV5 = [
+      v5.CategoriesData(
+        id: 9,
+        kind: 1,
+        name: 'Makan & minum',
+        normalizedName: 'makan & minum',
+        iconKey: 'restaurant',
+        isArchived: 0,
+        sortOrder: 0,
+        systemKey: 'expense.food_drink',
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+      ),
+      v5.CategoriesData(
+        id: 10,
+        parentId: 9,
+        kind: 1,
+        name: 'Umum',
+        normalizedName: 'umum',
+        iconKey: 'restaurant',
+        isArchived: 1,
+        sortOrder: 0,
+        systemKey: 'expense.food_drink.general',
+        createdAt: 1700000000001,
+        updatedAt: 1700000000001,
+      ),
+    ];
+    const entriesV5 = [
+      v5.LedgerEntriesData(
+        id: 7,
+        kind: 1,
+        accountId: 1,
+        amount: 17500,
+        note: 'makan lama',
+        occurredDay: 20260908,
+        createdAt: 1700000000010,
+      ),
+    ];
+    const allocationsV5 = [
+      v5.LedgerAllocationsData(
+        entryId: 7,
+        position: 0,
+        categoryId: 10,
+        amount: 17500,
+      ),
+    ];
+
+    await verifier.testWithDataIntegrity(
+      oldVersion: 5,
+      newVersion: 6,
+      createOld: v5.DatabaseAtV5.new,
+      createNew: v6.DatabaseAtV6.new,
+      openTestedDatabase: AppDatabase.new,
+      createItems: (batch, oldDb) {
+        batch.insertAll(oldDb.accounts, accountsV5);
+        batch.insertAll(oldDb.categories, categoriesV5);
+        batch.insertAll(oldDb.ledgerEntries, entriesV5);
+        batch.insertAll(oldDb.ledgerAllocations, allocationsV5);
+      },
+      validateItems: (newDb) async {
+        expect(await newDb.select(newDb.accounts).get(), const [
+          v6.AccountsData(
+            id: 1,
+            name: 'Dana darurat',
+            normalizedName: 'dana darurat',
+            type: 1,
+            balanceGroup: 1,
+            isArchived: 0,
+            createdAt: 1700000000000,
+          ),
+        ]);
+        expect(await newDb.select(newDb.categories).get(), const [
+          v6.CategoriesData(
+            id: 9,
+            kind: 1,
+            name: 'Makan & minum',
+            normalizedName: 'makan & minum',
+            iconKey: 'restaurant',
+            isArchived: 0,
+            sortOrder: 0,
+            systemKey: 'expense.food_drink',
+            createdAt: 1700000000000,
+            updatedAt: 1700000000000,
+          ),
+          v6.CategoriesData(
+            id: 10,
+            parentId: 9,
+            kind: 1,
+            name: 'Umum',
+            normalizedName: 'umum',
+            iconKey: 'restaurant',
+            isArchived: 1,
+            sortOrder: 0,
+            systemKey: 'expense.food_drink.general',
+            createdAt: 1700000000001,
+            updatedAt: 1700000000001,
+          ),
+        ]);
+        expect(await newDb.select(newDb.ledgerEntries).get(), const [
+          v6.LedgerEntriesData(
+            id: 7,
+            kind: 1,
+            accountId: 1,
+            amount: 17500,
+            note: 'makan lama',
+            occurredDay: 20260908,
+            createdAt: 1700000000010,
+          ),
+        ]);
+        expect(await newDb.select(newDb.ledgerAllocations).get(), const [
+          v6.LedgerAllocationsData(
+            entryId: 7,
+            position: 0,
+            categoryId: 10,
+            amount: 17500,
+          ),
+        ]);
+        expect(await newDb.select(newDb.budgets).get(), isEmpty);
+        expect(await newDb.select(newDb.budgetCategories).get(), isEmpty);
+
+        final extras = await newDb.customSelect('''
+          SELECT name
+          FROM sqlite_schema
+          WHERE name IN (
+            'budgets_unique_period_name',
+            'budgets_kind_period_order',
+            'budget_categories_category_budget',
+            'budget_categories_validate_insert',
+            'budget_categories_validate_update',
+            'budget_categories_overlap_insert',
+            'budget_categories_overlap_update',
+            'budgets_immutable_period'
+          )
+          ORDER BY name
+        ''').get();
+        expect(extras.map((row) => row.read<String>('name')).toSet(), {
+          'budgets_unique_period_name',
+          'budgets_kind_period_order',
+          'budget_categories_category_budget',
+          'budget_categories_validate_insert',
+          'budget_categories_validate_update',
+          'budget_categories_overlap_insert',
+          'budget_categories_overlap_update',
+          'budgets_immutable_period',
+        });
         expect(
           await newDb.customSelect('PRAGMA foreign_key_check').get(),
           isEmpty,

@@ -118,6 +118,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('restore preview warns when a legacy backup clears budgets', (
+    tester,
+  ) async {
+    final operations = _FakeBackupOperations(
+      document: _backupDocument(backupVersion: 3, databaseSchemaVersion: 5),
+    );
+    final files = _FakeBackupFileGateway(
+      picked: PickedBackupFile(
+        name: 'backup-lama.warasarta',
+        bytes: Uint8List.fromList([4, 5, 6]),
+      ),
+    );
+    await _pumpBackupScreen(tester, operations: operations, files: files);
+
+    await tester.ensureVisible(find.byKey(const Key('restore-backup')));
+    await tester.tap(find.byKey(const Key('restore-backup')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('backup-password')),
+      'kalimat-rahasia',
+    );
+    await tester.tap(find.byKey(const Key('submit-backup-password')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('legacy-backup-budget-warning')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('daftar anggaran akan kosong'), findsOneWidget);
+  });
+
   testWidgets('canceling safety backup leaves current data untouched', (
     tester,
   ) async {
@@ -339,7 +370,11 @@ Future<GoRouter> _pumpBackupScreen(
 }
 
 class _FakeBackupOperations implements BackupOperations {
-  _FakeBackupOperations({this.createGate, this.inspectError});
+  _FakeBackupOperations({
+    this.createGate,
+    this.inspectError,
+    BackupDocument? document,
+  }) : document = document ?? _backupDocument();
 
   final Completer<void>? createGate;
   final Object? inspectError;
@@ -348,7 +383,7 @@ class _FakeBackupOperations implements BackupOperations {
   int restoreCount = 0;
   String? lastPassword;
 
-  final BackupDocument document = _backupDocument();
+  final BackupDocument document;
 
   @override
   Future<CreatedBackup> create({
@@ -408,10 +443,14 @@ class _FakeBackupFileGateway implements BackupFileGateway {
   }
 }
 
-BackupDocument _backupDocument() {
+BackupDocument _backupDocument({
+  int backupVersion = currentBackupVersion,
+  int databaseSchemaVersion = 6,
+}) {
   final createdAt = DateTime.utc(2026, 9, 6, 7, 30);
   return BackupDocument(
-    databaseSchemaVersion: 5,
+    backupVersion: backupVersion,
+    databaseSchemaVersion: databaseSchemaVersion,
     createdAtUtc: createdAt,
     sequences: const BackupSequences(
       accounts: 1,

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:waras_arta/data/backup/encrypted_backup_codec.dart';
 import 'package:waras_arta/domain/backup.dart';
+import 'package:waras_arta/domain/budget.dart';
 import 'package:waras_arta/domain/finance.dart';
 
 void main() {
@@ -25,13 +26,14 @@ void main() {
       final decrypted = await codec.decrypt(encrypted, password: password);
 
       expect(decrypted.toJson(), original.toJson());
-      expect(decrypted.backupVersion, 3);
-      expect(decrypted.databaseSchemaVersion, 5);
+      expect(decrypted.backupVersion, 4);
+      expect(decrypted.databaseSchemaVersion, 6);
       expect(
         decrypted.accounts.single.balanceGroup,
         AccountBalanceGroup.savingsInvestment,
       );
       expect(decrypted.ledgerEntries.single.allocations, hasLength(2));
+      expect(decrypted.budgets.single.categoryIds, [4]);
     });
 
     test('decodes strict payload v1 into the current allocation model', () {
@@ -47,6 +49,8 @@ void main() {
       expect(decoded.ledgerEntries[0].allocations.single.amount, 100);
       expect(decoded.ledgerEntries[1].allocations, isEmpty);
       expect(decoded.ledgerEntries[2].allocations, isEmpty);
+      expect(decoded.budgets, isEmpty);
+      expect(decoded.sequences.budgets, 0);
       expect(decoded.toJson(), legacyJson);
     });
 
@@ -58,6 +62,7 @@ void main() {
       expect(decoded.backupVersion, 2);
       expect(decoded.databaseSchemaVersion, 4);
       expect(decoded.accounts.single.balanceGroup, AccountBalanceGroup.primary);
+      expect(decoded.budgets, isEmpty);
       expect(decoded.toJson(), legacyJson);
     });
 
@@ -123,15 +128,18 @@ void main() {
       expect(canRestoreBackupDocumentToSchema(legacy, 3), isTrue);
       expect(canRestoreBackupDocumentToSchema(legacy, 4), isTrue);
       expect(canRestoreBackupDocumentToSchema(legacy, 5), isTrue);
+      expect(canRestoreBackupDocumentToSchema(legacy, 6), isTrue);
       expect(canRestoreBackupDocumentToSchema(allocationLegacy, 3), isFalse);
       expect(canRestoreBackupDocumentToSchema(allocationLegacy, 4), isTrue);
       expect(canRestoreBackupDocumentToSchema(allocationLegacy, 5), isTrue);
+      expect(canRestoreBackupDocumentToSchema(allocationLegacy, 6), isTrue);
       expect(canRestoreBackupDocumentToSchema(current, 3), isFalse);
       expect(canRestoreBackupDocumentToSchema(current, 4), isFalse);
-      expect(canRestoreBackupDocumentToSchema(current, 5), isTrue);
+      expect(canRestoreBackupDocumentToSchema(current, 5), isFalse);
+      expect(canRestoreBackupDocumentToSchema(current, 6), isTrue);
     });
 
-    test('keeps v1 and v3 ledger shapes strict and separate', () {
+    test('keeps v1 and v4 ledger shapes strict and separate', () {
       final legacy = _mutableJson(_legacyV1Json());
       final legacyData = legacy['data']! as Map<String, Object?>;
       final legacyEntries = legacyData['ledgerEntries']! as List<Object?>;
@@ -214,9 +222,65 @@ void main() {
       expect(split - single, 128);
     });
 
+    test('payload v4 rejects overlapping budgets for one category', () {
+      final json = _mutableJson(_backupDocument().toJson());
+      final sequences = json['sequences']! as Map<String, Object?>;
+      sequences['budgets'] = 2;
+      final data = json['data']! as Map<String, Object?>;
+      final budgets = data['budgets']! as List<Object?>;
+      final overlapping =
+          Map<String, Object?>.from(budgets.single! as Map<String, Object?>)
+            ..['id'] = 2
+            ..['periodKind'] = BudgetPeriodKind.custom.name
+            ..['startDay'] = 20260915
+            ..['endDay'] = 20261015
+            ..['name'] = 'Makan lintas bulan'
+            ..['normalizedName'] = 'makan lintas bulan';
+      budgets.add(overlapping);
+
+      expect(
+        () => BackupDocument.fromJson(json),
+        throwsA(
+          isA<BackupValidationException>().having(
+            (error) => error.message,
+            'message',
+            contains('beririsan'),
+          ),
+        ),
+      );
+    });
+
+    test('payload v4 validates period shape and sorted category IDs', () {
+      Map<String, Object?> firstBudget(Map<String, Object?> document) {
+        final data = document['data']! as Map<String, Object?>;
+        final budgets = data['budgets']! as List<Object?>;
+        return budgets.single! as Map<String, Object?>;
+      }
+
+      final nonCanonicalMonth = _mutableJson(_backupDocument().toJson());
+      firstBudget(nonCanonicalMonth)['startDay'] = 20260902;
+
+      final duplicateCategory = _mutableJson(_backupDocument().toJson());
+      firstBudget(duplicateCategory)['categoryIds'] = <Object?>[4, 4];
+
+      final incomeCategory = _mutableJson(_backupDocument().toJson());
+      firstBudget(incomeCategory)['categoryIds'] = <Object?>[2];
+
+      for (final invalid in [
+        nonCanonicalMonth,
+        duplicateCategory,
+        incomeCategory,
+      ]) {
+        expect(
+          () => BackupDocument.fromJson(invalid),
+          throwsA(isA<BackupValidationException>()),
+        );
+      }
+    });
+
     test('rejects a document above the total allocation record limit', () {
       final oversized = BackupDocument(
-        databaseSchemaVersion: 5,
+        databaseSchemaVersion: 6,
         createdAtUtc: DateTime.utc(2026, 9, 6),
         sequences: const BackupSequences(
           accounts: 0,
@@ -579,7 +643,7 @@ void main() {
     });
 
     test('v1 rejects unknown semantic data instead of dropping it', () {
-      final json = _backupDocument().toJson();
+      final json = _legacyV1Json();
       final data = json['data']! as Map<String, Object?>;
       data['budgets'] = <Map<String, Object?>>[];
 
@@ -778,6 +842,9 @@ Map<String, Object?> _legacyV2Json() {
   json['backupVersion'] = 2;
   json['databaseSchemaVersion'] = 4;
   final data = json['data']! as Map<String, Object?>;
+  data.remove('budgets');
+  final sequences = json['sequences']! as Map<String, Object?>;
+  sequences.remove('budgets');
   final accounts = data['accounts']! as List<Object?>;
   for (final value in accounts) {
     (value as Map<String, Object?>).remove('balanceGroup');
@@ -787,7 +854,7 @@ Map<String, Object?> _legacyV2Json() {
 
 BackupDocument _backupDocument({
   int backupVersion = currentBackupVersion,
-  int databaseSchemaVersion = 5,
+  int databaseSchemaVersion = 6,
   bool split = true,
 }) {
   final createdAt = DateTime.utc(2026, 9, 5, 4, 30);
@@ -799,6 +866,7 @@ BackupDocument _backupDocument({
       accounts: 1,
       categories: 5,
       ledgerEntries: 1,
+      budgets: 1,
     ),
     accounts: [
       BackupAccount(
@@ -908,6 +976,20 @@ BackupDocument _backupDocument({
         note: 'PIN bank 9876',
         occurredDay: 20260905,
         createdAtUtc: createdAt,
+      ),
+    ],
+    budgets: [
+      BackupBudget(
+        id: 1,
+        periodKind: BudgetPeriodKind.monthly,
+        startDay: 20260901,
+        endDay: 20260930,
+        name: 'Makan September',
+        normalizedName: 'makan september',
+        limitAmount: 500000,
+        categoryIds: const [4],
+        createdAtUtc: createdAt,
+        updatedAtUtc: createdAt,
       ),
     ],
   );

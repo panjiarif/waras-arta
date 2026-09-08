@@ -17,7 +17,7 @@ void main() {
       () async {
         final document = _backupDocument(createdAtUtc: now);
         final store = _FakeBackupDataStore(
-          databaseSchemaVersion: 5,
+          databaseSchemaVersion: 6,
           documentToExport: document,
         );
         final codec = _testCodec();
@@ -34,6 +34,7 @@ void main() {
         expect(created.summary.accountCount, 1);
         expect(created.summary.categoryCount, 4);
         expect(created.summary.ledgerEntryCount, 0);
+        expect(created.summary.budgetCount, 0);
         expect(created.bytes, isNotEmpty);
         expect(
           (await codec.decrypt(created.bytes, password: password)).toJson(),
@@ -47,7 +48,7 @@ void main() {
       () async {
         final document = _backupDocument(createdAtUtc: now);
         final store = _FakeBackupDataStore(
-          databaseSchemaVersion: 5,
+          databaseSchemaVersion: 6,
           documentToExport: document,
         );
         final codec = _testCodec();
@@ -59,19 +60,20 @@ void main() {
 
         expect(plan.summary.accountCount, 1);
         expect(plan.summary.categoryCount, 4);
+        expect(plan.clearsBudgets, isFalse);
         expect(store.restoreCalls, 1);
         expect(store.lastRestoredDocument?.toJson(), document.toJson());
       },
     );
 
-    test('inspect accepts a v1/schema 3 backup on target schema 5', () async {
+    test('inspect accepts a v1/schema 3 backup on target schema 6', () async {
       final document = _backupDocument(
         backupVersion: 1,
         databaseSchemaVersion: 3,
         createdAtUtc: now,
       );
       final store = _FakeBackupDataStore(
-        databaseSchemaVersion: 5,
+        databaseSchemaVersion: 6,
         documentToExport: document,
       );
       final codec = _testCodec();
@@ -83,10 +85,11 @@ void main() {
 
       expect(plan.document.backupVersion, 1);
       expect(plan.document.databaseSchemaVersion, 3);
+      expect(plan.clearsBudgets, isTrue);
       expect(store.restoreCalls, 1);
     });
 
-    test('inspect rejects a valid v3 backup on target schema 4', () async {
+    test('inspect rejects a valid v4 backup on target schema 4', () async {
       final document = _backupDocument(createdAtUtc: now);
       final store = _FakeBackupDataStore(
         databaseSchemaVersion: 4,
@@ -176,7 +179,7 @@ EncryptedBackupCodec _testCodec() {
 
 BackupDocument _backupDocument({
   int backupVersion = currentBackupVersion,
-  int databaseSchemaVersion = 5,
+  int databaseSchemaVersion = 6,
   required DateTime createdAtUtc,
 }) {
   final rowCreatedAt = DateTime.utc(2026, 9, 5, 4, 30);

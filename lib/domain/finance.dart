@@ -1,4 +1,5 @@
 const maxAmount = 999999999999;
+const maxEntryAllocations = 50;
 
 enum AccountType { cash, bank, eWallet, other }
 
@@ -161,38 +162,65 @@ class AccountDetails {
   bool get canDelete => ledgerEntryCount == 0;
 }
 
+class FinanceEntryAllocation {
+  const FinanceEntryAllocation({
+    required this.position,
+    required this.categoryId,
+    required this.amount,
+    required this.categoryName,
+    required this.parentCategoryName,
+    required this.categoryIconKey,
+    required this.categoryArchived,
+  });
+
+  final int position;
+  final int categoryId;
+  final int amount;
+  final String categoryName;
+  final String parentCategoryName;
+  final String categoryIconKey;
+  final bool categoryArchived;
+}
+
 class FinanceEntry {
-  const FinanceEntry({
+  FinanceEntry({
     required this.id,
     required this.kind,
     required this.accountId,
     this.destinationAccountId,
     required this.amount,
-    this.categoryId,
-    this.categoryName,
-    this.parentCategoryName,
-    this.categoryIconKey,
-    this.categoryArchived = false,
+    Iterable<FinanceEntryAllocation> allocations = const [],
     required this.note,
     required this.occurredAt,
     required this.createdAt,
-  });
+  }) : allocations = List.unmodifiable(allocations);
 
   final int id;
   final EntryKind kind;
   final int accountId;
   final int? destinationAccountId;
+
+  /// The canonical header total. For income and expense entries this equals
+  /// the sum of [allocations].
   final int amount;
-  final int? categoryId;
-  final String? categoryName;
-  final String? parentCategoryName;
-  final String? categoryIconKey;
-  final bool categoryArchived;
+  final List<FinanceEntryAllocation> allocations;
   final String note;
 
   /// A civil date (year/month/day), independent of entry creation time.
   final DateTime occurredAt;
   final DateTime createdAt;
+
+  FinanceEntryAllocation? get singleAllocation =>
+      allocations.length == 1 ? allocations.single : null;
+
+  // Transitional accessors for the current single-category presentation.
+  // They intentionally return null/false for split entries instead of
+  // pretending that the first allocation represents the whole transaction.
+  int? get categoryId => singleAllocation?.categoryId;
+  String? get categoryName => singleAllocation?.categoryName;
+  String? get parentCategoryName => singleAllocation?.parentCategoryName;
+  String? get categoryIconKey => singleAllocation?.categoryIconKey;
+  bool get categoryArchived => singleAllocation?.categoryArchived ?? false;
 }
 
 class FinanceSnapshot {
@@ -305,24 +333,99 @@ class AccountBalanceAdjustmentDraft {
   final String note;
 }
 
+class EntryAllocationDraft {
+  const EntryAllocationDraft({required this.categoryId, required this.amount});
+
+  final int categoryId;
+  final int amount;
+}
+
 class EntryDraft {
-  const EntryDraft({
+  EntryDraft._({
     required this.kind,
     required this.accountId,
-    this.destinationAccountId,
-    required this.amount,
-    this.categoryId,
-    this.note = '',
+    required this.destinationAccountId,
+    required this.transferAmount,
+    required Iterable<EntryAllocationDraft> allocations,
+    required this.note,
     required this.occurredAt,
-  });
+  }) : allocations = List.unmodifiable(allocations);
+
+  factory EntryDraft.singleAllocation({
+    required EntryKind kind,
+    required int accountId,
+    required int amount,
+    required int categoryId,
+    String note = '',
+    required DateTime occurredAt,
+  }) => EntryDraft.withAllocations(
+    kind: kind,
+    accountId: accountId,
+    allocations: [EntryAllocationDraft(categoryId: categoryId, amount: amount)],
+    note: note,
+    occurredAt: occurredAt,
+  );
+
+  factory EntryDraft.withAllocations({
+    required EntryKind kind,
+    required int accountId,
+    required Iterable<EntryAllocationDraft> allocations,
+    String note = '',
+    required DateTime occurredAt,
+  }) {
+    if (kind != EntryKind.income && kind != EntryKind.expense) {
+      throw ArgumentError.value(
+        kind,
+        'kind',
+        'Alokasi hanya berlaku untuk pemasukan atau pengeluaran.',
+      );
+    }
+    return EntryDraft._(
+      kind: kind,
+      accountId: accountId,
+      destinationAccountId: null,
+      transferAmount: null,
+      allocations: allocations,
+      note: note,
+      occurredAt: occurredAt,
+    );
+  }
+
+  factory EntryDraft.transfer({
+    required int accountId,
+    required int destinationAccountId,
+    required int amount,
+    String note = '',
+    required DateTime occurredAt,
+  }) => EntryDraft._(
+    kind: EntryKind.transfer,
+    accountId: accountId,
+    destinationAccountId: destinationAccountId,
+    transferAmount: amount,
+    allocations: const [],
+    note: note,
+    occurredAt: occurredAt,
+  );
 
   final EntryKind kind;
   final int accountId;
   final int? destinationAccountId;
-  final int amount;
-  final int? categoryId;
+
+  /// Set only for transfers. Income and expense totals are derived from
+  /// [allocations], so the draft cannot carry a conflicting header total.
+  final int? transferAmount;
+  final List<EntryAllocationDraft> allocations;
   final String note;
   final DateTime occurredAt;
+
+  /// Convenience view for presentation and test doubles. The repository still
+  /// validates and derives the persisted header total independently.
+  int get amount =>
+      transferAmount ??
+      allocations.fold(0, (total, allocation) => total + allocation.amount);
+
+  int? get categoryId =>
+      allocations.length == 1 ? allocations.single.categoryId : null;
 }
 
 class FinanceValidationException implements Exception {

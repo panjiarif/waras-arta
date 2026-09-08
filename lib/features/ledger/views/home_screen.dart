@@ -5,13 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
-import '../../../core/category_icons.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
 import '../../calendar/view_models/calendar_view_model.dart';
 import '../../calendar/views/calendar_view.dart';
 import '../view_models/ledger_view_model.dart';
 import 'account_widgets.dart';
+import 'entry_presentation.dart';
 import 'form_widgets.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -610,14 +610,6 @@ class _EntryCard extends ConsumerWidget {
       EntryKind.adjustment when entry.amount > 0 => '+ ',
       _ => '',
     };
-    final icon = entry.categoryIconKey != null
-        ? categoryIconFor(entry.categoryIconKey!)
-        : switch (entry.kind) {
-            EntryKind.income => Icons.south_west,
-            EntryKind.expense => Icons.north_east,
-            EntryKind.transfer => Icons.swap_horiz,
-            EntryKind.adjustment => Icons.savings_outlined,
-          };
     return Card(
       child: InkWell(
         key: ValueKey('entry-${entry.id}'),
@@ -631,14 +623,14 @@ class _EntryCard extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, color: color),
+              Icon(entry.presentationIcon, color: color),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.categoryName ?? entry.kind.label,
+                      entry.presentationTitle,
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
@@ -648,14 +640,14 @@ class _EntryCard extends ConsumerWidget {
                     Text(route, style: const TextStyle(fontSize: 13)),
                     Text(
                       [
-                        if (entry.parentCategoryName != null)
-                          entry.parentCategoryName!,
+                        if (entry.presentationCategorySummary != null)
+                          entry.presentationCategorySummary!,
                         entry.kind.label,
                         formatDate(entry.occurredAt),
                       ].join(' • '),
                       style: const TextStyle(fontSize: 12),
                     ),
-                    if (entry.categoryArchived)
+                    if (entry.hasArchivedAllocation)
                       const Text(
                         'Kategori diarsipkan',
                         style: TextStyle(fontSize: 12),

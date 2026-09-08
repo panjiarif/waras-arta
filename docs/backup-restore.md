@@ -38,7 +38,7 @@ Restore versi awal memakai strategi **replace-all**, bukan merge. Seluruh rekeni
 
 ## Isi dan versi format
 
-File `.warasarta` adalah container terenkripsi, bukan file SQLite dan bukan JSON polos. Setelah autentikasi serta dekripsi berhasil, payload logis versi 1 memuat:
+File `.warasarta` adalah container terenkripsi, bukan file SQLite dan bukan JSON polos. Setelah autentikasi serta dekripsi berhasil, payload logis versi 2 saat ini memuat:
 
 - identitas format dan `backupVersion`;
 - versi schema database sumber;
@@ -46,23 +46,24 @@ File `.warasarta` adalah container terenkripsi, bukan file SQLite dan bukan JSON
 - rekening, termasuk status arsip dan waktu pembuatannya;
 - kelompok kategori dan subkategori, termasuk ikon, urutan, status arsip, serta identitas kategori bawaan;
 - seluruh ledger pemasukan, pengeluaran, transfer, dan penyesuaian saldo;
+- seluruh alokasi nominal–subkategori pada ledger pemasukan dan pengeluaran;
 - ID asli dan high-water mark ID SQLite agar identitas berikutnya tetap konsisten setelah restore.
 
 Saldo, ringkasan, dan penanda kalender tidak disimpan sebagai salinan turunan. Nilai tersebut dihitung kembali dari ledger setelah restore.
 
 `backupVersion` dan versi container enkripsi dipisahkan dari `databaseSchemaVersion`. Pemisahan ini memungkinkan format data, skema lokal, dan parameter keamanan berevolusi dengan jalur migrasi masing-masing. Versi aplikasi saat ini hanya menerima versi yang dikenal dan menolak versi yang lebih baru daripada yang didukung.
 
-Payload versi 1 belum berisi allocation terpisah, anggaran, tujuan keuangan, gambar unggahan, atau utang/piutang karena fitur tersebut belum tersedia. Backup yang dibuat sekarang tentu tidak dapat memuat data fitur yang belum ada.
+Payload versi 1 adalah format lama dari schema 3 dan belum berisi allocation terpisah. Versi aplikasi saat ini membuat payload v2/schema 4 dengan seluruh allocation serta tetap dapat membaca payload v1 dengan menormalisasi setiap pemasukan/pengeluaran lama menjadi satu allocation. Anggaran, tujuan keuangan, gambar unggahan, dan utang/piutang belum tersedia sehingga belum masuk backup.
 
-Evolusi yang sudah direncanakan:
+Dukungan format saat ini dan evolusi berikutnya:
 
-| Payload | Schema sumber | Isi kategorisasi |
-| --- | --- | --- |
-| v1 | 3 | Satu `categoryId` langsung pada setiap ledger pemasukan/pengeluaran; tanpa anggaran |
-| v2 | 4 | `allocations[]` pada ledger; tanpa anggaran |
-| v3 | 5 | `allocations[]` dan seluruh data anggaran |
+| Payload | Schema sumber | Isi kategorisasi | Status |
+| --- | --- | --- | --- |
+| v1 | 3 | Satu `categoryId` langsung pada setiap ledger pemasukan/pengeluaran; tanpa anggaran | Legacy, tetap dapat direstore |
+| v2 | 4 | `allocations[]` pada ledger; tanpa anggaran | Aktif |
+| v3 | 5 | `allocations[]` dan seluruh data anggaran | Direncanakan |
 
-Decoder v1 pada schema 4/5 menormalkan `categoryId + amount` lama menjadi satu allocation; transfer dan penyesuaian menjadi daftar allocation kosong. Decoder v2 pada schema 5 mempertahankan allocation dan menginisialisasi anggaran kosong. Exporter selalu menulis payload yang sesuai schema aplikasi saat itu. Parser dan encoder terpisah per versi, field semantik asing ditolak, dan aplikasi lama menolak versi lebih baru daripada yang dipahami. Container enkripsi tetap v1 karena evolusi ini mengubah isi logis, bukan primitive kriptografi.
+Exporter schema 4 saat ini selalu menulis payload v2. Decoder schema 4 menerima v1 maupun v2: v1 dinormalisasi dari `categoryId + amount` menjadi satu allocation, sedangkan transfer dan penyesuaian menjadi daftar allocation kosong. Ketika schema 5 ditambahkan, decoder v2 akan mempertahankan allocation dan menginisialisasi anggaran kosong. Parser dan encoder terpisah per versi, field semantik asing ditolak, dan aplikasi lama menolak versi lebih baru daripada yang dipahami. Container enkripsi tetap v1 karena evolusi ini mengubah isi logis, bukan primitive kriptografi.
 
 Kompatibilitas ini adalah persyaratan untuk setiap rilis format baru: file v1 harus tetap dapat dibaca oleh versi aplikasi yang lebih baru dengan bagian fitur baru diinisialisasi kosong/default, sedangkan aplikasi lama harus menolak versi baru dan tidak boleh diam-diam mengabaikan datanya. Parser v1 karena itu menolak field semantik yang tidak dikenal; penambahan data baru wajib disertai kenaikan `backupVersion`.
 
@@ -82,7 +83,7 @@ Saat menyimpan, adapter menulis dan menutup stream, membuka kembali URI yang sam
 
 ## Konsistensi database
 
-Versi saat ini mengekspor rekening, kategori, ledger, dan sequence dalam satu transaksi baca sehingga bagian-bagian snapshot berasal dari keadaan database yang konsisten. Schema v4 menambahkan allocation ke snapshot yang sama; schema v5 menambahkan anggaran beserta mapping dan sequence-nya.
+Versi saat ini mengekspor rekening, kategori, ledger, allocation, dan sequence dalam satu transaksi baca sehingga bagian-bagian snapshot berasal dari keadaan database yang konsisten. Schema v5 nantinya menambahkan anggaran beserta mapping dan sequence-nya.
 
 Sebelum restore, payload diperiksa terhadap batas nominal, bentuk tanggal, keunikan ID/nama, hierarki kategori, foreign key, aturan jenis transaksi, dan saldo rekening arsip. Pada payload v2+, setiap pemasukan/pengeluaran wajib mempunyai allocation yang jumlahnya sama dengan total header; transfer/penyesuaian wajib tidak mempunyai allocation. Pada payload v3, relasi serta overlap anggaran juga divalidasi. Penggantian data kemudian dijalankan dalam satu transaksi Drift/SQLite. ID asli dan sequence dipulihkan, hasilnya diperiksa kembali, dan commit hanya dilakukan jika seluruh langkah berhasil. Jika insert atau pemeriksaan akhir gagal, transaksi di-rollback sehingga data lama tetap ada.
 

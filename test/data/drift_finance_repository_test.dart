@@ -34,18 +34,41 @@ void main() {
     int? destination,
     DateTime? date,
     int? categoryId,
-  }) => EntryDraft(
+  }) {
+    final occurredAt = date ?? january;
+    if (kind == EntryKind.transfer) {
+      return EntryDraft.transfer(
+        accountId: accountId,
+        destinationAccountId: destination ?? accountId,
+        amount: amount,
+        occurredAt: occurredAt,
+      );
+    }
+    if (kind == EntryKind.adjustment) {
+      throw ArgumentError.value(kind, 'kind');
+    }
+    return EntryDraft.singleAllocation(
+      kind: kind,
+      accountId: accountId,
+      amount: amount,
+      categoryId:
+          categoryId ??
+          (kind == EntryKind.income ? incomeCategoryId : expenseCategoryId),
+      occurredAt: occurredAt,
+    );
+  }
+
+  EntryDraft allocatedEntry(
+    int accountId,
+    List<EntryAllocationDraft> allocations, {
+    EntryKind kind = EntryKind.income,
+    DateTime? date,
+    String note = '',
+  }) => EntryDraft.withAllocations(
     kind: kind,
     accountId: accountId,
-    destinationAccountId: destination,
-    amount: amount,
-    categoryId:
-        categoryId ??
-        (kind == EntryKind.income
-            ? incomeCategoryId
-            : kind == EntryKind.expense
-            ? expenseCategoryId
-            : null),
+    allocations: allocations,
+    note: note,
     occurredAt: date ?? january,
   );
 
@@ -211,6 +234,10 @@ void main() {
     expect(income.categoryName, 'Umum');
     expect(income.parentCategoryName, 'Gaji');
     expect(income.categoryIconKey, 'work');
+    expect(income.allocations, hasLength(1));
+    expect(income.allocations.single.position, 0);
+    expect(income.allocations.single.categoryId, incomeCategoryId);
+    expect(income.allocations.single.amount, 300);
     final expense = entries.singleWhere((item) => item.id == expenseId);
     expect(expense.categoryName, 'Umum');
     expect(expense.parentCategoryName, 'Makan & minum');
@@ -218,6 +245,7 @@ void main() {
     final transfer = entries.singleWhere((item) => item.id == transferId);
     expect(transfer.categoryId, isNull);
     expect(transfer.categoryName, isNull);
+    expect(transfer.allocations, isEmpty);
   });
 
   test('calendar read dates are normalized and bounded', () async {
@@ -496,6 +524,139 @@ void main() {
     },
   );
 
+  test('split entry preserves allocation order, derives one header total, and is immutable', () async {
+    final accountId = await account('Bank');
+    final expenseLeaves =
+        (await repository.watchCategoryTree(CategoryKind.expense).first)
+            .expand((group) => group.children)
+            .toList();
+    final drafts = [
+      EntryAllocationDraft(categoryId: expenseLeaves[1].id, amount: 7000),
+      EntryAllocationDraft(categoryId: expenseLeaves[0].id, amount: 10000),
+    ];
+    final draft = allocatedEntry(
+      accountId,
+      drafts,
+      kind: EntryKind.expense,
+      date: DateTime(2024, 1, 15),
+      note: '  makan dan parkir  ',
+    );
+    drafts.clear();
+    expect(draft.allocations, hasLength(2));
+    expect(() => draft.allocations.clear(), throwsUnsupportedError);
+
+    final entryId = await repository.addEntry(draft);
+    final detail = await repository.watchEntry(entryId).first;
+    final snapshot = await repository.loadMonth(january);
+    final day = await repository.watchDay(DateTime(2024, 1, 15)).first;
+    final calendar = await repository.watchCalendarMonth(january).first;
+
+    expect(detail, isNotNull);
+    expect(detail!.amount, 17000);
+    expect(detail.note, 'makan dan parkir');
+    expect(detail.categoryId, isNull);
+    expect(detail.categoryName, isNull);
+    expect(detail.allocations.map((item) => item.position), [0, 1]);
+    expect(detail.allocations.map((item) => item.categoryId), [
+      expenseLeaves[1].id,
+      expenseLeaves[0].id,
+    ]);
+    expect(detail.allocations.map((item) => item.amount), [7000, 10000]);
+    expect(detail.allocations.map((item) => item.categoryName), [
+      'Umum',
+      'Umum',
+    ]);
+    expect(() => detail.allocations.clear(), throwsUnsupportedError);
+    expect(snapshot.entries.single.id, entryId);
+    expect(snapshot.expense, 17000);
+    expect(snapshot.totalEntries, 1);
+    expect(snapshot.totalBalance, -17000);
+    expect(day.single.id, entryId);
+    expect(day.single.allocations, hasLength(2));
+    expect(calendar.totalExpense, 17000);
+    expect(calendar.totalEntryCount, 1);
+    expect(calendar.summaryForDay(DateTime(2024, 1, 15))?.entryCount, 1);
+
+    final header = await (db.select(
+      db.ledgerEntries,
+    )..where((row) => row.id.equals(entryId))).getSingle();
+    expect(header.amount, 17000);
+  });
+
+  test(
+    'history pagination limits headers before loading allocations',
+    () async {
+      final accountId = await account('Bank');
+      final leaves =
+          (await repository.watchCategoryTree(CategoryKind.income).first)
+              .expand((group) => group.children)
+              .toList();
+      await repository.addEntry(entry(accountId, amount: 10));
+      final secondId = await repository.addEntry(entry(accountId, amount: 20));
+      final splitId = await repository.addEntry(
+        allocatedEntry(accountId, [
+          EntryAllocationDraft(categoryId: leaves[0].id, amount: 30),
+          EntryAllocationDraft(categoryId: leaves[1].id, amount: 40),
+        ]),
+      );
+
+      final page = await repository.loadMonth(january, limit: 2);
+      expect(page.entries.map((item) => item.id), [splitId, secondId]);
+      expect(page.entries.map((item) => item.allocations.length), [2, 1]);
+      expect(page.totalEntries, 3);
+      expect(page.income, 100);
+      expect(page.hasMore, isTrue);
+    },
+  );
+
+  test(
+    'allocation validation rejects invalid sets without partial headers',
+    () async {
+      final accountId = await account('Bank');
+      final incomeLeaves =
+          (await repository.watchCategoryTree(CategoryKind.income).first)
+              .expand((group) => group.children)
+              .toList();
+      final invalidDrafts = <EntryDraft>[
+        allocatedEntry(accountId, const []),
+        allocatedEntry(
+          accountId,
+          List.generate(
+            maxEntryAllocations + 1,
+            (_) => const EntryAllocationDraft(
+              categoryId: incomeCategoryId,
+              amount: 1,
+            ),
+          ),
+        ),
+        allocatedEntry(accountId, const [
+          EntryAllocationDraft(categoryId: incomeCategoryId, amount: 50),
+          EntryAllocationDraft(categoryId: incomeCategoryId, amount: 50),
+        ]),
+        allocatedEntry(accountId, [
+          EntryAllocationDraft(
+            categoryId: incomeLeaves[0].id,
+            amount: maxAmount,
+          ),
+          EntryAllocationDraft(categoryId: incomeLeaves[1].id, amount: 1),
+        ]),
+        allocatedEntry(accountId, const [
+          EntryAllocationDraft(categoryId: 1, amount: 100),
+        ]),
+        allocatedEntry(accountId, const [
+          EntryAllocationDraft(categoryId: expenseCategoryId, amount: 100),
+        ]),
+      ];
+
+      for (final draft in invalidDrafts) {
+        await expectLater(repository.addEntry(draft), throwsA(validationError));
+      }
+      expect(await db.select(db.ledgerEntries).get(), isEmpty);
+      expect(await db.select(db.ledgerAllocations).get(), isEmpty);
+      expect((await repository.loadMonth(january)).totalBalance, 0);
+    },
+  );
+
   test('fresh schema seeds two-level built-in category trees', () async {
     final id = await account('Bank');
     final income = await repository
@@ -768,6 +929,58 @@ void main() {
     },
   );
 
+  test(
+    'archived allocation may stay or be removed but cannot be re-added',
+    () async {
+      final accountId = await account('Bank');
+      final leaves =
+          (await repository.watchCategoryTree(CategoryKind.income).first)
+              .expand((group) => group.children)
+              .toList();
+      final archivedId = leaves[0].id;
+      final activeId = leaves[1].id;
+      final entryId = await repository.addEntry(
+        allocatedEntry(accountId, [
+          EntryAllocationDraft(categoryId: archivedId, amount: 40),
+          EntryAllocationDraft(categoryId: activeId, amount: 60),
+        ]),
+      );
+      await repository.setCategoryArchived(archivedId, true);
+
+      await repository.updateEntry(
+        entryId,
+        allocatedEntry(accountId, [
+          EntryAllocationDraft(categoryId: archivedId, amount: 50),
+          EntryAllocationDraft(categoryId: activeId, amount: 50),
+        ]),
+      );
+      final retained = await repository.watchEntry(entryId).first;
+      expect(retained?.allocations.first.categoryArchived, isTrue);
+      expect(retained?.allocations.first.amount, 50);
+
+      await repository.updateEntry(
+        entryId,
+        allocatedEntry(accountId, [
+          EntryAllocationDraft(categoryId: activeId, amount: 100),
+        ]),
+      );
+      await expectLater(
+        repository.updateEntry(
+          entryId,
+          allocatedEntry(accountId, [
+            EntryAllocationDraft(categoryId: activeId, amount: 50),
+            EntryAllocationDraft(categoryId: archivedId, amount: 50),
+          ]),
+        ),
+        throwsA(validationError),
+      );
+      final unchanged = await repository.watchEntry(entryId).first;
+      expect(unchanged?.amount, 100);
+      expect(unchanged?.allocations, hasLength(1));
+      expect(unchanged?.allocations.single.categoryId, activeId);
+    },
+  );
+
   test('archive guard retains one effective leaf for each kind', () async {
     final income = await repository
         .watchCategoryTree(CategoryKind.income)
@@ -801,53 +1014,56 @@ void main() {
     expect(active.expand((group) => group.children), isNotEmpty);
   });
 
-  test('database enforces category depth, kind, and sibling uniqueness', () async {
-    Future<void> insertCategory({
-      required int? parentId,
-      required int kind,
-      required String name,
-    }) => db.customStatement(
-      'INSERT INTO categories '
-      '(parent_id, kind, name, normalized_name, icon_key, is_archived, '
-      'sort_order, system_key, created_at, updated_at) '
-      'VALUES (?, ?, ?, ?, ?, 0, 0, NULL, 0, 0)',
-      [parentId, kind, name, name.toLowerCase(), 'category'],
-    );
+  test(
+    'database enforces category depth, kind, and sibling uniqueness',
+    () async {
+      Future<void> insertCategory({
+        required int? parentId,
+        required int kind,
+        required String name,
+      }) => db.customStatement(
+        'INSERT INTO categories '
+        '(parent_id, kind, name, normalized_name, icon_key, is_archived, '
+        'sort_order, system_key, created_at, updated_at) '
+        'VALUES (?, ?, ?, ?, ?, 0, 0, NULL, 0, 0)',
+        [parentId, kind, name, name.toLowerCase(), 'category'],
+      );
 
-    await expectLater(
-      insertCategory(parentId: incomeCategoryId, kind: 0, name: 'Level 3'),
-      throwsA(anything),
-    );
-    await expectLater(
-      insertCategory(parentId: 1, kind: 1, name: 'Wrong kind'),
-      throwsA(anything),
-    );
-    await expectLater(
-      insertCategory(parentId: null, kind: 0, name: 'gaji'),
-      throwsA(anything),
-    );
-    await expectLater(
-      insertCategory(parentId: 1, kind: 0, name: 'umum'),
-      throwsA(anything),
-    );
-    await expectLater(
-      db.customStatement('UPDATE categories SET parent_id = 3 WHERE id = ?', [
-        incomeCategoryId,
-      ]),
-      throwsA(anything),
-    );
+      await expectLater(
+        insertCategory(parentId: incomeCategoryId, kind: 0, name: 'Level 3'),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertCategory(parentId: 1, kind: 1, name: 'Wrong kind'),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertCategory(parentId: null, kind: 0, name: 'gaji'),
+        throwsA(anything),
+      );
+      await expectLater(
+        insertCategory(parentId: 1, kind: 0, name: 'umum'),
+        throwsA(anything),
+      );
+      await expectLater(
+        db.customStatement('UPDATE categories SET parent_id = 3 WHERE id = ?', [
+          incomeCategoryId,
+        ]),
+        throwsA(anything),
+      );
 
-    final accountId = await account('Bank');
-    await expectLater(
-      db.customStatement(
-        'INSERT INTO ledger_entries '
-        '(kind, account_id, destination_account_id, amount, category_id, note, '
-        'occurred_day, created_at) VALUES (0, ?, NULL, 10, 1, ?, 20240101, 0)',
-        [accountId, 'root is not a leaf'],
-      ),
-      throwsA(anything),
-    );
-  });
+      final accountId = await account('Bank');
+      final entryId = await repository.addEntry(entry(accountId));
+      await expectLater(
+        db.customStatement(
+          'INSERT INTO ledger_allocations '
+          '(entry_id, position, category_id, amount) VALUES (?, 1, 1, 10)',
+          [entryId],
+        ),
+        throwsA(anything),
+      );
+    },
+  );
 
   test('amount bounds reject zero, negative, and overflow entries', () async {
     final id = await account('Bank');
@@ -885,18 +1101,9 @@ void main() {
       final destination = await account('Tunai');
       final invalid = [
         entry(id, kind: EntryKind.transfer),
-        entry(id, kind: EntryKind.transfer, destination: id),
         entry(id, kind: EntryKind.transfer, destination: 999),
         entry(999, kind: EntryKind.transfer, destination: destination),
-        entry(
-          id,
-          kind: EntryKind.transfer,
-          destination: destination,
-          categoryId: incomeCategoryId,
-        ),
         entry(999),
-        entry(id, destination: destination),
-        entry(id, kind: EntryKind.adjustment),
         entry(id, categoryId: expenseCategoryId),
         entry(id, kind: EntryKind.expense, categoryId: incomeCategoryId),
       ];
@@ -946,33 +1153,76 @@ void main() {
     'database independently rejects bad foreign keys, shapes, and amounts',
     () async {
       final id = await account('Bank');
-      Future<void> insert({
+      final destinationId = await account('Tunai');
+      Future<void> insertHeader({
         int kind = 2,
         int? destination,
         int amount = 10,
-        int? categoryId,
       }) => db.customStatement(
         'INSERT INTO ledger_entries '
-        '(kind, account_id, destination_account_id, amount, category_id, note, occurred_day, created_at) '
-        "VALUES (?, ?, ?, ?, ?, '', 20240101, 0)",
-        [kind, id, destination, amount, categoryId],
+        '(kind, account_id, destination_account_id, amount, note, occurred_day, created_at) '
+        "VALUES (?, ?, ?, ?, '', 20240101, 0)",
+        [kind, id, destination, amount],
       );
-      await expectLater(insert(destination: 999), throwsA(anything));
-      await expectLater(insert(destination: id), throwsA(anything));
-      await expectLater(insert(), throwsA(anything));
+      Future<void> insertWithAllocation({
+        int kind = 0,
+        int? destination,
+        int headerAmount = 10,
+        int categoryId = incomeCategoryId,
+        int position = 0,
+        int allocationAmount = 10,
+      }) => db.transaction(() async {
+        await insertHeader(
+          kind: kind,
+          destination: destination,
+          amount: headerAmount,
+        );
+        final inserted = await db
+            .customSelect('SELECT last_insert_rowid() AS id')
+            .getSingle();
+        await db.customStatement(
+          'INSERT INTO ledger_allocations '
+          '(entry_id, position, category_id, amount) VALUES (?, ?, ?, ?)',
+          [inserted.read<int>('id'), position, categoryId, allocationAmount],
+        );
+      });
+
+      await expectLater(insertHeader(destination: 999), throwsA(anything));
+      await expectLater(insertHeader(destination: id), throwsA(anything));
+      await expectLater(insertHeader(), throwsA(anything));
+      await expectLater(insertHeader(kind: 0, amount: 0), throwsA(anything));
       await expectLater(
-        insert(kind: 0, categoryId: incomeCategoryId, amount: 0),
+        insertHeader(kind: 0, amount: maxAmount + 1),
         throwsA(anything),
       );
       await expectLater(
-        insert(kind: 0, categoryId: incomeCategoryId, amount: maxAmount + 1),
+        insertWithAllocation(categoryId: expenseCategoryId),
         throwsA(anything),
       );
+      await expectLater(insertWithAllocation(categoryId: 1), throwsA(anything));
       await expectLater(
-        insert(kind: 0, categoryId: expenseCategoryId),
+        insertWithAllocation(categoryId: 999),
         throwsA(anything),
       );
-      await expectLater(insert(kind: 0), throwsA(anything));
+      for (final position in [-1, maxEntryAllocations]) {
+        await expectLater(
+          insertWithAllocation(position: position),
+          throwsA(anything),
+        );
+      }
+      for (final amount in [0, maxAmount + 1]) {
+        await expectLater(
+          insertWithAllocation(allocationAmount: amount),
+          throwsA(anything),
+        );
+      }
+      await expectLater(
+        insertWithAllocation(
+          kind: EntryKind.transfer.index,
+          destination: destinationId,
+        ),
+        throwsA(anything),
+      );
       expect((await repository.loadMonth(january)).totalEntries, 0);
     },
   );
@@ -1013,8 +1263,7 @@ void main() {
 
       await repository.updateEntry(
         id,
-        EntryDraft(
-          kind: EntryKind.transfer,
+        EntryDraft.transfer(
           accountId: source,
           destinationAccountId: destination,
           amount: 300,
@@ -1041,6 +1290,147 @@ void main() {
       expect(feb.accounts.firstWhere((a) => a.id == destination).balance, 300);
     },
   );
+
+  test('edit supports one-to-split-to-one and rolls back partial allocation writes', () async {
+    final accountId = await account('Bank');
+    final leaves =
+        (await repository.watchCategoryTree(CategoryKind.income).first)
+            .expand((group) => group.children)
+            .toList();
+    final entryId = await repository.addEntry(
+      entry(accountId, amount: 100, categoryId: leaves[0].id),
+    );
+    final createdAt = (await repository.watchEntry(entryId).first)!.createdAt;
+
+    await repository.updateEntry(
+      entryId,
+      allocatedEntry(accountId, [
+        EntryAllocationDraft(categoryId: leaves[0].id, amount: 40),
+        EntryAllocationDraft(categoryId: leaves[1].id, amount: 60),
+      ]),
+    );
+    final split = await repository.watchEntry(entryId).first;
+    expect(split?.createdAt, createdAt);
+    expect(split?.amount, 100);
+    expect(split?.allocations.map((item) => item.position), [0, 1]);
+    expect(split?.allocations.map((item) => item.amount), [40, 60]);
+
+    await repository.updateEntry(
+      entryId,
+      entry(accountId, amount: 75, categoryId: leaves[1].id),
+    );
+    final single = await repository.watchEntry(entryId).first;
+    expect(single?.createdAt, createdAt);
+    expect(single?.amount, 75);
+    expect(single?.allocations, hasLength(1));
+    expect(single?.allocations.single.position, 0);
+    expect(single?.allocations.single.categoryId, leaves[1].id);
+
+    await db.customStatement('''
+        CREATE TRIGGER reject_second_test_allocation
+        BEFORE INSERT ON ledger_allocations WHEN NEW.position = 1
+        BEGIN SELECT RAISE(ABORT, 'test allocation failed'); END
+      ''');
+    await expectLater(
+      repository.updateEntry(
+        entryId,
+        allocatedEntry(accountId, [
+          EntryAllocationDraft(categoryId: leaves[0].id, amount: 30),
+          EntryAllocationDraft(categoryId: leaves[1].id, amount: 45),
+        ]),
+      ),
+      throwsA(anything),
+    );
+
+    final afterRollback = await repository.watchEntry(entryId).first;
+    expect(afterRollback?.amount, 75);
+    expect(afterRollback?.allocations, hasLength(1));
+    expect(afterRollback?.allocations.single.categoryId, leaves[1].id);
+    expect((await repository.loadMonth(january)).totalBalance, 75);
+  });
+
+  test(
+    'allocation-only redistribution refreshes detail, day, and month streams',
+    () async {
+      final accountId = await account('Bank');
+      final leaves =
+          (await repository.watchCategoryTree(CategoryKind.income).first)
+              .expand((group) => group.children)
+              .toList();
+      final day = DateTime(2024, 1, 12);
+      final entryId = await repository.addEntry(
+        allocatedEntry(accountId, [
+          EntryAllocationDraft(categoryId: leaves[0].id, amount: 30),
+          EntryAllocationDraft(categoryId: leaves[1].id, amount: 70),
+        ], date: day),
+      );
+      bool redistributed(FinanceEntry? item) =>
+          item != null &&
+          item.allocations.length == 2 &&
+          item.allocations.first.amount == 60 &&
+          item.allocations.last.amount == 40;
+      final detailChanged = repository
+          .watchEntry(entryId)
+          .firstWhere(redistributed);
+      final dayChanged = repository
+          .watchDay(day)
+          .firstWhere(
+            (entries) => entries.length == 1 && redistributed(entries.single),
+          );
+      final monthChanged = repository
+          .watchMonth(january)
+          .firstWhere(
+            (snapshot) =>
+                snapshot.entries.length == 1 &&
+                redistributed(snapshot.entries.single),
+          );
+
+      await repository.updateEntry(
+        entryId,
+        allocatedEntry(accountId, [
+          EntryAllocationDraft(categoryId: leaves[0].id, amount: 60),
+          EntryAllocationDraft(categoryId: leaves[1].id, amount: 40),
+        ], date: day),
+      );
+
+      final changed = await Future.wait([
+        detailChanged.timeout(const Duration(seconds: 5)),
+        dayChanged.timeout(const Duration(seconds: 5)),
+        monthChanged.timeout(const Duration(seconds: 5)),
+      ]);
+      expect((changed[0] as FinanceEntry).amount, 100);
+      expect((changed[1] as List<FinanceEntry>).single.amount, 100);
+      expect((changed[2] as FinanceSnapshot).income, 100);
+      expect((changed[2] as FinanceSnapshot).totalEntries, 1);
+    },
+  );
+
+  test('deleting a split header cascades every allocation', () async {
+    final accountId = await account('Bank');
+    final leaves =
+        (await repository.watchCategoryTree(CategoryKind.expense).first)
+            .expand((group) => group.children)
+            .toList();
+    final entryId = await repository.addEntry(
+      allocatedEntry(accountId, [
+        EntryAllocationDraft(categoryId: leaves[0].id, amount: 25),
+        EntryAllocationDraft(categoryId: leaves[1].id, amount: 75),
+      ], kind: EntryKind.expense),
+    );
+    final before = await (db.select(
+      db.ledgerAllocations,
+    )..where((row) => row.entryId.equals(entryId))).get();
+    expect(before, hasLength(2));
+
+    await repository.deleteEntry(entryId);
+
+    final after = await (db.select(
+      db.ledgerAllocations,
+    )..where((row) => row.entryId.equals(entryId))).get();
+    expect(after, isEmpty);
+    expect(await repository.watchEntry(entryId).first, isNull);
+    expect((await repository.loadMonth(january)).totalEntries, 0);
+  });
 
   test(
     'delete reverses transfer atomically and detail emits missing',
@@ -1278,8 +1668,8 @@ void main() {
         db.customStatement(
           '''
           INSERT INTO ledger_entries
-            (kind, account_id, amount, category_id, note, occurred_day, created_at)
-          VALUES (3, ?, 0, NULL, '', 20240101, 0)
+            (kind, account_id, amount, note, occurred_day, created_at)
+          VALUES (3, ?, 0, '', 20240101, 0)
         ''',
           [id],
         ),
@@ -1394,10 +1784,10 @@ void main() {
         db.customStatement(
           '''
           INSERT INTO ledger_entries
-            (kind, account_id, amount, category_id, note, occurred_day, created_at)
-          VALUES (0, ?, 10, ?, '', 20240101, 0)
+            (kind, account_id, amount, note, occurred_day, created_at)
+          VALUES (0, ?, 10, '', 20240101, 0)
         ''',
-          [archivedId, incomeCategoryId],
+          [archivedId],
         ),
         throwsA(anything),
       );

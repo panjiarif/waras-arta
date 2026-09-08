@@ -12,6 +12,11 @@ class CategorySelectionField extends StatelessWidget {
     required this.allowArchivedValue,
     required this.onChanged,
     required this.onManage,
+    this.controlKey = const Key('entry-category'),
+    this.identity = 'single',
+    this.additionalValidator,
+    this.disabledValues = const <int>{},
+    this.label = 'Subkategori',
   });
 
   final List<CategoryGroup> groups;
@@ -19,6 +24,11 @@ class CategorySelectionField extends StatelessWidget {
   final bool allowArchivedValue;
   final ValueChanged<int> onChanged;
   final VoidCallback onManage;
+  final Key controlKey;
+  final Object identity;
+  final FormFieldValidator<int>? additionalValidator;
+  final Set<int> disabledValues;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +38,7 @@ class CategorySelectionField extends StatelessWidget {
         (selected.child.isArchived || selected.parent.isArchived);
 
     return FormField<int>(
-      key: ValueKey('entry-category-${value ?? 'none'}'),
+      key: ValueKey('entry-category-$identity-${value ?? 'none'}'),
       initialValue: value,
       validator: (categoryId) {
         if (categoryId == null) return 'Pilih subkategori.';
@@ -36,10 +46,10 @@ class CategorySelectionField extends StatelessWidget {
         if (selectedArchived && !allowArchivedValue) {
           return 'Subkategori ini sudah diarsipkan. Pilih yang aktif.';
         }
-        return null;
+        return additionalValidator?.call(categoryId);
       },
       builder: (field) => InkWell(
-        key: const Key('entry-category'),
+        key: controlKey,
         borderRadius: BorderRadius.circular(12),
         onTap: () async {
           final activeRows = _activeRows(groups);
@@ -51,8 +61,11 @@ class CategorySelectionField extends StatelessWidget {
             context: context,
             isScrollControlled: true,
             showDragHandle: true,
-            builder: (sheetContext) =>
-                _CategoryPickerSheet(rows: activeRows, selectedId: value),
+            builder: (sheetContext) => _CategoryPickerSheet(
+              rows: activeRows,
+              selectedId: value,
+              disabledValues: disabledValues,
+            ),
           );
           if (!context.mounted || result == null) return;
           if (result == _manageCategoriesResult) {
@@ -65,7 +78,7 @@ class CategorySelectionField extends StatelessWidget {
         child: InputDecorator(
           isEmpty: selected == null,
           decoration: InputDecoration(
-            labelText: 'Subkategori',
+            labelText: label,
             floatingLabelBehavior: FloatingLabelBehavior.always,
             errorText: field.errorText,
             helperText: selectedArchived && allowArchivedValue
@@ -107,10 +120,15 @@ class CategorySelectionField extends StatelessWidget {
 const _manageCategoriesResult = -1;
 
 class _CategoryPickerSheet extends StatelessWidget {
-  const _CategoryPickerSheet({required this.rows, required this.selectedId});
+  const _CategoryPickerSheet({
+    required this.rows,
+    required this.selectedId,
+    required this.disabledValues,
+  });
 
   final List<_CategoryPickerRow> rows;
   final int? selectedId;
+  final Set<int> disabledValues;
 
   @override
   Widget build(BuildContext context) {
@@ -174,6 +192,7 @@ class _CategoryPickerSheet extends StatelessWidget {
                     );
                   }
                   final child = row.child!;
+                  final disabled = disabledValues.contains(child.id);
                   return ListTile(
                     key: ValueKey('entry-category-option-${child.id}'),
                     selected: child.id == selectedId,
@@ -182,11 +201,18 @@ class _CategoryPickerSheet extends StatelessWidget {
                     ),
                     leading: Icon(categoryIconFor(child.iconKey)),
                     title: Text(child.name),
-                    subtitle: Text(row.parent.name),
+                    subtitle: Text(
+                      disabled
+                          ? '${row.parent.name} • Sudah dipakai'
+                          : row.parent.name,
+                    ),
                     trailing: child.id == selectedId
                         ? const Icon(Icons.check, color: forest)
                         : null,
-                    onTap: () => Navigator.pop(context, child.id),
+                    enabled: !disabled,
+                    onTap: disabled
+                        ? null
+                        : () => Navigator.pop(context, child.id),
                   );
                 },
               ),

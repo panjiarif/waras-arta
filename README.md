@@ -13,7 +13,7 @@ Yang tersedia:
 - Membuat rekening tunai, bank, e-wallet, atau lainnya dengan saldo awal yang dicatat sebagai penyesuaian ledger.
 - Membuka detail rekening, mengubah nama/jenis, serta mengoreksi saldo melalui entri penyesuaian bertanda yang dapat ditelusuri dan tidak masuk ringkasan arus kas.
 - Mengarsipkan rekening bersaldo nol, memulihkannya, atau menghapus permanen rekening yang tidak memiliki referensi ledger tanpa menghapus riwayat secara berantai.
-- Mencatat pemasukan dan pengeluaran dengan satu subkategori, tanggal kejadian, dan catatan.
+- Mencatat pemasukan dan pengeluaran dengan 1–50 rincian nominal–subkategori, tanggal kejadian, dan catatan; total split dihitung otomatis.
 - Mengelola kategori pemasukan/pengeluaran dalam hierarki dua tingkat: kelompok dan subkategori.
 - Mengubah nama serta ikon Material kategori, lalu mengarsipkannya tanpa memutus riwayat lama.
 - Transfer satu transaksi antar-rekening sendiri, tidak dihitung sebagai pemasukan/pengeluaran.
@@ -22,17 +22,17 @@ Yang tersedia:
 - Pencatatan tanggal lampau melalui kalender atau pemilih tanggal; tombol tambah pada tab kalender otomatis memakai tanggal yang dipilih.
 - Ikhtisar saldo seluruh rekening dan ringkasan bulanan.
 - Riwayat bulanan yang dimuat bertahap mulai 50 entri.
-- Detail transaksi beserta nama rekening, tanggal kejadian, catatan, dan waktu pencatatan.
+- Detail transaksi beserta nama rekening, tanggal kejadian, catatan, waktu pencatatan, dan seluruh rincian split.
 - Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
 - Hapus permanen transaksi biasa melalui dialog konfirmasi.
 - Penyimpanan persisten lokal menggunakan Drift/SQLite.
-- Migrasi schema bertahap v1 ke v2 dan v2 ke v3 yang menjaga transaksi serta saldo lama ketika kategori dan siklus rekening berevolusi.
+- Migrasi schema bertahap v1 sampai v4 yang menjaga transaksi serta saldo lama ketika kategori, siklus rekening, dan alokasi transaksi berevolusi.
 - Backup manual terenkripsi ke file `.warasarta` melalui pemilih dokumen Android; hasil simpan dibuka ulang dan diverifikasi sebelum dianggap berhasil.
 - Restore replace-all dengan pemeriksaan kata sandi, ringkasan isi, konfirmasi, transaksi database atomik, dan safety backup terenkripsi yang wajib disimpan lebih dahulu.
 
 Rekening arsip disembunyikan secara default, tetap dapat ditampilkan dan dipulihkan, serta tidak dapat dipilih untuk transaksi baru. Entri penyesuaian, termasuk saldo awal, bersifat tetap agar jejak perubahan saldo tidak ditulis ulang.
 
-Belum tersedia: pembagian satu transaksi ke beberapa alokasi kategori (split transaction), gambar kategori unggahan pengguna, backup rutin terjadwal, anggaran, tujuan keuangan, diagram, dan utang/piutang.
+Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, anggaran, tujuan keuangan, diagram, dan utang/piutang.
 
 Backup rutin adalah snapshot manual saat tombol ditekan; aplikasi belum menjadwalkan, mengunggah, merotasi, atau memverifikasi backup secara otomatis. Verifikasi tepat setelah penulisan hanya memastikan ukuran dan SHA-256 file yang baru disimpan cocok pada saat itu, bukan memantau retensi file berikutnya. Pengecualiannya adalah jalur restore: setelah pengguna mengonfirmasi restore, aplikasi wajib menyimpan safety backup terenkripsi dari data aktif dengan kata sandi yang sama sebelum melakukan replace-all. Jika penyimpanan dibatalkan, gagal, atau tidak lolos verifikasi penulisan, restore tidak dijalankan. Simpan beberapa file di luar HP, misalnya pada penyedia dokumen cloud dan komputer, lalu uji restore menggunakan data percobaan sebelum mengandalkannya. **Kata sandi backup tidak disimpan dan tidak dapat dipulihkan. Jika lupa, file tersebut tidak dapat direstore.**
 

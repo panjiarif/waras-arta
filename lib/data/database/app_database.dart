@@ -65,8 +65,6 @@ class LedgerEntries extends Table {
   IntColumn get destinationAccountId =>
       integer().nullable().references(Accounts, #id)();
   IntColumn get amount => integer()();
-  IntColumn get categoryId =>
-      integer().nullable().references(Categories, #id)();
   TextColumn get note => text().withDefault(const Constant(''))();
 
   /// YYYYMMDD civil date. Never converted through a timezone or UTC timestamp.
@@ -84,15 +82,41 @@ class LedgerEntries extends Table {
     'CHECK (occurred_day BETWEEN 20000101 AND 99991231)',
     'CHECK (length(note) <= 500)',
     '''CHECK (
-      (kind IN (0, 1) AND destination_account_id IS NULL AND category_id IS NOT NULL)
+      (kind IN (0, 1) AND destination_account_id IS NULL)
       OR (kind = 2 AND destination_account_id IS NOT NULL
-        AND destination_account_id <> account_id AND category_id IS NULL)
-      OR (kind = 3 AND destination_account_id IS NULL AND category_id IS NULL)
+        AND destination_account_id <> account_id)
+      OR (kind = 3 AND destination_account_id IS NULL)
     )''',
   ];
 }
 
-@DriftDatabase(tables: [Accounts, Categories, LedgerEntries])
+@DataClassName('LedgerAllocationRow')
+class LedgerAllocations extends Table {
+  @ReferenceName('allocations')
+  IntColumn get entryId =>
+      integer().references(LedgerEntries, #id, onDelete: KeyAction.cascade)();
+  IntColumn get position => integer()();
+  @ReferenceName('allocationEntries')
+  IntColumn get categoryId =>
+      integer().references(Categories, #id, onDelete: KeyAction.restrict)();
+  IntColumn get amount => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {entryId, position};
+
+  @override
+  List<Set<Column<Object>>> get uniqueKeys => [
+    {entryId, categoryId},
+  ];
+
+  @override
+  List<String> get customConstraints => [
+    'CHECK (position BETWEEN 0 AND 49)',
+    'CHECK (amount BETWEEN 1 AND 999999999999)',
+  ];
+}
+
+@DriftDatabase(tables: [Accounts, Categories, LedgerEntries, LedgerAllocations])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
     : super(
@@ -106,15 +130,16 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) async {
       await migrator.createAll();
       await _seedDefaultCategories();
-      await _createSchemaExtras();
+      await _createCommonSchemaExtras();
       await _createSchemaV3Extras();
+      await _createSchemaV4Extras();
     },
     onUpgrade: (migrator, from, to) async {
       if (from >= to) return;
@@ -124,10 +149,24 @@ class AppDatabase extends _$AppDatabase {
           final runSteps = stepByStep(
             from1To2: _migrateV1ToV2,
             from2To3: _migrateV2ToV3,
+            from3To4: _migrateV3ToV4,
           );
           await runSteps(migrator, from, to);
 
           if (to >= 2) {
+            await _createCommonSchemaExtras();
+          }
+          if (to == 2 || to == 3) {
+            await _createLegacyLedgerCategoryExtras();
+          }
+          if (to >= 3) {
+            await _createSchemaV3Extras();
+          }
+          if (to >= 4) {
+            await _createSchemaV4Extras();
+          }
+
+          if (to >= 2 && to < 4) {
             final invalid = await customSelect('''
             SELECT COUNT(*) AS amount
             FROM ledger_entries AS l
@@ -139,6 +178,9 @@ class AppDatabase extends _$AppDatabase {
             if (invalid.read<int>('amount') != 0) {
               throw StateError('Hasil migrasi kategori tidak valid.');
             }
+          }
+          if (to >= 4) {
+            await verifyLedgerAllocationIntegrity();
           }
           final foreignKeyErrors = await customSelect(
             'PRAGMA foreign_key_check',
@@ -187,14 +229,69 @@ class AppDatabase extends _$AppDatabase {
         },
       ),
     );
-    await _createSchemaExtras();
   }
 
   Future<void> _migrateV2ToV3(Migrator migrator, Schema3 schema) async {
     await migrator.addColumn(schema.accounts, schema.accounts.isArchived);
     await migrator.alterTable(TableMigration(schema.ledgerEntries));
-    await _createSchemaExtras();
-    await _createSchemaV3Extras();
+  }
+
+  Future<void> _migrateV3ToV4(Migrator migrator, Schema4 schema) async {
+    final sequenceState = await customSelect('''
+      SELECT
+        COALESCE((SELECT seq FROM sqlite_sequence
+                  WHERE name = 'ledger_entries'), 0) AS sequence_value,
+        COALESCE((SELECT MAX(id) FROM ledger_entries), 0) AS maximum_id
+    ''').getSingle();
+    final previousSequence = sequenceState.read<int>('sequence_value');
+    final maximumLedgerId = sequenceState.read<int>('maximum_id');
+    final sequenceToRestore = previousSequence > maximumLedgerId
+        ? previousSequence
+        : maximumLedgerId;
+
+    await customStatement('DROP TABLE IF EXISTS temp.ledger_allocations_v4');
+    await customStatement('''
+      CREATE TEMP TABLE ledger_allocations_v4 AS
+      SELECT id AS entry_id, 0 AS position, category_id, amount
+      FROM ledger_entries
+      WHERE kind IN (0, 1)
+    ''');
+    try {
+      final invalid = await customSelect('''
+        SELECT COUNT(*) AS amount
+        FROM ledger_entries AS entry
+        LEFT JOIN categories AS category ON category.id = entry.category_id
+        WHERE (entry.kind IN (0, 1) AND
+               (category.id IS NULL OR category.parent_id IS NULL OR
+                category.kind <> entry.kind))
+           OR (entry.kind IN (2, 3) AND entry.category_id IS NOT NULL)
+      ''').getSingle();
+      if (invalid.read<int>('amount') != 0) {
+        throw StateError('Kategori transaksi schema v3 tidak valid.');
+      }
+
+      // Drift preserves custom table extras while rebuilding a table. Retire
+      // the v3 objects before the category_id column disappears.
+      await _dropLegacyLedgerCategoryExtras();
+      await migrator.alterTable(TableMigration(schema.ledgerEntries));
+      await migrator.createTable(schema.ledgerAllocations);
+      await customStatement('''
+        INSERT INTO ledger_allocations (entry_id, position, category_id, amount)
+        SELECT entry_id, position, category_id, amount
+        FROM temp.ledger_allocations_v4
+        ORDER BY entry_id
+      ''');
+
+      await customStatement(
+        "DELETE FROM sqlite_sequence WHERE name = 'ledger_entries'",
+      );
+      await customStatement(
+        "INSERT INTO sqlite_sequence (name, seq) VALUES ('ledger_entries', ?)",
+        [sequenceToRestore],
+      );
+    } finally {
+      await customStatement('DROP TABLE IF EXISTS temp.ledger_allocations_v4');
+    }
   }
 
   Future<void> _seedDefaultCategories() async {
@@ -230,7 +327,7 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  Future<void> _createSchemaExtras() async {
+  Future<void> _createCommonSchemaExtras() async {
     const statements = [
       '''CREATE UNIQUE INDEX IF NOT EXISTS categories_unique_root_name
          ON categories (kind, normalized_name) WHERE parent_id IS NULL''',
@@ -244,8 +341,6 @@ class AppDatabase extends _$AppDatabase {
          ON ledger_entries (account_id)''',
       '''CREATE INDEX IF NOT EXISTS ledger_entries_destination_account_id
          ON ledger_entries (destination_account_id)''',
-      '''CREATE INDEX IF NOT EXISTS ledger_entries_category_id
-         ON ledger_entries (category_id)''',
       '''CREATE TRIGGER IF NOT EXISTS categories_validate_parent_insert
          BEFORE INSERT ON categories
          WHEN NEW.parent_id IS NOT NULL AND NOT EXISTS (
@@ -257,6 +352,16 @@ class AppDatabase extends _$AppDatabase {
          BEFORE UPDATE OF parent_id, kind ON categories
          WHEN NEW.parent_id IS NOT OLD.parent_id OR NEW.kind <> OLD.kind
          BEGIN SELECT RAISE(ABORT, 'immutable category structure'); END''',
+    ];
+    for (final statement in statements) {
+      await customStatement(statement);
+    }
+  }
+
+  Future<void> _createLegacyLedgerCategoryExtras() async {
+    const statements = [
+      '''CREATE INDEX IF NOT EXISTS ledger_entries_category_id
+         ON ledger_entries (category_id)''',
       '''CREATE TRIGGER IF NOT EXISTS ledger_validate_category_insert
          BEFORE INSERT ON ledger_entries
          WHEN NEW.kind IN (0, 1) AND NOT EXISTS (
@@ -273,6 +378,64 @@ class AppDatabase extends _$AppDatabase {
              AND category.kind = NEW.kind
              AND category.parent_id IS NOT NULL)
          BEGIN SELECT RAISE(ABORT, 'invalid ledger category'); END''',
+    ];
+    for (final statement in statements) {
+      await customStatement(statement);
+    }
+  }
+
+  Future<void> _dropLegacyLedgerCategoryExtras() async {
+    const statements = [
+      'DROP INDEX IF EXISTS ledger_entries_category_id',
+      'DROP TRIGGER IF EXISTS ledger_validate_category_insert',
+      'DROP TRIGGER IF EXISTS ledger_validate_category_update',
+    ];
+    for (final statement in statements) {
+      await customStatement(statement);
+    }
+  }
+
+  Future<void> _createSchemaV4Extras() async {
+    const statements = [
+      '''CREATE INDEX IF NOT EXISTS ledger_allocations_category_entry
+         ON ledger_allocations (category_id, entry_id)''',
+      '''CREATE TRIGGER IF NOT EXISTS ledger_allocations_validate_insert
+         BEFORE INSERT ON ledger_allocations
+         WHEN NOT EXISTS (
+           SELECT 1
+           FROM ledger_entries AS entry
+           JOIN categories AS category ON category.id = NEW.category_id
+           WHERE entry.id = NEW.entry_id
+             AND entry.kind IN (0, 1)
+             AND category.parent_id IS NOT NULL
+             AND category.kind = entry.kind)
+         BEGIN SELECT RAISE(ABORT, 'invalid ledger allocation'); END''',
+      '''CREATE TRIGGER IF NOT EXISTS ledger_allocations_validate_update
+         BEFORE UPDATE OF entry_id, category_id ON ledger_allocations
+         WHEN NOT EXISTS (
+           SELECT 1
+           FROM ledger_entries AS entry
+           JOIN categories AS category ON category.id = NEW.category_id
+           WHERE entry.id = NEW.entry_id
+             AND entry.kind IN (0, 1)
+             AND category.parent_id IS NOT NULL
+             AND category.kind = entry.kind)
+         BEGIN SELECT RAISE(ABORT, 'invalid ledger allocation'); END''',
+      '''CREATE TRIGGER IF NOT EXISTS ledger_validate_allocations_kind_update
+         BEFORE UPDATE OF kind ON ledger_entries
+         WHEN (NEW.kind IN (2, 3) AND EXISTS (
+           SELECT 1 FROM ledger_allocations
+           WHERE entry_id = OLD.id
+         )) OR (NEW.kind IN (0, 1) AND EXISTS (
+           SELECT 1
+           FROM ledger_allocations AS allocation
+           LEFT JOIN categories AS category
+             ON category.id = allocation.category_id
+           WHERE allocation.entry_id = OLD.id
+             AND (category.id IS NULL OR category.parent_id IS NULL
+               OR category.kind <> NEW.kind)
+         ))
+         BEGIN SELECT RAISE(ABORT, 'invalid ledger allocation kind'); END''',
     ];
     for (final statement in statements) {
       await customStatement(statement);
@@ -330,6 +493,73 @@ class AppDatabase extends _$AppDatabase {
     ];
     for (final statement in statements) {
       await customStatement(statement);
+    }
+  }
+
+  /// Verifies allocation invariants that SQLite cannot enforce per row.
+  ///
+  /// Call this inside the same transaction as ledger writes. Passing an
+  /// [entryId] limits the verification to that transaction header.
+  Future<void> verifyLedgerAllocationIntegrity({int? entryId}) async {
+    if (entryId != null && entryId < 1) {
+      throw ArgumentError.value(entryId, 'entryId', 'must be positive');
+    }
+    final entryFilter = entryId == null ? '' : 'AND entry.id = ?';
+    final allocationFilter = entryId == null
+        ? ''
+        : 'AND allocation.entry_id = ?';
+
+    final invalidHeaders = await customSelect(
+      '''
+        WITH allocation_stats AS (
+          SELECT entry_id,
+                 COUNT(*) AS allocation_count,
+                 MIN(position) AS minimum_position,
+                 MAX(position) AS maximum_position,
+                 COUNT(DISTINCT category_id) AS category_count,
+                 SUM(amount) AS allocated_amount
+          FROM ledger_allocations
+          GROUP BY entry_id
+        )
+        SELECT COUNT(*) AS amount
+        FROM ledger_entries AS entry
+        LEFT JOIN allocation_stats AS stats ON stats.entry_id = entry.id
+        WHERE (
+          (entry.kind IN (0, 1) AND (
+            COALESCE(stats.allocation_count, 0) NOT BETWEEN 1 AND 50
+            OR stats.minimum_position <> 0
+            OR stats.maximum_position <> stats.allocation_count - 1
+            OR stats.category_count <> stats.allocation_count
+            OR stats.allocated_amount <> entry.amount
+          ))
+          OR (entry.kind IN (2, 3)
+            AND COALESCE(stats.allocation_count, 0) <> 0)
+        )
+        $entryFilter
+      ''',
+      variables: entryId == null ? const [] : [Variable.withInt(entryId)],
+      readsFrom: {ledgerEntries, ledgerAllocations},
+    ).getSingle();
+    if (invalidHeaders.read<int>('amount') != 0) {
+      throw StateError('Integritas jumlah atau posisi alokasi tidak valid.');
+    }
+
+    final invalidReferences = await customSelect(
+      '''
+        SELECT COUNT(*) AS amount
+        FROM ledger_allocations AS allocation
+        LEFT JOIN ledger_entries AS entry ON entry.id = allocation.entry_id
+        LEFT JOIN categories AS category ON category.id = allocation.category_id
+        WHERE (entry.id IS NULL OR entry.kind NOT IN (0, 1)
+          OR category.id IS NULL OR category.parent_id IS NULL
+          OR category.kind <> entry.kind)
+        $allocationFilter
+      ''',
+      variables: entryId == null ? const [] : [Variable.withInt(entryId)],
+      readsFrom: {ledgerEntries, ledgerAllocations, categories},
+    ).getSingle();
+    if (invalidReferences.read<int>('amount') != 0) {
+      throw StateError('Integritas relasi alokasi tidak valid.');
     }
   }
 }

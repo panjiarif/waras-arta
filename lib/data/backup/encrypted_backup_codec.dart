@@ -345,6 +345,15 @@ bool _sameKdfProfile(
     left.keyLength == right.keyLength;
 
 void _validatePayloadBudget(BackupDocument document) {
+  if (estimateBackupPayloadUpperBoundBytes(document) >
+      maxBackupPlaintextBytes) {
+    throw const BackupFormatException(
+      'Isi backup terlalu besar untuk versi aplikasi ini.',
+    );
+  }
+}
+
+int estimateBackupPayloadUpperBoundBytes(BackupDocument document) {
   var estimatedBytes = 1024;
   for (final account in document.accounts) {
     estimatedBytes +=
@@ -361,12 +370,9 @@ void _validatePayloadBudget(BackupDocument document) {
   }
   for (final entry in document.ledgerEntries) {
     estimatedBytes += 256 + 6 * entry.note.length;
+    estimatedBytes += 128 * entry.allocations.length;
   }
-  if (estimatedBytes > maxBackupPlaintextBytes) {
-    throw const BackupFormatException(
-      'Isi backup terlalu besar untuk versi aplikasi ini.',
-    );
-  }
+  return estimatedBytes;
 }
 
 Map<String, Object?> _decodeObject(Uint8List bytes, String message) {

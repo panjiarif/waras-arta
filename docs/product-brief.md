@@ -90,7 +90,7 @@ Versi awal menggunakan susunan tetap. Pengaturan kartu dan urutan dashboard dire
 - Mencatat pemasukan dan pengeluaran.
 - Memilih rekening, tanggal, dan catatan yang berlaku untuk seluruh transaksi.
 - Memasukkan 1–50 alokasi kategori; setiap alokasi mempunyai nominal positif dan satu subkategori yang sesuai jenis transaksi.
-- Membuka form dengan satu alokasi secara default agar pencatatan biasa tetap ringkas, lalu menambah baris melalui tombol **+ Tambah kategori lain** bila satu pembayaran atau penerimaan mencakup beberapa kategori.
+- Membuka form dengan satu alokasi secara default agar pencatatan biasa tetap ringkas, lalu menambah baris melalui tombol **+ Tambah rincian** bila satu pembayaran atau penerimaan mencakup beberapa kategori.
 - Melihat riwayat berdasarkan bulan atau tahun.
 - Mencari dan memfilter transaksi.
 - Mengubah atau menghapus transaksi dengan pembaruan saldo yang konsisten.
@@ -98,7 +98,7 @@ Versi awal menggunakan susunan tetap. Pengaturan kartu dan urutan dashboard dire
 
 Header tetap mewakili satu transaksi dan satu pergerakan saldo. Total bukan input independen: aplikasi menghitungnya otomatis dari jumlah seluruh alokasi lalu menyimpannya pada header. Saldo rekening, arus kas, kalender, dan jumlah transaksi memakai total header tepat sekali; rincian kategori serta anggaran memakai nominal masing-masing alokasi agar transaksi split tidak dihitung ganda.
 
-Aturan lengkap, evolusi schema/backup, serta matriks pengujiannya direncanakan dalam [spesifikasi Alokasi Kategori Transaksi](transaction-allocations.md).
+Aturan lengkap, evolusi schema/backup, serta matriks pengujiannya didokumentasikan dalam [spesifikasi Alokasi Kategori Transaksi](transaction-allocations.md).
 
 Kategori pemasukan dan pengeluaran memiliki tepat dua tingkat:
 
@@ -194,7 +194,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 - Setelah konfirmasi restore, aplikasi wajib membuat safety backup terenkripsi dari data aktif dengan kata sandi restore yang sama. File harus selesai ditulis, dibuka ulang, serta cocok dalam jumlah byte dan SHA-256 sebelum replace-all dimulai; pembatalan atau kegagalan penulisan/verifikasi menghentikan restore tanpa mengubah database.
 - Penggantian berlangsung atomik: kegagalan membatalkan seluruh perubahan database.
 - Container v1 hanya menerima profil Argon2id produksi secara persis. Ukuran file terenkripsi dibatasi 16 MiB dan plaintext hasil dekripsi dibatasi 10 MiB.
-- Payload saat ini mencakup rekening, kategori, dan seluruh ledger. Ketika alokasi kategori transaksi, anggaran, atau fitur data baru ditambahkan, versi format berikutnya harus membawa data tersebut dan menyediakan jalur pembacaan backup lama.
+- Payload v2 saat ini mencakup rekening, kategori, seluruh header ledger, dan allocation. Ketika anggaran atau fitur data baru ditambahkan, versi format berikutnya harus membawa data tersebut dan menyediakan jalur pembacaan backup lama.
 - Backup adalah snapshot manual, bukan sinkronisasi atau jadwal otomatis. Lokasi cloud dipilih pengguna melalui penyedia dokumen Android; aplikasi tidak mengunggah file sendiri.
 - Ekspor CSV disediakan sebagai laporan terpisah dan bukan format utama restore.
 
@@ -232,7 +232,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 
 ### Versi 0.2 — Perencanaan dan Analisis
 
-- fondasi alokasi kategori transaksi dan alur split transaction;
+- fondasi alokasi kategori transaksi dan alur split transaction *(sudah tersedia pada alpha saat ini)*;
 - anggaran multi-kategori;
 - tujuan keuangan;
 - diagram;
@@ -311,11 +311,11 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Rekening arsip tidak tersedia untuk transaksi baru. Transaksi lama tetap utuh, sedangkan edit/hapusnya menunggu rekening dipulihkan.
 - Hapus rekening permanen hanya berlaku jika tidak ada referensi ledger dan tidak menghapus transaksi secara berantai.
 - Migrasi schema v2 ke v3 menambahkan siklus arsip rekening dan dukungan penyesuaian saldo bertanda tanpa mengubah arus kas lama.
-- Kalender memakai `occurredDay` dan indeks ledger yang sudah ada sehingga schema database tetap versi 3.
+- Kalender diperkenalkan dengan memakai `occurredDay` dan indeks ledger yang sudah ada tanpa menaikkan schema 3; schema aktif kemudian naik ke v4 untuk allocation transaksi.
 - Kalender dibatasi Januari 2000 sampai hari ini, menggunakan pekan Senin–Minggu, dan menyertakan seluruh jenis transaksi pada daftar harian.
 - Backup manual menggunakan file `.warasarta` terenkripsi berbasis kata sandi, sedangkan restore memakai validasi, preview, konfirmasi replace-all, dan transaksi atomik.
 - Enkripsi backup tidak berarti database SQLite aktif sudah terenkripsi; perlindungan database kerja dan PIN/biometrik tetap keputusan terpisah.
 - Backup/restore harus diverifikasi pada Downloads, penyedia dokumen cloud, dan instalasi/perangkat berbeda sebelum aplikasi dipercaya sebagai satu-satunya catatan keuangan.
-- Pemasukan/pengeluaran direncanakan mempunyai 1–50 alokasi kategori dengan satu alokasi sebagai default. Tombol plus menambah rincian kategori tanpa mengubah transaksi menjadi beberapa pergerakan saldo.
+- Pemasukan/pengeluaran mempunyai 1–50 alokasi kategori dengan satu alokasi sebagai default. Tombol plus menambah rincian kategori tanpa mengubah transaksi menjadi beberapa pergerakan saldo.
 - Total transaksi menjadi sumber perubahan saldo dan arus kas, sedangkan nominal alokasi menjadi sumber laporan kategori serta progres anggaran; keduanya wajib selalu berjumlah sama.
-- Fondasi alokasi kategori dan split transaction dikerjakan sebelum Anggaran v1 agar anggaran sejak awal menghitung bagian kategori, bukan menggandakan total transaksi.
+- Fondasi alokasi kategori dan split transaction sudah dikerjakan sebelum Anggaran v1 agar anggaran sejak awal menghitung bagian kategori, bukan menggandakan total transaksi.

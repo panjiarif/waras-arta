@@ -8,8 +8,8 @@ import '../database/app_database.dart';
 // Deliberately independent from AppDatabase.schemaVersion. A database or
 // backup-format change must first extend the DTO, export, restore, and decoder
 // migration before these adapter coverage pins are updated.
-const _encodedBackupVersion = 1;
-const _encodedDatabaseSchemaVersion = 3;
+const _encodedBackupVersion = 2;
+const _encodedDatabaseSchemaVersion = 4;
 const _encodedTableColumns = <String, Set<String>>{
   'accounts': {
     'id',
@@ -38,11 +38,11 @@ const _encodedTableColumns = <String, Set<String>>{
     'account_id',
     'destination_account_id',
     'amount',
-    'category_id',
     'note',
     'occurred_day',
     'created_at',
   },
+  'ledger_allocations': {'entry_id', 'position', 'category_id', 'amount'},
 };
 
 class DriftBackupDataStore implements BackupDataStore {
@@ -69,6 +69,26 @@ class DriftBackupDataStore implements BackupDataStore {
         final ledgerEntries = await (_db.select(
           _db.ledgerEntries,
         )..orderBy([(row) => OrderingTerm.asc(row.id)])).get();
+        final ledgerAllocations =
+            await (_db.select(_db.ledgerAllocations)..orderBy([
+                  (row) => OrderingTerm.asc(row.entryId),
+                  (row) => OrderingTerm.asc(row.position),
+                ]))
+                .get();
+        final ledgerIds = ledgerEntries.map((row) => row.id).toSet();
+        if (ledgerAllocations.any(
+          (allocation) => !ledgerIds.contains(allocation.entryId),
+        )) {
+          throw const BackupPersistenceException(
+            'Allocation transaksi tidak mempunyai header yang valid.',
+          );
+        }
+        final allocationsByEntry = <int, List<LedgerAllocationRow>>{};
+        for (final allocation in ledgerAllocations) {
+          allocationsByEntry
+              .putIfAbsent(allocation.entryId, () => [])
+              .add(allocation);
+        }
         final sequences = await _readSequences(
           maximumAccountId: _maximum(accounts.map((row) => row.id)),
           maximumCategoryId: _maximum(categories.map((row) => row.id)),
@@ -81,7 +101,10 @@ class DriftBackupDataStore implements BackupDataStore {
           sequences: sequences,
           accounts: accounts.map(_backupAccount),
           categories: categories.map(_backupCategory),
-          ledgerEntries: ledgerEntries.map(_backupLedgerEntry),
+          ledgerEntries: ledgerEntries.map(
+            (row) =>
+                _backupLedgerEntry(row, allocationsByEntry[row.id] ?? const []),
+          ),
         );
         validateBackupDocument(document, requireSequenceHeadroom: false);
         return document;
@@ -124,7 +147,7 @@ class DriftBackupDataStore implements BackupDataStore {
   Future<void> restoreDocument(BackupDocument document) async {
     _ensureAdapterCoversCurrentDatabase();
     validateBackupDocument(document);
-    if (document.databaseSchemaVersion != _db.schemaVersion) {
+    if (!canRestoreBackupDocumentToSchema(document, _db.schemaVersion)) {
       throw const BackupValidationException(
         'Versi database pada backup belum didukung oleh aplikasi ini.',
       );
@@ -138,6 +161,7 @@ class DriftBackupDataStore implements BackupDataStore {
         await _db
             .update(_db.accounts)
             .write(const AccountsCompanion(isArchived: Value(false)));
+        await _db.delete(_db.ledgerAllocations).go();
         await _db.delete(_db.ledgerEntries).go();
         await (_db.delete(
           _db.categories,
@@ -186,11 +210,20 @@ class DriftBackupDataStore implements BackupDataStore {
               accountId: entry.accountId,
               destinationAccountId: entry.destinationAccountId,
               amount: entry.amount,
-              categoryId: entry.categoryId,
               note: entry.note,
               occurredDay: entry.occurredDay,
               createdAt: entry.createdAtUtc,
             ),
+        ];
+        final allocationRows = [
+          for (final entry in document.ledgerEntries)
+            for (final allocation in entry.allocations)
+              LedgerAllocationRow(
+                entryId: entry.id,
+                position: allocation.position,
+                categoryId: allocation.categoryId,
+                amount: allocation.amount,
+              ),
         ];
 
         await _db.batch((batch) {
@@ -205,6 +238,9 @@ class DriftBackupDataStore implements BackupDataStore {
           }
           if (ledgerRows.isNotEmpty) {
             batch.insertAll(_db.ledgerEntries, ledgerRows);
+          }
+          if (allocationRows.isNotEmpty) {
+            batch.insertAll(_db.ledgerAllocations, allocationRows);
           }
         });
 
@@ -281,28 +317,61 @@ class DriftBackupDataStore implements BackupDataStore {
       SELECT
         (SELECT COUNT(*) FROM accounts) AS account_count,
         (SELECT COUNT(*) FROM categories) AS category_count,
-        (SELECT COUNT(*) FROM ledger_entries) AS ledger_count
+        (SELECT COUNT(*) FROM ledger_entries) AS ledger_count,
+        (SELECT COUNT(*) FROM ledger_allocations) AS allocation_count
     ''').getSingle();
+    final expectedAllocationCount = document.ledgerEntries.fold<int>(
+      0,
+      (count, entry) => count + entry.allocations.length,
+    );
     if (counts.read<int>('account_count') != document.accounts.length ||
         counts.read<int>('category_count') != document.categories.length ||
-        counts.read<int>('ledger_count') != document.ledgerEntries.length) {
+        counts.read<int>('ledger_count') != document.ledgerEntries.length ||
+        counts.read<int>('allocation_count') != expectedAllocationCount) {
       throw const BackupValidationException(
         'Jumlah data hasil restore tidak sesuai dengan backup.',
       );
     }
 
-    final invalidCategories = await _db.customSelect('''
+    try {
+      await _db.verifyLedgerAllocationIntegrity();
+    } on StateError catch (error) {
+      throw BackupValidationException(
+        'Rincian allocation hasil restore tidak valid.',
+        cause: error,
+      );
+    }
+
+    final invalidArchivedBalances = await _db.customSelect('''
       SELECT COUNT(*) AS amount
-      FROM ledger_entries AS entry
-      LEFT JOIN categories AS category ON category.id = entry.category_id
-      WHERE (entry.kind IN (0, 1) AND
-             (category.id IS NULL OR category.parent_id IS NULL OR
-              category.kind <> entry.kind))
-         OR (entry.kind IN (2, 3) AND entry.category_id IS NOT NULL)
+      FROM (
+        SELECT account.id
+        FROM accounts AS account
+        LEFT JOIN ledger_entries AS entry
+          ON entry.account_id = account.id
+          OR entry.destination_account_id = account.id
+        WHERE account.is_archived = 1
+        GROUP BY account.id
+        HAVING COALESCE(SUM(
+          CASE
+            WHEN entry.kind = 0 AND entry.account_id = account.id
+              THEN entry.amount
+            WHEN entry.kind = 1 AND entry.account_id = account.id
+              THEN -entry.amount
+            WHEN entry.kind = 2 AND entry.account_id = account.id
+              THEN -entry.amount
+            WHEN entry.kind = 2 AND entry.destination_account_id = account.id
+              THEN entry.amount
+            WHEN entry.kind = 3 AND entry.account_id = account.id
+              THEN entry.amount
+            ELSE 0
+          END
+        ), 0) <> 0
+      )
     ''').getSingle();
-    if (invalidCategories.read<int>('amount') != 0) {
+    if (invalidArchivedBalances.read<int>('amount') != 0) {
       throw const BackupValidationException(
-        'Kategori hasil restore tidak valid.',
+        'Saldo rekening arsip hasil restore tidak valid.',
       );
     }
 
@@ -343,18 +412,26 @@ class DriftBackupDataStore implements BackupDataStore {
     updatedAtUtc: row.updatedAt.toUtc(),
   );
 
-  static BackupLedgerEntry _backupLedgerEntry(LedgerRow row) =>
-      BackupLedgerEntry(
-        id: row.id,
-        kind: EntryKind.values[row.kind],
-        accountId: row.accountId,
-        destinationAccountId: row.destinationAccountId,
-        amount: row.amount,
-        categoryId: row.categoryId,
-        note: row.note,
-        occurredDay: row.occurredDay,
-        createdAtUtc: row.createdAt.toUtc(),
-      );
+  static BackupLedgerEntry _backupLedgerEntry(
+    LedgerRow row,
+    Iterable<LedgerAllocationRow> allocations,
+  ) => BackupLedgerEntry(
+    id: row.id,
+    kind: EntryKind.values[row.kind],
+    accountId: row.accountId,
+    destinationAccountId: row.destinationAccountId,
+    amount: row.amount,
+    allocations: allocations.map(
+      (allocation) => BackupLedgerAllocation(
+        position: allocation.position,
+        categoryId: allocation.categoryId,
+        amount: allocation.amount,
+      ),
+    ),
+    note: row.note,
+    occurredDay: row.occurredDay,
+    createdAtUtc: row.createdAt.toUtc(),
+  );
 
   static int _maximum(Iterable<int> values) {
     var result = 0;

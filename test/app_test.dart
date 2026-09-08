@@ -280,6 +280,360 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('expense form saves ordered split allocations and live total', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('primary-action')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('entry-allocation-row-0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('entry-allocation-total')), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('entry-amount')), '15000');
+    await tester.ensureVisible(find.byKey(const Key('entry-category')));
+    await tester.tap(find.byKey(const Key('entry-category')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('entry-category-option-10')));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('add-entry-allocation')));
+    await tester.tap(find.byKey(const Key('add-entry-allocation')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('entry-allocation-row-1')),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('entry-allocation-amount-1')),
+      '2000',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('entry-category-1')));
+    await tester.tap(find.byKey(const ValueKey('entry-category-1')));
+    await tester.pumpAndSettle();
+    final usedCategory = tester.widget<ListTile>(
+      find.byKey(const ValueKey('entry-category-option-10')),
+    );
+    expect(usedCategory.enabled, isFalse);
+    await tester.tap(find.byKey(const ValueKey('entry-category-option-12')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('entry-allocation-total')),
+        matching: find.text('Rp 17.000'),
+      ),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.byKey(const Key('save-entry')));
+    await tester.tap(find.byKey(const Key('save-entry')));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedEntry?.kind, EntryKind.expense);
+    expect(repository.savedEntry?.amount, 17000);
+    expect(repository.savedEntry?.categoryId, isNull);
+    expect(repository.savedEntry?.allocations, hasLength(2));
+    expect(
+      repository.savedEntry?.allocations.map(
+        (allocation) => (allocation.categoryId, allocation.amount),
+      ),
+      [(10, 15000), (12, 2000)],
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('split form rejects a total above the transaction limit', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('primary-action')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('entry-amount')),
+      maxAmount.toString(),
+    );
+    await tester.ensureVisible(find.byKey(const Key('add-entry-allocation')));
+    await tester.tap(find.byKey(const Key('add-entry-allocation')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('entry-allocation-amount-1')),
+      '1',
+    );
+    await tester.pump();
+    expect(find.text('Rp 1.000.000.000.000'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const Key('save-entry')));
+    await tester.tap(find.byKey(const Key('save-entry')));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedEntry, isNull);
+    expect(
+      find.text('Total transaksi melebihi Rp999.999.999.999.'),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const Key('entry-amount')),
+      (maxAmount - 1).toString(),
+    );
+    await tester.pump();
+    expect(
+      find.text('Total transaksi melebihi Rp999.999.999.999.'),
+      findsNothing,
+    );
+    expect(find.text('Rp 999.999.999.999'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('split form reserves one active category for each empty row', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    repository.categoryGroups.removeWhere(
+      (group) =>
+          group.parent.kind == CategoryKind.expense &&
+          !const {10, 12}.contains(group.children.single.id),
+    );
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('primary-action')));
+    await tester.pumpAndSettle();
+
+    final addButton = find.byKey(const Key('add-entry-allocation'));
+    expect(tester.widget<OutlinedButton>(addButton).onPressed, isNotNull);
+    await tester.ensureVisible(addButton);
+    await tester.tap(addButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('entry-allocation-row-1')),
+      findsOneWidget,
+    );
+    expect(tester.widget<OutlinedButton>(addButton).onPressed, isNull);
+    expect(
+      find.text('Tidak ada subkategori aktif lain untuk rincian baru.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('entry-allocation-row-2')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('removing a middle allocation keeps the other row values', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('primary-action')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('entry-amount')), '100');
+    await tester.ensureVisible(find.byKey(const Key('entry-category')));
+    await tester.tap(find.byKey(const Key('entry-category')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('entry-category-option-10')));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('add-entry-allocation')));
+    await tester.tap(find.byKey(const Key('add-entry-allocation')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('entry-allocation-amount-1')),
+      '200',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('entry-category-1')));
+    await tester.tap(find.byKey(const ValueKey('entry-category-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('entry-category-option-12')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('add-entry-allocation')));
+    await tester.tap(find.byKey(const Key('add-entry-allocation')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('entry-allocation-amount-2')),
+      '300',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('entry-category-2')));
+    await tester.tap(find.byKey(const ValueKey('entry-category-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('entry-category-option-14')));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('remove-entry-allocation-1')),
+    );
+    await tester.tap(find.byKey(const ValueKey('remove-entry-allocation-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('entry-allocation-row-1')), findsNothing);
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const Key('entry-amount')))
+          .controller
+          ?.text,
+      '100',
+    );
+    expect(
+      tester
+          .widget<TextFormField>(
+            find.byKey(const ValueKey('entry-allocation-amount-2')),
+          )
+          .controller
+          ?.text,
+      '300',
+    );
+    expect(find.text('Rp 400'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('save-entry')));
+    await tester.tap(find.byKey(const Key('save-entry')));
+    await tester.pumpAndSettle();
+    expect(
+      repository.savedEntry?.allocations.map(
+        (allocation) => (allocation.categoryId, allocation.amount),
+      ),
+      [(10, 100), (14, 300)],
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('switching a split expense to transfer carries only its total', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('primary-action')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('entry-amount')), '15000');
+    await tester.ensureVisible(find.byKey(const Key('add-entry-allocation')));
+    await tester.tap(find.byKey(const Key('add-entry-allocation')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('entry-allocation-amount-1')),
+      '2000',
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('entry-kind')));
+    await tester.tap(find.byKey(const Key('entry-kind')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Transfer').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('add-entry-allocation')), findsNothing);
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const Key('entry-amount')))
+          .controller
+          ?.text,
+      '17000',
+    );
+    await tester.ensureVisible(find.byKey(const Key('save-entry')));
+    await tester.tap(find.byKey(const Key('save-entry')));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedEntry?.kind, EntryKind.transfer);
+    expect(repository.savedEntry?.amount, 17000);
+    expect(repository.savedEntry?.allocations, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'an invalid split clears a transfer total from an earlier toggle',
+    (tester) async {
+      await pumpApp(tester, _UiRepository(withAccounts: true));
+      await tester.tap(find.byKey(const Key('primary-action')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('entry-amount')), '17000');
+
+      await tester.ensureVisible(find.byKey(const Key('entry-kind')));
+      await tester.tap(find.byKey(const Key('entry-kind')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Transfer').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('entry-amount')))
+            .controller
+            ?.text,
+        '17000',
+      );
+
+      await tester.tap(find.byKey(const Key('entry-kind')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pengeluaran').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('entry-amount')), '');
+      await tester.ensureVisible(find.byKey(const Key('entry-kind')));
+      await tester.tap(find.byKey(const Key('entry-kind')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Transfer').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('entry-amount')))
+            .controller
+            ?.text,
+        isEmpty,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'switching transfer to expense carries amount but requires category',
+    (tester) async {
+      final repository = _UiRepository(withAccounts: true);
+      await pumpApp(tester, repository);
+      await tester.tap(find.byKey(const Key('primary-action')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('entry-kind')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Transfer').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('entry-amount')), '25000');
+
+      await tester.tap(find.byKey(const Key('entry-kind')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pengeluaran').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('entry-amount')))
+            .controller
+            ?.text,
+        '25000',
+      );
+      expect(
+        tester
+            .widget<CategorySelectionField>(find.byType(CategorySelectionField))
+            .value,
+        isNull,
+      );
+
+      await tester.ensureVisible(find.byKey(const Key('save-entry')));
+      await tester.tap(find.byKey(const Key('save-entry')));
+      await tester.pumpAndSettle();
+      expect(repository.savedEntry, isNull);
+      expect(find.text('Pilih subkategori.'), findsOneWidget);
+
+      await tester.ensureVisible(find.byKey(const Key('entry-category')));
+      await tester.tap(find.byKey(const Key('entry-category')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('entry-category-option-10')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('save-entry')));
+      await tester.tap(find.byKey(const Key('save-entry')));
+      await tester.pumpAndSettle();
+
+      expect(repository.savedEntry?.kind, EntryKind.expense);
+      expect(repository.savedEntry?.destinationAccountId, isNull);
+      expect(repository.savedEntry?.allocations, hasLength(1));
+      expect(repository.savedEntry?.allocations.single.categoryId, 10);
+      expect(repository.savedEntry?.allocations.single.amount, 25000);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('transfer uses distinct accounts and no category', (
     tester,
   ) async {
@@ -287,6 +641,7 @@ void main() {
     await pumpApp(tester, repository);
     await tester.tap(find.byKey(const Key('primary-action')));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('entry-kind')));
     await tester.tap(find.byKey(const Key('entry-kind')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Transfer').last);
@@ -310,6 +665,7 @@ void main() {
     await tester.tap(find.byKey(const Key('primary-action')));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const Key('entry-category')));
     await tester.tap(find.byKey(const Key('entry-category')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('entry-category-option-9')), findsNothing);
@@ -326,15 +682,35 @@ void main() {
       10,
     );
 
+    await tester.ensureVisible(find.byKey(const Key('add-entry-allocation')));
+    await tester.tap(find.byKey(const Key('add-entry-allocation')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('entry-category-1')));
+    await tester.tap(find.byKey(const ValueKey('entry-category-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('entry-category-option-12')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widgetList<CategorySelectionField>(
+            find.byType(CategorySelectionField),
+          )
+          .map((field) => field.value),
+      [10, 12],
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('entry-kind')));
     await tester.tap(find.byKey(const Key('entry-kind')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Pemasukan').last);
     await tester.pumpAndSettle();
     expect(
       tester
-          .widget<CategorySelectionField>(find.byType(CategorySelectionField))
-          .value,
-      isNull,
+          .widgetList<CategorySelectionField>(
+            find.byType(CategorySelectionField),
+          )
+          .map((field) => field.value),
+      [null, null],
     );
     expect(repository.savedEntry, isNull);
     expect(tester.takeException(), isNull);
@@ -516,6 +892,56 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('split total and controls fit a narrow screen with large text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpApp(tester, _UiRepository(withAccounts: true));
+
+    await tester.tap(find.byKey(const Key('primary-action')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('entry-amount')),
+      maxAmount.toString(),
+    );
+    await tester.ensureVisible(find.byKey(const Key('add-entry-allocation')));
+    await tester.tap(find.byKey(const Key('add-entry-allocation')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('entry-allocation-amount-1')),
+      '1',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('entry-allocation-total')));
+    await tester.pumpAndSettle();
+    expect(find.text('Rp 1.000.000.000.000'), findsOneWidget);
+    expect(
+      find.text('Total transaksi melebihi Rp999.999.999.999.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('remove-entry-allocation-1')),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.byKey(const Key('save-entry')));
+    await tester.tap(find.byKey(const Key('save-entry')));
+    await tester.pumpAndSettle();
+    final firstRowRect = tester.getRect(
+      find.byKey(const ValueKey('entry-allocation-row-0')),
+    );
+    expect(firstRowRect.bottom, greaterThan(0));
+    expect(firstRowRect.top, lessThan(800));
+    expect(find.text('Pilih subkategori.'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('repository failure shows retry instead of a fake zero balance', (
     tester,
   ) async {
@@ -529,7 +955,7 @@ void main() {
   testWidgets('transaction card opens details and edit pre-fills the form', (
     tester,
   ) async {
-    final entry = FinanceEntry(
+    final entry = _financeEntry(
       id: 7,
       kind: EntryKind.expense,
       accountId: 1,
@@ -581,12 +1007,118 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('split transaction details and edit preserve every allocation', (
+    tester,
+  ) async {
+    final entry = _financeEntry(
+      id: 17,
+      kind: EntryKind.expense,
+      accountId: 1,
+      amount: 17000,
+      entryAllocations: const [
+        FinanceEntryAllocation(
+          position: 0,
+          categoryId: 10,
+          amount: 15000,
+          categoryName: 'Umum',
+          parentCategoryName: 'Makan & minum',
+          categoryIconKey: 'restaurant',
+          categoryArchived: false,
+        ),
+        FinanceEntryAllocation(
+          position: 1,
+          categoryId: 12,
+          amount: 2000,
+          categoryName: 'Umum',
+          parentCategoryName: 'Transportasi',
+          categoryIconKey: 'directions_car',
+          categoryArchived: false,
+        ),
+      ],
+      note: 'Makan siang dan parkir',
+      occurredAt: DateTime(2024, 8, 17),
+      createdAt: DateTime(2024, 8, 17, 12, 30),
+    );
+    final repository = _UiRepository(withAccounts: true, entry: entry);
+    await pumpApp(tester, repository);
+
+    await tester.tap(find.text('Riwayat').last);
+    await tester.pumpAndSettle();
+    expect(find.text('2 rincian'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('entry-17')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 rincian'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('entry-detail-allocation-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('entry-detail-allocation-1')),
+      findsOneWidget,
+    );
+    expect(find.text('Rp 15.000'), findsOneWidget);
+    expect(find.text('Rp 2.000'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('edit-entry')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const Key('entry-amount')))
+          .controller
+          ?.text,
+      '15000',
+    );
+    expect(
+      tester
+          .widget<TextFormField>(
+            find.byKey(const ValueKey('entry-allocation-amount-1')),
+          )
+          .controller
+          ?.text,
+      '2000',
+    );
+    expect(
+      tester
+          .widgetList<CategorySelectionField>(
+            find.byType(CategorySelectionField),
+          )
+          .map((field) => field.value),
+      [10, 12],
+    );
+    expect(find.text('Rp 17.000'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('entry-allocation-amount-1')),
+      '3000',
+    );
+    await tester.ensureVisible(find.byKey(const Key('save-entry')));
+    await tester.tap(find.byKey(const Key('save-entry')));
+    await tester.pumpAndSettle();
+
+    expect(repository.updatedEntryId, 17);
+    expect(repository.updatedEntry?.amount, 18000);
+    expect(repository.updatedEntry?.allocations, hasLength(2));
+    expect(
+      repository.updatedEntry?.allocations.map(
+        (allocation) => (allocation.categoryId, allocation.amount),
+      ),
+      [(10, 15000), (12, 3000)],
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const Key('entry-detail-amount'))).data,
+      '− Rp 18.000',
+    );
+    expect(find.text('Rp 3.000'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('delete requires confirmation and removes one transaction', (
     tester,
   ) async {
     final repository = _UiRepository(
       withAccounts: true,
-      entry: FinanceEntry(
+      entry: _financeEntry(
         id: 8,
         kind: EntryKind.income,
         accountId: 1,
@@ -630,7 +1162,7 @@ void main() {
   testWidgets('opening balance details are read-only', (tester) async {
     final repository = _UiRepository(
       withAccounts: true,
-      entry: FinanceEntry(
+      entry: _financeEntry(
         id: 9,
         kind: EntryKind.adjustment,
         accountId: 1,
@@ -663,7 +1195,7 @@ void main() {
   ) async {
     final repository = _UiRepository(
       withAccounts: true,
-      entry: FinanceEntry(
+      entry: _financeEntry(
         id: 10,
         kind: EntryKind.adjustment,
         accountId: 1,
@@ -710,7 +1242,7 @@ void main() {
     final repository = _UiRepository(
       withAccounts: true,
       failRead: true,
-      entry: FinanceEntry(
+      entry: _financeEntry(
         id: 13,
         kind: EntryKind.income,
         accountId: 1,
@@ -744,7 +1276,7 @@ void main() {
   ) async {
     final repository = _UiRepository(
       withAccounts: true,
-      entry: FinanceEntry(
+      entry: _financeEntry(
         id: 10,
         kind: EntryKind.expense,
         accountId: 1,
@@ -781,7 +1313,7 @@ void main() {
   testWidgets('failed delete keeps detail and can be retried', (tester) async {
     final repository = _UiRepository(
       withAccounts: true,
-      entry: FinanceEntry(
+      entry: _financeEntry(
         id: 11,
         kind: EntryKind.income,
         accountId: 1,
@@ -822,7 +1354,7 @@ void main() {
   ) async {
     final repository = _UiRepository(
       withAccounts: true,
-      entry: FinanceEntry(
+      entry: _financeEntry(
         id: 12,
         kind: EntryKind.expense,
         accountId: 1,
@@ -868,7 +1400,7 @@ void main() {
     final repository = _UiRepository(withAccounts: true);
     final date = DateTime(2024, 2, 29);
     repository.entries.addAll([
-      FinanceEntry(
+      _financeEntry(
         id: 31,
         kind: EntryKind.income,
         accountId: 1,
@@ -879,7 +1411,7 @@ void main() {
         occurredAt: date,
         createdAt: date,
       ),
-      FinanceEntry(
+      _financeEntry(
         id: 32,
         kind: EntryKind.expense,
         accountId: 1,
@@ -890,7 +1422,7 @@ void main() {
         occurredAt: date,
         createdAt: date,
       ),
-      FinanceEntry(
+      _financeEntry(
         id: 33,
         kind: EntryKind.transfer,
         accountId: 1,
@@ -900,7 +1432,7 @@ void main() {
         occurredAt: date,
         createdAt: date,
       ),
-      FinanceEntry(
+      _financeEntry(
         id: 34,
         kind: EntryKind.adjustment,
         accountId: 1,
@@ -976,7 +1508,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final repository = _UiRepository(withAccounts: true);
     repository.entries.add(
-      FinanceEntry(
+      _financeEntry(
         id: 41,
         kind: EntryKind.income,
         accountId: 1,
@@ -1009,6 +1541,51 @@ void main() {
     expect(find.text('+ Rp 999.999.999.999'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+FinanceEntry _financeEntry({
+  required int id,
+  required EntryKind kind,
+  required int accountId,
+  int? destinationAccountId,
+  required int amount,
+  int? categoryId,
+  String? categoryName,
+  String? parentCategoryName,
+  String? categoryIconKey,
+  bool categoryArchived = false,
+  List<FinanceEntryAllocation>? entryAllocations,
+  required String note,
+  required DateTime occurredAt,
+  required DateTime createdAt,
+}) {
+  final categorized = kind == EntryKind.income || kind == EntryKind.expense;
+  return FinanceEntry(
+    id: id,
+    kind: kind,
+    accountId: accountId,
+    destinationAccountId: destinationAccountId,
+    amount: amount,
+    allocations: categorized
+        ? entryAllocations ??
+              [
+                FinanceEntryAllocation(
+                  position: 0,
+                  categoryId: categoryId ?? (kind == EntryKind.income ? 2 : 10),
+                  amount: amount,
+                  categoryName: categoryName ?? 'Umum',
+                  parentCategoryName:
+                      parentCategoryName ??
+                      (kind == EntryKind.income ? 'Pemasukan' : 'Pengeluaran'),
+                  categoryIconKey: categoryIconKey ?? 'category',
+                  categoryArchived: categoryArchived,
+                ),
+              ]
+        : const [],
+    note: note,
+    occurredAt: occurredAt,
+    createdAt: createdAt,
+  );
 }
 
 class _UiRepository implements FinanceRepository {
@@ -1381,7 +1958,7 @@ class _UiRepository implements FinanceRepository {
         }) +
         1;
     entries.add(
-      FinanceEntry(
+      _financeEntry(
         id: entryId,
         kind: EntryKind.adjustment,
         accountId: id,
@@ -1419,17 +1996,31 @@ class _UiRepository implements FinanceRepository {
       throw const FinanceValidationException('Transaksi tidak ditemukan.');
     }
     final previous = entries[index];
-    entries[index] = FinanceEntry(
+    final updatedAllocations = <FinanceEntryAllocation>[];
+    for (var position = 0; position < draft.allocations.length; position++) {
+      final allocation = draft.allocations[position];
+      final selection = _findUiCategory(allocation.categoryId, categoryGroups);
+      updatedAllocations.add(
+        FinanceEntryAllocation(
+          position: position,
+          categoryId: allocation.categoryId,
+          amount: allocation.amount,
+          categoryName: selection.child.name,
+          parentCategoryName: selection.parent.name,
+          categoryIconKey: selection.child.iconKey,
+          categoryArchived:
+              selection.child.isArchived || selection.parent.isArchived,
+        ),
+      );
+    }
+    entries[index] = _financeEntry(
       id: id,
       kind: draft.kind,
       accountId: draft.accountId,
       destinationAccountId: draft.destinationAccountId,
       amount: draft.amount,
       categoryId: draft.categoryId,
-      categoryName: previous.categoryName,
-      parentCategoryName: previous.parentCategoryName,
-      categoryIconKey: previous.categoryIconKey,
-      categoryArchived: previous.categoryArchived,
+      entryAllocations: updatedAllocations,
       note: draft.note,
       occurredAt: draft.occurredAt,
       createdAt: previous.createdAt,
@@ -1525,6 +2116,18 @@ class _UiRepository implements FinanceRepository {
       yield matching();
     }
   }
+}
+
+({FinanceCategory parent, FinanceCategory child}) _findUiCategory(
+  int categoryId,
+  List<CategoryGroup> groups,
+) {
+  for (final group in groups) {
+    for (final child in group.children) {
+      if (child.id == categoryId) return (parent: group.parent, child: child);
+    }
+  }
+  throw StateError('Kategori test $categoryId tidak ditemukan.');
 }
 
 List<CategoryGroup> _defaultCategoryGroups() => [

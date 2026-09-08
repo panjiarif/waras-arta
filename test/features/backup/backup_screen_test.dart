@@ -411,7 +411,7 @@ class _FakeBackupFileGateway implements BackupFileGateway {
 BackupDocument _backupDocument() {
   final createdAt = DateTime.utc(2026, 9, 6, 7, 30);
   return BackupDocument(
-    databaseSchemaVersion: 3,
+    databaseSchemaVersion: 4,
     createdAtUtc: createdAt,
     sequences: const BackupSequences(
       accounts: 1,
@@ -489,7 +489,9 @@ BackupDocument _backupDocument() {
         accountId: 1,
         destinationAccountId: null,
         amount: 100000,
-        categoryId: 2,
+        allocations: const [
+          BackupLedgerAllocation(position: 0, categoryId: 2, amount: 100000),
+        ],
         note: 'Rahasia gaji September',
         occurredDay: 20260906,
         createdAtUtc: createdAt,

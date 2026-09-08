@@ -2,10 +2,12 @@ import 'finance.dart';
 
 const warasArtaBackupFormat = 'waras-arta-backup';
 const oldestSupportedBackupVersion = 1;
-const currentBackupVersion = 1;
+const currentBackupVersion = 2;
 const maxBackupAccountRecords = 2000;
 const maxBackupCategoryRecords = 20000;
 const maxBackupLedgerRecords = 100000;
+const maxBackupLedgerAllocationRecords = 200000;
+const maxBackupLedgerAllocationsPerEntry = 50;
 const maxBackupRecordId = 1000000000000;
 const minimumRestoredIdHeadroom = 1000000;
 
@@ -36,6 +38,11 @@ class BackupDocument {
         format: format,
         backupVersion: backupVersion,
       ),
+      2 => _readBackupDocumentV2(
+        json,
+        format: format,
+        backupVersion: backupVersion,
+      ),
       _ => throw const BackupFormatException(
         'Versi backup belum didukung oleh aplikasi ini.',
       ),
@@ -61,14 +68,16 @@ class BackupDocument {
       'categories',
       'ledgerEntries',
     }, 'data');
+    final databaseSchemaVersion = _readInt(
+      json,
+      'databaseSchemaVersion',
+      'databaseSchemaVersion',
+    );
+    _requireBackupVersionSchemaPair(backupVersion, databaseSchemaVersion);
     final document = BackupDocument(
       format: format,
       backupVersion: backupVersion,
-      databaseSchemaVersion: _readInt(
-        json,
-        'databaseSchemaVersion',
-        'databaseSchemaVersion',
-      ),
+      databaseSchemaVersion: databaseSchemaVersion,
       createdAtUtc: _readDateTime(json, 'createdAtUtc', 'createdAtUtc'),
       sequences: BackupSequences.fromJson(
         _readObject(json, 'sequences', 'sequences'),
@@ -91,9 +100,62 @@ class BackupDocument {
         data,
         'ledgerEntries',
         'data.ledgerEntries',
-        BackupLedgerEntry.fromJson,
+        _readBackupLedgerEntryV1,
         maximumLength: maxBackupLedgerRecords,
       ),
+    );
+    validateBackupDocument(document);
+    return document;
+  }
+
+  static BackupDocument _readBackupDocumentV2(
+    Map<String, Object?> json, {
+    required String format,
+    required int backupVersion,
+  }) {
+    _requireExactKeys(json, const {
+      'format',
+      'backupVersion',
+      'databaseSchemaVersion',
+      'createdAtUtc',
+      'sequences',
+      'data',
+    }, 'backup');
+    final data = _readObject(json, 'data', 'data');
+    _requireExactKeys(data, const {
+      'accounts',
+      'categories',
+      'ledgerEntries',
+    }, 'data');
+    final databaseSchemaVersion = _readInt(
+      json,
+      'databaseSchemaVersion',
+      'databaseSchemaVersion',
+    );
+    _requireBackupVersionSchemaPair(backupVersion, databaseSchemaVersion);
+    final document = BackupDocument(
+      format: format,
+      backupVersion: backupVersion,
+      databaseSchemaVersion: databaseSchemaVersion,
+      createdAtUtc: _readDateTime(json, 'createdAtUtc', 'createdAtUtc'),
+      sequences: BackupSequences.fromJson(
+        _readObject(json, 'sequences', 'sequences'),
+      ),
+      accounts: _readObjectList(
+        data,
+        'accounts',
+        'data.accounts',
+        BackupAccount.fromJson,
+        maximumLength: maxBackupAccountRecords,
+      ),
+      categories: _readObjectList(
+        data,
+        'categories',
+        'data.categories',
+        BackupCategory.fromJson,
+        maximumLength: maxBackupCategoryRecords,
+      ),
+      ledgerEntries: _readBackupLedgerEntriesV2(data),
     );
     validateBackupDocument(document);
     return document;
@@ -117,19 +179,41 @@ class BackupDocument {
     ledgerEntryCount: ledgerEntries.length,
   );
 
-  Map<String, Object?> toJson() => {
-    'format': format,
-    'backupVersion': backupVersion,
-    'databaseSchemaVersion': databaseSchemaVersion,
-    'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
-    'sequences': sequences.toJson(),
-    'data': {
-      'accounts': accounts.map((item) => item.toJson()).toList(),
-      'categories': categories.map((item) => item.toJson()).toList(),
-      'ledgerEntries': ledgerEntries.map((item) => item.toJson()).toList(),
-    },
-  };
+  Map<String, Object?> toJson() {
+    validateBackupDocument(this, requireSequenceHeadroom: false);
+    final Map<String, Object?> Function(BackupLedgerEntry) encodeLedgerEntry =
+        switch (backupVersion) {
+          1 => _writeBackupLedgerEntryV1,
+          2 => _writeBackupLedgerEntryV2,
+          _ => throw const BackupFormatException(
+            'Versi backup belum didukung oleh aplikasi ini.',
+          ),
+        };
+    return {
+      'format': format,
+      'backupVersion': backupVersion,
+      'databaseSchemaVersion': databaseSchemaVersion,
+      'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
+      'sequences': sequences.toJson(),
+      'data': {
+        'accounts': accounts.map((item) => item.toJson()).toList(),
+        'categories': categories.map((item) => item.toJson()).toList(),
+        'ledgerEntries': ledgerEntries.map(encodeLedgerEntry).toList(),
+      },
+    };
+  }
 }
+
+bool canRestoreBackupDocumentToSchema(
+  BackupDocument document,
+  int targetDatabaseSchemaVersion,
+) => switch (targetDatabaseSchemaVersion) {
+  3 => document.backupVersion == 1 && document.databaseSchemaVersion == 3,
+  4 =>
+    (document.backupVersion == 1 && document.databaseSchemaVersion == 3) ||
+        (document.backupVersion == 2 && document.databaseSchemaVersion == 4),
+  _ => false,
+};
 
 class BackupSummary {
   const BackupSummary({
@@ -314,76 +398,215 @@ class BackupCategory {
 }
 
 class BackupLedgerEntry {
-  const BackupLedgerEntry({
+  BackupLedgerEntry({
     required this.id,
     required this.kind,
     required this.accountId,
     required this.destinationAccountId,
     required this.amount,
-    required this.categoryId,
+    required Iterable<BackupLedgerAllocation> allocations,
     required this.note,
     required this.occurredDay,
     required this.createdAtUtc,
-  });
-
-  factory BackupLedgerEntry.fromJson(Map<String, Object?> json) {
-    _requireExactKeys(json, const {
-      'id',
-      'kind',
-      'accountId',
-      'destinationAccountId',
-      'amount',
-      'categoryId',
-      'note',
-      'occurredDay',
-      'createdAtUtc',
-    }, 'ledgerEntry');
-    return BackupLedgerEntry(
-      id: _readInt(json, 'id', 'ledgerEntry.id'),
-      kind: _readEnum(json, 'kind', 'ledgerEntry.kind', EntryKind.values),
-      accountId: _readInt(json, 'accountId', 'ledgerEntry.accountId'),
-      destinationAccountId: _readNullableInt(
-        json,
-        'destinationAccountId',
-        'ledgerEntry.destinationAccountId',
-      ),
-      amount: _readInt(json, 'amount', 'ledgerEntry.amount'),
-      categoryId: _readNullableInt(
-        json,
-        'categoryId',
-        'ledgerEntry.categoryId',
-      ),
-      note: _readString(json, 'note', 'ledgerEntry.note'),
-      occurredDay: _readInt(json, 'occurredDay', 'ledgerEntry.occurredDay'),
-      createdAtUtc: _readDateTime(
-        json,
-        'createdAtUtc',
-        'ledgerEntry.createdAtUtc',
-      ),
-    );
-  }
+  }) : allocations = List.unmodifiable(allocations);
 
   final int id;
   final EntryKind kind;
   final int accountId;
   final int? destinationAccountId;
   final int amount;
-  final int? categoryId;
+  final List<BackupLedgerAllocation> allocations;
   final String note;
   final int occurredDay;
   final DateTime createdAtUtc;
+}
+
+class BackupLedgerAllocation {
+  const BackupLedgerAllocation({
+    required this.position,
+    required this.categoryId,
+    required this.amount,
+  });
+
+  final int position;
+  final int categoryId;
+  final int amount;
 
   Map<String, Object?> toJson() => {
-    'id': id,
-    'kind': kind.name,
-    'accountId': accountId,
-    'destinationAccountId': destinationAccountId,
-    'amount': amount,
+    'position': position,
     'categoryId': categoryId,
-    'note': note,
-    'occurredDay': occurredDay,
-    'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
+    'amount': amount,
   };
+}
+
+BackupLedgerEntry _readBackupLedgerEntryV1(Map<String, Object?> json) {
+  _requireExactKeys(json, const {
+    'id',
+    'kind',
+    'accountId',
+    'destinationAccountId',
+    'amount',
+    'categoryId',
+    'note',
+    'occurredDay',
+    'createdAtUtc',
+  }, 'ledgerEntry');
+  final amount = _readInt(json, 'amount', 'ledgerEntry.amount');
+  final categoryId = _readNullableInt(
+    json,
+    'categoryId',
+    'ledgerEntry.categoryId',
+  );
+  return BackupLedgerEntry(
+    id: _readInt(json, 'id', 'ledgerEntry.id'),
+    kind: _readEnum(json, 'kind', 'ledgerEntry.kind', EntryKind.values),
+    accountId: _readInt(json, 'accountId', 'ledgerEntry.accountId'),
+    destinationAccountId: _readNullableInt(
+      json,
+      'destinationAccountId',
+      'ledgerEntry.destinationAccountId',
+    ),
+    amount: amount,
+    allocations: categoryId == null
+        ? const []
+        : [
+            BackupLedgerAllocation(
+              position: 0,
+              categoryId: categoryId,
+              amount: amount,
+            ),
+          ],
+    note: _readString(json, 'note', 'ledgerEntry.note'),
+    occurredDay: _readInt(json, 'occurredDay', 'ledgerEntry.occurredDay'),
+    createdAtUtc: _readDateTime(
+      json,
+      'createdAtUtc',
+      'ledgerEntry.createdAtUtc',
+    ),
+  );
+}
+
+BackupLedgerEntry _readBackupLedgerEntryV2(Map<String, Object?> json) {
+  _requireExactKeys(json, const {
+    'id',
+    'kind',
+    'accountId',
+    'destinationAccountId',
+    'amount',
+    'allocations',
+    'note',
+    'occurredDay',
+    'createdAtUtc',
+  }, 'ledgerEntry');
+  return BackupLedgerEntry(
+    id: _readInt(json, 'id', 'ledgerEntry.id'),
+    kind: _readEnum(json, 'kind', 'ledgerEntry.kind', EntryKind.values),
+    accountId: _readInt(json, 'accountId', 'ledgerEntry.accountId'),
+    destinationAccountId: _readNullableInt(
+      json,
+      'destinationAccountId',
+      'ledgerEntry.destinationAccountId',
+    ),
+    amount: _readInt(json, 'amount', 'ledgerEntry.amount'),
+    allocations: _readObjectList(
+      json,
+      'allocations',
+      'ledgerEntry.allocations',
+      _readBackupLedgerAllocation,
+      maximumLength: maxBackupLedgerAllocationsPerEntry,
+    ),
+    note: _readString(json, 'note', 'ledgerEntry.note'),
+    occurredDay: _readInt(json, 'occurredDay', 'ledgerEntry.occurredDay'),
+    createdAtUtc: _readDateTime(
+      json,
+      'createdAtUtc',
+      'ledgerEntry.createdAtUtc',
+    ),
+  );
+}
+
+BackupLedgerAllocation _readBackupLedgerAllocation(Map<String, Object?> json) {
+  _requireExactKeys(json, const {
+    'position',
+    'categoryId',
+    'amount',
+  }, 'allocation');
+  return BackupLedgerAllocation(
+    position: _readInt(json, 'position', 'allocation.position'),
+    categoryId: _readInt(json, 'categoryId', 'allocation.categoryId'),
+    amount: _readInt(json, 'amount', 'allocation.amount'),
+  );
+}
+
+List<BackupLedgerEntry> _readBackupLedgerEntriesV2(Map<String, Object?> data) {
+  final values = _readList(
+    data,
+    'ledgerEntries',
+    'data.ledgerEntries',
+    maximumLength: maxBackupLedgerRecords,
+  );
+  final entries = <BackupLedgerEntry>[];
+  var allocationCount = 0;
+  for (var index = 0; index < values.length; index++) {
+    final entry = _readBackupLedgerEntryV2(
+      _asObject(values[index], 'data.ledgerEntries[$index]'),
+    );
+    allocationCount += entry.allocations.length;
+    if (allocationCount > maxBackupLedgerAllocationRecords) {
+      throw const BackupFormatException(
+        'Jumlah allocation pada backup melebihi batas versi aplikasi ini.',
+      );
+    }
+    entries.add(entry);
+  }
+  return entries;
+}
+
+Map<String, Object?> _writeBackupLedgerEntryV1(BackupLedgerEntry entry) => {
+  'id': entry.id,
+  'kind': entry.kind.name,
+  'accountId': entry.accountId,
+  'destinationAccountId': entry.destinationAccountId,
+  'amount': entry.amount,
+  'categoryId': entry.allocations.isEmpty
+      ? null
+      : entry.allocations.single.categoryId,
+  'note': entry.note,
+  'occurredDay': entry.occurredDay,
+  'createdAtUtc': entry.createdAtUtc.toUtc().toIso8601String(),
+};
+
+Map<String, Object?> _writeBackupLedgerEntryV2(BackupLedgerEntry entry) => {
+  'id': entry.id,
+  'kind': entry.kind.name,
+  'accountId': entry.accountId,
+  'destinationAccountId': entry.destinationAccountId,
+  'amount': entry.amount,
+  'allocations': entry.allocations.map((item) => item.toJson()).toList(),
+  'note': entry.note,
+  'occurredDay': entry.occurredDay,
+  'createdAtUtc': entry.createdAtUtc.toUtc().toIso8601String(),
+};
+
+bool _isSupportedBackupVersionSchemaPair(
+  int backupVersion,
+  int databaseSchemaVersion,
+) =>
+    (backupVersion == 1 && databaseSchemaVersion == 3) ||
+    (backupVersion == 2 && databaseSchemaVersion == 4);
+
+void _requireBackupVersionSchemaPair(
+  int backupVersion,
+  int databaseSchemaVersion,
+) {
+  if (!_isSupportedBackupVersionSchemaPair(
+    backupVersion,
+    databaseSchemaVersion,
+  )) {
+    throw const BackupFormatException(
+      'Pasangan versi backup dan database tidak didukung.',
+    );
+  }
 }
 
 void validateBackupDocument(
@@ -393,19 +616,23 @@ void validateBackupDocument(
   if (document.format != warasArtaBackupFormat) {
     _invalid('File bukan backup Waras Arta.');
   }
-  if (document.backupVersion < oldestSupportedBackupVersion ||
-      document.backupVersion > currentBackupVersion) {
-    _invalid('Versi backup belum didukung oleh aplikasi ini.');
-  }
-  if (document.databaseSchemaVersion < 1) {
-    _invalid('Versi database pada backup tidak valid.');
+  if (!_isSupportedBackupVersionSchemaPair(
+    document.backupVersion,
+    document.databaseSchemaVersion,
+  )) {
+    _invalid('Pasangan versi backup dan database tidak didukung.');
   }
   if (!document.createdAtUtc.isUtc) {
     _invalid('Waktu pembuatan backup harus menggunakan UTC.');
   }
+  final allocationCount = document.ledgerEntries.fold<int>(
+    0,
+    (count, entry) => count + entry.allocations.length,
+  );
   if (document.accounts.length > maxBackupAccountRecords ||
       document.categories.length > maxBackupCategoryRecords ||
-      document.ledgerEntries.length > maxBackupLedgerRecords) {
+      document.ledgerEntries.length > maxBackupLedgerRecords ||
+      allocationCount > maxBackupLedgerAllocationRecords) {
     _invalid('Jumlah data pada backup melebihi batas versi aplikasi ini.');
   }
 
@@ -513,17 +740,44 @@ void validateBackupDocument(
         if (entry.amount < 1 || entry.amount > maxAmount) {
           _invalid('Nominal transaksi tidak valid.');
         }
-        if (entry.destinationAccountId != null || entry.categoryId == null) {
+        final allocations = entry.allocations;
+        final maximumAllocations = document.backupVersion == 1
+            ? 1
+            : maxBackupLedgerAllocationsPerEntry;
+        if (entry.destinationAccountId != null ||
+            allocations.isEmpty ||
+            allocations.length > maximumAllocations) {
           _invalid('Relasi transaksi pemasukan/pengeluaran tidak valid.');
         }
-        final category = categoriesById[entry.categoryId];
         final expectedKind = entry.kind == EntryKind.income
             ? CategoryKind.income
             : CategoryKind.expense;
-        if (category == null ||
-            category.parentId == null ||
-            category.kind != expectedKind) {
-          _invalid('Subkategori transaksi tidak valid.');
+        final allocationCategoryIds = <int>{};
+        var allocationTotal = 0;
+        for (var index = 0; index < allocations.length; index++) {
+          final allocation = allocations[index];
+          if (allocation.position != index) {
+            _invalid('Posisi allocation transaksi tidak valid.');
+          }
+          if (!allocationCategoryIds.add(allocation.categoryId)) {
+            _invalid('Subkategori allocation transaksi duplikat.');
+          }
+          if (allocation.amount < 1 || allocation.amount > maxAmount) {
+            _invalid('Nominal allocation transaksi tidak valid.');
+          }
+          allocationTotal += allocation.amount;
+          if (allocationTotal > maxAmount) {
+            _invalid('Total allocation transaksi tidak valid.');
+          }
+          final category = categoriesById[allocation.categoryId];
+          if (category == null ||
+              category.parentId == null ||
+              category.kind != expectedKind) {
+            _invalid('Subkategori transaksi tidak valid.');
+          }
+        }
+        if (allocationTotal != entry.amount) {
+          _invalid('Total allocation tidak sama dengan nominal transaksi.');
         }
         balances.update(
           entry.accountId,
@@ -539,7 +793,7 @@ void validateBackupDocument(
         if (destinationId == null ||
             destinationId == entry.accountId ||
             !accountIds.contains(destinationId) ||
-            entry.categoryId != null) {
+            entry.allocations.isNotEmpty) {
           _invalid('Relasi transfer tidak valid.');
         }
         balances.update(entry.accountId, (value) => value - entry.amount);
@@ -550,7 +804,8 @@ void validateBackupDocument(
             entry.amount > maxAmount) {
           _invalid('Nominal penyesuaian saldo tidak valid.');
         }
-        if (entry.destinationAccountId != null || entry.categoryId != null) {
+        if (entry.destinationAccountId != null ||
+            entry.allocations.isNotEmpty) {
           _invalid('Relasi penyesuaian saldo tidak valid.');
         }
         balances.update(entry.accountId, (value) => value + entry.amount);
@@ -695,6 +950,19 @@ List<T> _readObjectList<T>(
   T Function(Map<String, Object?>) decode, {
   required int maximumLength,
 }) {
+  final value = _readList(json, key, path, maximumLength: maximumLength);
+  return [
+    for (var index = 0; index < value.length; index++)
+      decode(_asObject(value[index], '$path[$index]')),
+  ];
+}
+
+List<Object?> _readList(
+  Map<String, Object?> json,
+  String key,
+  String path, {
+  required int maximumLength,
+}) {
   final value = json[key];
   if (value is! List) {
     throw BackupFormatException('Field $path tidak valid.');
@@ -704,10 +972,7 @@ List<T> _readObjectList<T>(
       'Jumlah data pada $path melebihi batas versi aplikasi ini.',
     );
   }
-  return [
-    for (var index = 0; index < value.length; index++)
-      decode(_asObject(value[index], '$path[$index]')),
-  ];
+  return value;
 }
 
 Map<String, Object?> _asObject(Object? value, String path) {

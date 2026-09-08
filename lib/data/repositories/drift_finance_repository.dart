@@ -103,23 +103,15 @@ class DriftFinanceRepository implements FinanceRepository {
   @override
   Stream<FinanceEntry?> watchEntry(int id) {
     if (id < 1) return Stream.value(null);
-    final parent = _db.alias(_db.categories, 'parent_category');
-    final query = _db.select(_db.ledgerEntries).join([
-      leftOuterJoin(
-        _db.categories,
-        _db.categories.id.equalsExp(_db.ledgerEntries.categoryId),
-      ),
-      leftOuterJoin(parent, parent.id.equalsExp(_db.categories.parentId)),
-    ])..where(_db.ledgerEntries.id.equals(id));
-    return query.watchSingleOrNull().map(
-      (row) => row == null
-          ? null
-          : _toEntry(
-              row.readTable(_db.ledgerEntries),
-              category: row.readTableOrNull(_db.categories),
-              parent: row.readTableOrNull(parent),
-            ),
-    );
+    return _db
+        .customSelect(
+          '''SELECT COUNT(*) AS change_marker
+             FROM ledger_entries WHERE id = ?''',
+          variables: [Variable.withInt(id)],
+          readsFrom: {_db.ledgerEntries, _db.ledgerAllocations, _db.categories},
+        )
+        .watchSingle()
+        .asyncMap((_) => _loadEntry(id));
   }
 
   @override
@@ -128,7 +120,12 @@ class DriftFinanceRepository implements FinanceRepository {
     return _db
         .customSelect(
           'SELECT COUNT(*) AS entry_count FROM ledger_entries',
-          readsFrom: {_db.accounts, _db.categories, _db.ledgerEntries},
+          readsFrom: {
+            _db.accounts,
+            _db.categories,
+            _db.ledgerEntries,
+            _db.ledgerAllocations,
+          },
         )
         .watch()
         .asyncMap((_) => loadMonth(normalizedMonth, limit: limit));
@@ -170,31 +167,16 @@ class DriftFinanceRepository implements FinanceRepository {
   @override
   Stream<List<FinanceEntry>> watchDay(DateTime day) {
     final normalizedDay = _normalizeDayForRead(day);
-    final parent = _db.alias(_db.categories, 'parent_category');
-    final query = _db.select(_db.ledgerEntries).join([
-      leftOuterJoin(
-        _db.categories,
-        _db.categories.id.equalsExp(_db.ledgerEntries.categoryId),
-      ),
-      leftOuterJoin(parent, parent.id.equalsExp(_db.categories.parentId)),
-    ]);
-    query
-      ..where(_db.ledgerEntries.occurredDay.equals(_dayKey(normalizedDay)))
-      ..orderBy([
-        OrderingTerm.desc(_db.ledgerEntries.createdAt),
-        OrderingTerm.desc(_db.ledgerEntries.id),
-      ]);
-    return query.watch().map(
-      (rows) => List.unmodifiable(
-        rows.map(
-          (row) => _toEntry(
-            row.readTable(_db.ledgerEntries),
-            category: row.readTableOrNull(_db.categories),
-            parent: row.readTableOrNull(parent),
-          ),
-        ),
-      ),
-    );
+    final dayKey = _dayKey(normalizedDay);
+    return _db
+        .customSelect(
+          '''SELECT COUNT(*) AS change_marker
+             FROM ledger_entries WHERE occurred_day = ?''',
+          variables: [Variable.withInt(dayKey)],
+          readsFrom: {_db.ledgerEntries, _db.ledgerAllocations, _db.categories},
+        )
+        .watchSingle()
+        .asyncMap((_) => _loadDayEntries(dayKey));
   }
 
   @override
@@ -238,25 +220,20 @@ class DriftFinanceRepository implements FinanceRepository {
             variables: [Variable.withInt(start), Variable.withInt(end)],
           )
           .getSingle();
-      final parent = _db.alias(_db.categories, 'parent_category');
-      final entryQuery = _db.select(_db.ledgerEntries).join([
-        leftOuterJoin(
-          _db.categories,
-          _db.categories.id.equalsExp(_db.ledgerEntries.categoryId),
-        ),
-        leftOuterJoin(parent, parent.id.equalsExp(_db.categories.parentId)),
-      ]);
+      final entryQuery = _db.select(_db.ledgerEntries);
       entryQuery
         ..where(
-          _db.ledgerEntries.occurredDay.isBiggerOrEqualValue(start) &
-              _db.ledgerEntries.occurredDay.isSmallerThanValue(end),
+          (entry) =>
+              entry.occurredDay.isBiggerOrEqualValue(start) &
+              entry.occurredDay.isSmallerThanValue(end),
         )
         ..orderBy([
-          OrderingTerm.desc(_db.ledgerEntries.occurredDay),
-          OrderingTerm.desc(_db.ledgerEntries.id),
+          (entry) => OrderingTerm.desc(entry.occurredDay),
+          (entry) => OrderingTerm.desc(entry.id),
         ])
         ..limit(limit);
       final rows = await entryQuery.get();
+      final entries = await _entriesWithAllocations(rows);
 
       return FinanceSnapshot(
         accounts: accountRows
@@ -270,15 +247,7 @@ class DriftFinanceRepository implements FinanceRepository {
               ),
             )
             .toList(),
-        entries: rows
-            .map(
-              (row) => _toEntry(
-                row.readTable(_db.ledgerEntries),
-                category: row.readTableOrNull(_db.categories),
-                parent: row.readTableOrNull(parent),
-              ),
-            )
-            .toList(),
+        entries: entries,
         income: totals.read<int>('income'),
         expense: totals.read<int>('expense'),
         totalEntries: totals.read<int>('total_entries'),
@@ -442,11 +411,14 @@ class DriftFinanceRepository implements FinanceRepository {
 
     return _db.transaction(() async {
       await _requireAccounts(normalized);
-      await _requireUsableCategory(normalized);
+      await _requireUsableAllocations(normalized);
       // A transfer is one insert: it cannot leave a half-completed debit/credit.
-      return _db
+      final entryId = await _db
           .into(_db.ledgerEntries)
           .insert(_insertCompanion(normalized, createdAt: DateTime.now()));
+      await _writeAllocations(entryId, normalized.allocations);
+      await _assertEntryAllocationIntegrity(entryId);
+      return entryId;
     });
   }
 
@@ -457,6 +429,7 @@ class DriftFinanceRepository implements FinanceRepository {
 
     await _db.transaction(() async {
       final existing = await _requireEntry(id);
+      final existingAllocations = await _loadAllocationRows(id);
       await _requireEntryAccountsActive(existing);
       if (existing.kind == EntryKind.adjustment.index) {
         throw const FinanceValidationException(
@@ -464,11 +437,16 @@ class DriftFinanceRepository implements FinanceRepository {
         );
       }
       await _requireAccounts(normalized);
-      await _requireUsableCategory(
+      await _requireUsableAllocations(
         normalized,
-        existingCategoryId: existing.categoryId,
+        existingCategoryIds: {
+          for (final allocation in existingAllocations) allocation.categoryId,
+        },
         existingKind: existing.kind,
       );
+      await (_db.delete(
+        _db.ledgerAllocations,
+      )..where((allocation) => allocation.entryId.equals(id))).go();
       final affected =
           await (_db.update(
             _db.ledgerEntries,
@@ -478,12 +456,13 @@ class DriftFinanceRepository implements FinanceRepository {
               accountId: Value(normalized.accountId),
               destinationAccountId: Value(normalized.destinationAccountId),
               amount: Value(normalized.amount),
-              categoryId: Value(normalized.categoryId),
               note: Value(normalized.note),
               occurredDay: Value(_dayKey(normalized.occurredAt)),
             ),
           );
       if (affected != 1) _throwEntryNotFound();
+      await _writeAllocations(id, normalized.allocations);
+      await _assertEntryAllocationIntegrity(id);
     });
   }
 
@@ -668,19 +647,18 @@ class DriftFinanceRepository implements FinanceRepository {
     });
   }
 
-  static EntryDraft _validateAndNormalizeEntry(EntryDraft draft) {
+  static _NormalizedEntryDraft _validateAndNormalizeEntry(EntryDraft draft) {
     if (draft.kind == EntryKind.adjustment) {
       throw const FinanceValidationException(
         'Penyesuaian saldo hanya dibuat melalui pengelolaan rekening.',
       );
     }
-    _validateAmount(draft.amount);
     _validateDate(draft.occurredAt);
     final note = draft.note.trim();
     if (note.length > 500) {
       throw const FinanceValidationException('Catatan maksimal 500 karakter.');
     }
-    final categoryId = draft.categoryId;
+
     if (draft.kind == EntryKind.transfer) {
       if (draft.destinationAccountId == null ||
           draft.destinationAccountId == draft.accountId) {
@@ -688,34 +666,68 @@ class DriftFinanceRepository implements FinanceRepository {
           'Transfer membutuhkan dua rekening yang berbeda.',
         );
       }
-      if (categoryId != null) {
+      if (draft.allocations.isNotEmpty) {
         throw const FinanceValidationException(
-          'Transfer tidak memiliki kategori.',
+          'Transfer tidak memiliki alokasi kategori.',
         );
       }
-    } else {
-      if (draft.destinationAccountId != null) {
-        throw const FinanceValidationException(
-          'Rekening tujuan hanya berlaku untuk transfer.',
-        );
+      final amount = draft.transferAmount;
+      if (amount == null) {
+        throw const FinanceValidationException('Masukkan nominal transfer.');
       }
-      if (categoryId == null) {
-        throw const FinanceValidationException('Pilih subkategori.');
-      }
+      _validateAmount(amount);
+      return _NormalizedEntryDraft(
+        kind: draft.kind,
+        accountId: draft.accountId,
+        destinationAccountId: draft.destinationAccountId,
+        amount: amount,
+        allocations: const [],
+        note: note,
+        occurredAt: draft.occurredAt,
+      );
     }
 
-    return EntryDraft(
+    if (draft.destinationAccountId != null || draft.transferAmount != null) {
+      throw const FinanceValidationException(
+        'Rekening tujuan dan nominal transfer hanya berlaku untuk transfer.',
+      );
+    }
+    final allocations = draft.allocations;
+    if (allocations.isEmpty || allocations.length > maxEntryAllocations) {
+      throw const FinanceValidationException(
+        'Pemasukan atau pengeluaran harus memiliki 1 sampai 50 alokasi.',
+      );
+    }
+    final categoryIds = <int>{};
+    var total = 0;
+    for (final allocation in allocations) {
+      _validateCategoryId(allocation.categoryId);
+      _validateAmount(allocation.amount);
+      if (!categoryIds.add(allocation.categoryId)) {
+        throw const FinanceValidationException(
+          'Satu subkategori hanya boleh dipakai sekali dalam satu transaksi.',
+        );
+      }
+      if (total > maxAmount - allocation.amount) {
+        throw const FinanceValidationException(
+          'Total transaksi melebihi Rp999.999.999.999.',
+        );
+      }
+      total += allocation.amount;
+    }
+
+    return _NormalizedEntryDraft(
       kind: draft.kind,
       accountId: draft.accountId,
-      destinationAccountId: draft.destinationAccountId,
-      amount: draft.amount,
-      categoryId: categoryId,
+      destinationAccountId: null,
+      amount: total,
+      allocations: allocations,
       note: note,
       occurredAt: draft.occurredAt,
     );
   }
 
-  Future<void> _requireAccounts(EntryDraft draft) async {
+  Future<void> _requireAccounts(_NormalizedEntryDraft draft) async {
     await _requireAccount(draft.accountId, requireActive: true);
     if (draft.destinationAccountId != null) {
       await _requireAccount(draft.destinationAccountId!, requireActive: true);
@@ -729,27 +741,44 @@ class DriftFinanceRepository implements FinanceRepository {
     }
   }
 
-  Future<void> _requireUsableCategory(
-    EntryDraft draft, {
-    int? existingCategoryId,
+  Future<void> _requireUsableAllocations(
+    _NormalizedEntryDraft draft, {
+    Set<int> existingCategoryIds = const {},
     int? existingKind,
   }) async {
-    final categoryId = draft.categoryId;
-    if (categoryId == null) return;
-    final category = await _requireCategory(categoryId);
-    if (category.parentId == null || category.kind != draft.kind.index) {
-      throw const FinanceValidationException(
-        'Subkategori tidak sesuai dengan jenis transaksi.',
-      );
+    if (draft.allocations.isEmpty) return;
+    final categoryIds = draft.allocations
+        .map((allocation) => allocation.categoryId)
+        .toSet();
+    final parent = _db.alias(_db.categories, 'allocation_parent_category');
+    final query = _db.select(_db.categories).join([
+      leftOuterJoin(parent, parent.id.equalsExp(_db.categories.parentId)),
+    ])..where(_db.categories.id.isIn(categoryIds));
+    final rows = await query.get();
+    if (rows.length != categoryIds.length) {
+      throw const FinanceValidationException('Kategori tidak ditemukan.');
     }
-    final parent = await _requireCategory(category.parentId!);
-    final unchangedArchivedCategory =
-        existingCategoryId == categoryId && existingKind == draft.kind.index;
-    if ((category.isArchived || parent.isArchived) &&
-        !unchangedArchivedCategory) {
-      throw const FinanceValidationException(
-        'Subkategori telah diarsipkan. Pilih subkategori aktif.',
-      );
+    for (final row in rows) {
+      final category = row.readTable(_db.categories);
+      final parentCategory = row.readTableOrNull(parent);
+      if (category.parentId == null ||
+          parentCategory == null ||
+          parentCategory.parentId != null ||
+          category.kind != draft.kind.index ||
+          parentCategory.kind != draft.kind.index) {
+        throw const FinanceValidationException(
+          'Subkategori tidak sesuai dengan jenis transaksi.',
+        );
+      }
+      final unchangedArchivedCategory =
+          existingKind == draft.kind.index &&
+          existingCategoryIds.contains(category.id);
+      if ((category.isArchived || parentCategory.isArchived) &&
+          !unchangedArchivedCategory) {
+        throw const FinanceValidationException(
+          'Subkategori telah diarsipkan. Pilih subkategori aktif.',
+        );
+      }
     }
   }
 
@@ -759,6 +788,172 @@ class DriftFinanceRepository implements FinanceRepository {
     )..where((entry) => entry.id.equals(id))).getSingleOrNull();
     if (entry == null) _throwEntryNotFound();
     return entry;
+  }
+
+  Future<FinanceEntry?> _loadEntry(int id) {
+    return _db.transaction(() async {
+      final row = await (_db.select(
+        _db.ledgerEntries,
+      )..where((entry) => entry.id.equals(id))).getSingleOrNull();
+      if (row == null) return null;
+      return (await _entriesWithAllocations([row])).single;
+    });
+  }
+
+  Future<List<FinanceEntry>> _loadDayEntries(int dayKey) {
+    return _db.transaction(() async {
+      final query = _db.select(_db.ledgerEntries)
+        ..where((entry) => entry.occurredDay.equals(dayKey))
+        ..orderBy([
+          (entry) => OrderingTerm.desc(entry.createdAt),
+          (entry) => OrderingTerm.desc(entry.id),
+        ]);
+      return _entriesWithAllocations(await query.get());
+    });
+  }
+
+  Future<List<FinanceEntry>> _entriesWithAllocations(
+    Iterable<LedgerRow> rows,
+  ) async {
+    final headers = List<LedgerRow>.of(rows);
+    if (headers.isEmpty) return const [];
+    final allocationsByEntry = await _loadAllocationsForEntries(
+      headers.map((row) => row.id),
+    );
+    return List.unmodifiable(
+      headers.map(
+        (row) =>
+            _toEntry(row, allocations: allocationsByEntry[row.id] ?? const []),
+      ),
+    );
+  }
+
+  Future<Map<int, List<FinanceEntryAllocation>>> _loadAllocationsForEntries(
+    Iterable<int> entryIds,
+  ) async {
+    final ids = entryIds.toSet();
+    if (ids.isEmpty) return const {};
+    final parent = _db.alias(_db.categories, 'allocation_parent_category');
+    final query = _db.select(_db.ledgerAllocations).join([
+      leftOuterJoin(
+        _db.categories,
+        _db.categories.id.equalsExp(_db.ledgerAllocations.categoryId),
+      ),
+      leftOuterJoin(parent, parent.id.equalsExp(_db.categories.parentId)),
+    ]);
+    query
+      ..where(_db.ledgerAllocations.entryId.isIn(ids))
+      ..orderBy([
+        OrderingTerm.asc(_db.ledgerAllocations.entryId),
+        OrderingTerm.asc(_db.ledgerAllocations.position),
+      ]);
+    final grouped = <int, List<FinanceEntryAllocation>>{};
+    for (final result in await query.get()) {
+      final allocation = result.readTable(_db.ledgerAllocations);
+      final category = result.readTableOrNull(_db.categories);
+      final parentCategory = result.readTableOrNull(parent);
+      if (category == null || parentCategory == null) {
+        throw StateError('Relasi kategori alokasi transaksi tidak valid.');
+      }
+      grouped
+          .putIfAbsent(allocation.entryId, () => [])
+          .add(
+            FinanceEntryAllocation(
+              position: allocation.position,
+              categoryId: allocation.categoryId,
+              amount: allocation.amount,
+              categoryName: category.name,
+              parentCategoryName: parentCategory.name,
+              categoryIconKey: category.iconKey,
+              categoryArchived:
+                  category.isArchived || parentCategory.isArchived,
+            ),
+          );
+    }
+    return {
+      for (final entry in grouped.entries)
+        entry.key: List.unmodifiable(entry.value),
+    };
+  }
+
+  Future<List<LedgerAllocationRow>> _loadAllocationRows(int entryId) {
+    final query = _db.select(_db.ledgerAllocations)
+      ..where((allocation) => allocation.entryId.equals(entryId))
+      ..orderBy([(allocation) => OrderingTerm.asc(allocation.position)]);
+    return query.get();
+  }
+
+  Future<void> _writeAllocations(
+    int entryId,
+    List<EntryAllocationDraft> allocations,
+  ) async {
+    if (allocations.isEmpty) return;
+    await _db.batch((batch) {
+      batch.insertAll(_db.ledgerAllocations, [
+        for (var position = 0; position < allocations.length; position++)
+          LedgerAllocationsCompanion.insert(
+            entryId: entryId,
+            position: position,
+            categoryId: allocations[position].categoryId,
+            amount: allocations[position].amount,
+          ),
+      ]);
+    });
+  }
+
+  Future<void> _assertEntryAllocationIntegrity(int entryId) async {
+    final result = await _db
+        .customSelect(
+          '''SELECT l.kind AS kind,
+                    l.amount AS header_amount,
+                    COUNT(a.entry_id) AS allocation_count,
+                    COALESCE(SUM(a.amount), 0) AS allocation_total,
+                    COALESCE(MIN(a.position), -1) AS min_position,
+                    COALESCE(MAX(a.position), -1) AS max_position,
+                    COUNT(DISTINCT a.category_id) AS category_count,
+                    COALESCE(SUM(CASE
+                      WHEN a.entry_id IS NOT NULL AND
+                        (c.id IS NULL OR c.parent_id IS NULL OR c.kind <> l.kind OR
+                         p.id IS NULL OR p.parent_id IS NOT NULL OR p.kind <> l.kind)
+                      THEN 1 ELSE 0 END), 0) AS invalid_category_count,
+                    COALESCE(SUM(CASE
+                      WHEN a.entry_id IS NOT NULL AND
+                        (a.amount < 1 OR a.amount > ?)
+                      THEN 1 ELSE 0 END), 0) AS invalid_amount_count
+             FROM ledger_entries AS l
+             LEFT JOIN ledger_allocations AS a ON a.entry_id = l.id
+             LEFT JOIN categories AS c ON c.id = a.category_id
+             LEFT JOIN categories AS p ON p.id = c.parent_id
+             WHERE l.id = ?
+             GROUP BY l.id, l.kind, l.amount''',
+          variables: [Variable.withInt(maxAmount), Variable.withInt(entryId)],
+        )
+        .getSingleOrNull();
+    if (result == null) _throwEntryNotFound();
+    final kind = result.read<int>('kind');
+    final amount = result.read<int>('header_amount');
+    final allocationCount = result.read<int>('allocation_count');
+    final allocationTotal = result.read<int>('allocation_total');
+    final minPosition = result.read<int>('min_position');
+    final maxPosition = result.read<int>('max_position');
+    final categoryCount = result.read<int>('category_count');
+    final invalidCategoryCount = result.read<int>('invalid_category_count');
+    final invalidAmountCount = result.read<int>('invalid_amount_count');
+    final categorized =
+        kind == EntryKind.income.index || kind == EntryKind.expense.index;
+    final valid = categorized
+        ? allocationCount >= 1 &&
+              allocationCount <= maxEntryAllocations &&
+              allocationTotal == amount &&
+              minPosition == 0 &&
+              maxPosition == allocationCount - 1 &&
+              categoryCount == allocationCount &&
+              invalidCategoryCount == 0 &&
+              invalidAmountCount == 0
+        : allocationCount == 0;
+    if (!valid) {
+      throw StateError('Invariant alokasi transaksi tidak valid.');
+    }
   }
 
   Future<CategoryRow> _requireCategory(int id) async {
@@ -1019,14 +1214,13 @@ class DriftFinanceRepository implements FinanceRepository {
       throw const FinanceValidationException('Rekening tidak ditemukan.');
 
   static LedgerEntriesCompanion _insertCompanion(
-    EntryDraft draft, {
+    _NormalizedEntryDraft draft, {
     required DateTime createdAt,
   }) => LedgerEntriesCompanion.insert(
     kind: draft.kind.index,
     accountId: draft.accountId,
     destinationAccountId: Value(draft.destinationAccountId),
     amount: draft.amount,
-    categoryId: Value(draft.categoryId),
     note: Value(draft.note),
     occurredDay: _dayKey(draft.occurredAt),
     createdAt: createdAt,
@@ -1079,26 +1273,63 @@ class DriftFinanceRepository implements FinanceRepository {
 
   static FinanceEntry _toEntry(
     LedgerRow row, {
-    CategoryRow? category,
-    CategoryRow? parent,
-  }) => FinanceEntry(
-    id: row.id,
-    kind: EntryKind.values[row.kind],
-    accountId: row.accountId,
-    destinationAccountId: row.destinationAccountId,
-    amount: row.amount,
-    categoryId: row.categoryId,
-    categoryName: category?.name,
-    parentCategoryName: parent?.name,
-    categoryIconKey: category?.iconKey,
-    categoryArchived:
-        category?.isArchived == true || parent?.isArchived == true,
-    note: row.note,
-    occurredAt: DateTime(
-      row.occurredDay ~/ 10000,
-      row.occurredDay ~/ 100 % 100,
-      row.occurredDay % 100,
-    ),
-    createdAt: row.createdAt,
-  );
+    required List<FinanceEntryAllocation> allocations,
+  }) {
+    final kind = EntryKind.values[row.kind];
+    final categorized = kind == EntryKind.income || kind == EntryKind.expense;
+    if (categorized) {
+      var total = 0;
+      final categoryIds = <int>{};
+      for (var position = 0; position < allocations.length; position++) {
+        final allocation = allocations[position];
+        if (allocation.position != position ||
+            !categoryIds.add(allocation.categoryId)) {
+          throw StateError('Urutan alokasi transaksi tidak valid.');
+        }
+        total += allocation.amount;
+      }
+      if (allocations.isEmpty ||
+          allocations.length > maxEntryAllocations ||
+          total != row.amount) {
+        throw StateError('Total alokasi transaksi tidak valid.');
+      }
+    } else if (allocations.isNotEmpty) {
+      throw StateError('Transfer atau penyesuaian memiliki alokasi.');
+    }
+    return FinanceEntry(
+      id: row.id,
+      kind: kind,
+      accountId: row.accountId,
+      destinationAccountId: row.destinationAccountId,
+      amount: row.amount,
+      allocations: allocations,
+      note: row.note,
+      occurredAt: DateTime(
+        row.occurredDay ~/ 10000,
+        row.occurredDay ~/ 100 % 100,
+        row.occurredDay % 100,
+      ),
+      createdAt: row.createdAt,
+    );
+  }
+}
+
+class _NormalizedEntryDraft {
+  _NormalizedEntryDraft({
+    required this.kind,
+    required this.accountId,
+    required this.destinationAccountId,
+    required this.amount,
+    required Iterable<EntryAllocationDraft> allocations,
+    required this.note,
+    required this.occurredAt,
+  }) : allocations = List.unmodifiable(allocations);
+
+  final EntryKind kind;
+  final int accountId;
+  final int? destinationAccountId;
+  final int amount;
+  final List<EntryAllocationDraft> allocations;
+  final String note;
+  final DateTime occurredAt;
 }

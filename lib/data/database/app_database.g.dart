@@ -1142,20 +1142,6 @@ class $LedgerEntriesTable extends LedgerEntries
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _categoryIdMeta = const VerificationMeta(
-    'categoryId',
-  );
-  @override
-  late final GeneratedColumn<int> categoryId = GeneratedColumn<int>(
-    'category_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES categories (id)',
-    ),
-  );
   static const VerificationMeta _noteMeta = const VerificationMeta('note');
   @override
   late final GeneratedColumn<String> note = GeneratedColumn<String>(
@@ -1195,7 +1181,6 @@ class $LedgerEntriesTable extends LedgerEntries
     accountId,
     destinationAccountId,
     amount,
-    categoryId,
     note,
     occurredDay,
     createdAt,
@@ -1247,12 +1232,6 @@ class $LedgerEntriesTable extends LedgerEntries
       );
     } else if (isInserting) {
       context.missing(_amountMeta);
-    }
-    if (data.containsKey('category_id')) {
-      context.handle(
-        _categoryIdMeta,
-        categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
-      );
     }
     if (data.containsKey('note')) {
       context.handle(
@@ -1308,10 +1287,6 @@ class $LedgerEntriesTable extends LedgerEntries
         DriftSqlType.int,
         data['${effectivePrefix}amount'],
       )!,
-      categoryId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}category_id'],
-      ),
       note: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}note'],
@@ -1339,7 +1314,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
   final int accountId;
   final int? destinationAccountId;
   final int amount;
-  final int? categoryId;
   final String note;
 
   /// YYYYMMDD civil date. Never converted through a timezone or UTC timestamp.
@@ -1351,7 +1325,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
     required this.accountId,
     this.destinationAccountId,
     required this.amount,
-    this.categoryId,
     required this.note,
     required this.occurredDay,
     required this.createdAt,
@@ -1366,9 +1339,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
       map['destination_account_id'] = Variable<int>(destinationAccountId);
     }
     map['amount'] = Variable<int>(amount);
-    if (!nullToAbsent || categoryId != null) {
-      map['category_id'] = Variable<int>(categoryId);
-    }
     map['note'] = Variable<String>(note);
     map['occurred_day'] = Variable<int>(occurredDay);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -1384,9 +1354,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
           ? const Value.absent()
           : Value(destinationAccountId),
       amount: Value(amount),
-      categoryId: categoryId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(categoryId),
       note: Value(note),
       occurredDay: Value(occurredDay),
       createdAt: Value(createdAt),
@@ -1406,7 +1373,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
         json['destinationAccountId'],
       ),
       amount: serializer.fromJson<int>(json['amount']),
-      categoryId: serializer.fromJson<int?>(json['categoryId']),
       note: serializer.fromJson<String>(json['note']),
       occurredDay: serializer.fromJson<int>(json['occurredDay']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -1421,7 +1387,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
       'accountId': serializer.toJson<int>(accountId),
       'destinationAccountId': serializer.toJson<int?>(destinationAccountId),
       'amount': serializer.toJson<int>(amount),
-      'categoryId': serializer.toJson<int?>(categoryId),
       'note': serializer.toJson<String>(note),
       'occurredDay': serializer.toJson<int>(occurredDay),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -1434,7 +1399,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
     int? accountId,
     Value<int?> destinationAccountId = const Value.absent(),
     int? amount,
-    Value<int?> categoryId = const Value.absent(),
     String? note,
     int? occurredDay,
     DateTime? createdAt,
@@ -1446,7 +1410,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
         ? destinationAccountId.value
         : this.destinationAccountId,
     amount: amount ?? this.amount,
-    categoryId: categoryId.present ? categoryId.value : this.categoryId,
     note: note ?? this.note,
     occurredDay: occurredDay ?? this.occurredDay,
     createdAt: createdAt ?? this.createdAt,
@@ -1460,9 +1423,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
           ? data.destinationAccountId.value
           : this.destinationAccountId,
       amount: data.amount.present ? data.amount.value : this.amount,
-      categoryId: data.categoryId.present
-          ? data.categoryId.value
-          : this.categoryId,
       note: data.note.present ? data.note.value : this.note,
       occurredDay: data.occurredDay.present
           ? data.occurredDay.value
@@ -1479,7 +1439,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
           ..write('accountId: $accountId, ')
           ..write('destinationAccountId: $destinationAccountId, ')
           ..write('amount: $amount, ')
-          ..write('categoryId: $categoryId, ')
           ..write('note: $note, ')
           ..write('occurredDay: $occurredDay, ')
           ..write('createdAt: $createdAt')
@@ -1494,7 +1453,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
     accountId,
     destinationAccountId,
     amount,
-    categoryId,
     note,
     occurredDay,
     createdAt,
@@ -1508,7 +1466,6 @@ class LedgerRow extends DataClass implements Insertable<LedgerRow> {
           other.accountId == this.accountId &&
           other.destinationAccountId == this.destinationAccountId &&
           other.amount == this.amount &&
-          other.categoryId == this.categoryId &&
           other.note == this.note &&
           other.occurredDay == this.occurredDay &&
           other.createdAt == this.createdAt);
@@ -1520,7 +1477,6 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerRow> {
   final Value<int> accountId;
   final Value<int?> destinationAccountId;
   final Value<int> amount;
-  final Value<int?> categoryId;
   final Value<String> note;
   final Value<int> occurredDay;
   final Value<DateTime> createdAt;
@@ -1530,7 +1486,6 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerRow> {
     this.accountId = const Value.absent(),
     this.destinationAccountId = const Value.absent(),
     this.amount = const Value.absent(),
-    this.categoryId = const Value.absent(),
     this.note = const Value.absent(),
     this.occurredDay = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -1541,7 +1496,6 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerRow> {
     required int accountId,
     this.destinationAccountId = const Value.absent(),
     required int amount,
-    this.categoryId = const Value.absent(),
     this.note = const Value.absent(),
     required int occurredDay,
     required DateTime createdAt,
@@ -1556,7 +1510,6 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerRow> {
     Expression<int>? accountId,
     Expression<int>? destinationAccountId,
     Expression<int>? amount,
-    Expression<int>? categoryId,
     Expression<String>? note,
     Expression<int>? occurredDay,
     Expression<DateTime>? createdAt,
@@ -1568,7 +1521,6 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerRow> {
       if (destinationAccountId != null)
         'destination_account_id': destinationAccountId,
       if (amount != null) 'amount': amount,
-      if (categoryId != null) 'category_id': categoryId,
       if (note != null) 'note': note,
       if (occurredDay != null) 'occurred_day': occurredDay,
       if (createdAt != null) 'created_at': createdAt,
@@ -1581,7 +1533,6 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerRow> {
     Value<int>? accountId,
     Value<int?>? destinationAccountId,
     Value<int>? amount,
-    Value<int?>? categoryId,
     Value<String>? note,
     Value<int>? occurredDay,
     Value<DateTime>? createdAt,
@@ -1592,7 +1543,6 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerRow> {
       accountId: accountId ?? this.accountId,
       destinationAccountId: destinationAccountId ?? this.destinationAccountId,
       amount: amount ?? this.amount,
-      categoryId: categoryId ?? this.categoryId,
       note: note ?? this.note,
       occurredDay: occurredDay ?? this.occurredDay,
       createdAt: createdAt ?? this.createdAt,
@@ -1617,9 +1567,6 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerRow> {
     if (amount.present) {
       map['amount'] = Variable<int>(amount.value);
     }
-    if (categoryId.present) {
-      map['category_id'] = Variable<int>(categoryId.value);
-    }
     if (note.present) {
       map['note'] = Variable<String>(note.value);
     }
@@ -1640,10 +1587,335 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerRow> {
           ..write('accountId: $accountId, ')
           ..write('destinationAccountId: $destinationAccountId, ')
           ..write('amount: $amount, ')
-          ..write('categoryId: $categoryId, ')
           ..write('note: $note, ')
           ..write('occurredDay: $occurredDay, ')
           ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LedgerAllocationsTable extends LedgerAllocations
+    with TableInfo<$LedgerAllocationsTable, LedgerAllocationRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LedgerAllocationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entryIdMeta = const VerificationMeta(
+    'entryId',
+  );
+  @override
+  late final GeneratedColumn<int> entryId = GeneratedColumn<int>(
+    'entry_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES ledger_entries (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _categoryIdMeta = const VerificationMeta(
+    'categoryId',
+  );
+  @override
+  late final GeneratedColumn<int> categoryId = GeneratedColumn<int>(
+    'category_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES categories (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _amountMeta = const VerificationMeta('amount');
+  @override
+  late final GeneratedColumn<int> amount = GeneratedColumn<int>(
+    'amount',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [entryId, position, categoryId, amount];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'ledger_allocations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LedgerAllocationRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entry_id')) {
+      context.handle(
+        _entryIdMeta,
+        entryId.isAcceptableOrUnknown(data['entry_id']!, _entryIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entryIdMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    if (data.containsKey('category_id')) {
+      context.handle(
+        _categoryIdMeta,
+        categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryIdMeta);
+    }
+    if (data.containsKey('amount')) {
+      context.handle(
+        _amountMeta,
+        amount.isAcceptableOrUnknown(data['amount']!, _amountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_amountMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entryId, position};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {entryId, categoryId},
+  ];
+  @override
+  LedgerAllocationRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LedgerAllocationRow(
+      entryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}entry_id'],
+      )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+      categoryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}category_id'],
+      )!,
+      amount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}amount'],
+      )!,
+    );
+  }
+
+  @override
+  $LedgerAllocationsTable createAlias(String alias) {
+    return $LedgerAllocationsTable(attachedDatabase, alias);
+  }
+}
+
+class LedgerAllocationRow extends DataClass
+    implements Insertable<LedgerAllocationRow> {
+  final int entryId;
+  final int position;
+  final int categoryId;
+  final int amount;
+  const LedgerAllocationRow({
+    required this.entryId,
+    required this.position,
+    required this.categoryId,
+    required this.amount,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entry_id'] = Variable<int>(entryId);
+    map['position'] = Variable<int>(position);
+    map['category_id'] = Variable<int>(categoryId);
+    map['amount'] = Variable<int>(amount);
+    return map;
+  }
+
+  LedgerAllocationsCompanion toCompanion(bool nullToAbsent) {
+    return LedgerAllocationsCompanion(
+      entryId: Value(entryId),
+      position: Value(position),
+      categoryId: Value(categoryId),
+      amount: Value(amount),
+    );
+  }
+
+  factory LedgerAllocationRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LedgerAllocationRow(
+      entryId: serializer.fromJson<int>(json['entryId']),
+      position: serializer.fromJson<int>(json['position']),
+      categoryId: serializer.fromJson<int>(json['categoryId']),
+      amount: serializer.fromJson<int>(json['amount']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entryId': serializer.toJson<int>(entryId),
+      'position': serializer.toJson<int>(position),
+      'categoryId': serializer.toJson<int>(categoryId),
+      'amount': serializer.toJson<int>(amount),
+    };
+  }
+
+  LedgerAllocationRow copyWith({
+    int? entryId,
+    int? position,
+    int? categoryId,
+    int? amount,
+  }) => LedgerAllocationRow(
+    entryId: entryId ?? this.entryId,
+    position: position ?? this.position,
+    categoryId: categoryId ?? this.categoryId,
+    amount: amount ?? this.amount,
+  );
+  LedgerAllocationRow copyWithCompanion(LedgerAllocationsCompanion data) {
+    return LedgerAllocationRow(
+      entryId: data.entryId.present ? data.entryId.value : this.entryId,
+      position: data.position.present ? data.position.value : this.position,
+      categoryId: data.categoryId.present
+          ? data.categoryId.value
+          : this.categoryId,
+      amount: data.amount.present ? data.amount.value : this.amount,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LedgerAllocationRow(')
+          ..write('entryId: $entryId, ')
+          ..write('position: $position, ')
+          ..write('categoryId: $categoryId, ')
+          ..write('amount: $amount')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(entryId, position, categoryId, amount);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LedgerAllocationRow &&
+          other.entryId == this.entryId &&
+          other.position == this.position &&
+          other.categoryId == this.categoryId &&
+          other.amount == this.amount);
+}
+
+class LedgerAllocationsCompanion extends UpdateCompanion<LedgerAllocationRow> {
+  final Value<int> entryId;
+  final Value<int> position;
+  final Value<int> categoryId;
+  final Value<int> amount;
+  final Value<int> rowid;
+  const LedgerAllocationsCompanion({
+    this.entryId = const Value.absent(),
+    this.position = const Value.absent(),
+    this.categoryId = const Value.absent(),
+    this.amount = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LedgerAllocationsCompanion.insert({
+    required int entryId,
+    required int position,
+    required int categoryId,
+    required int amount,
+    this.rowid = const Value.absent(),
+  }) : entryId = Value(entryId),
+       position = Value(position),
+       categoryId = Value(categoryId),
+       amount = Value(amount);
+  static Insertable<LedgerAllocationRow> custom({
+    Expression<int>? entryId,
+    Expression<int>? position,
+    Expression<int>? categoryId,
+    Expression<int>? amount,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entryId != null) 'entry_id': entryId,
+      if (position != null) 'position': position,
+      if (categoryId != null) 'category_id': categoryId,
+      if (amount != null) 'amount': amount,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LedgerAllocationsCompanion copyWith({
+    Value<int>? entryId,
+    Value<int>? position,
+    Value<int>? categoryId,
+    Value<int>? amount,
+    Value<int>? rowid,
+  }) {
+    return LedgerAllocationsCompanion(
+      entryId: entryId ?? this.entryId,
+      position: position ?? this.position,
+      categoryId: categoryId ?? this.categoryId,
+      amount: amount ?? this.amount,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entryId.present) {
+      map['entry_id'] = Variable<int>(entryId.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (categoryId.present) {
+      map['category_id'] = Variable<int>(categoryId.value);
+    }
+    if (amount.present) {
+      map['amount'] = Variable<int>(amount.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LedgerAllocationsCompanion(')
+          ..write('entryId: $entryId, ')
+          ..write('position: $position, ')
+          ..write('categoryId: $categoryId, ')
+          ..write('amount: $amount, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -1655,6 +1927,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $AccountsTable accounts = $AccountsTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $LedgerEntriesTable ledgerEntries = $LedgerEntriesTable(this);
+  late final $LedgerAllocationsTable ledgerAllocations =
+      $LedgerAllocationsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1663,7 +1937,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     accounts,
     categories,
     ledgerEntries,
+    ledgerAllocations,
   ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'ledger_entries',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('ledger_allocations', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$AccountsTableCreateCompanionBuilder = AccountsCompanion Function({
@@ -2125,19 +2410,19 @@ final class $$CategoriesTableReferences
     );
   }
 
-  static MultiTypedResultKey<$LedgerEntriesTable, List<LedgerRow>>
-  _ledgerEntriesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.ledgerEntries,
-    aliasName: 'categories__id__ledger_entries__category_id',
+  static MultiTypedResultKey<$LedgerAllocationsTable, List<LedgerAllocationRow>>
+  _allocationEntriesTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.ledgerAllocations,
+    aliasName: 'categories__id__ledger_allocations__category_id',
   );
 
-  $$LedgerEntriesTableProcessedTableManager get ledgerEntriesRefs {
-    final manager = $$LedgerEntriesTableTableManager(
+  $$LedgerAllocationsTableProcessedTableManager get allocationEntries {
+    final manager = $$LedgerAllocationsTableTableManager(
       $_db,
-      $_db.ledgerEntries,
+      $_db.ledgerAllocations,
     ).filter((f) => f.categoryId.id.sqlEquals($_itemColumn<int>('id')!));
 
-    final cache = $_typedResult.readTableOrNull(_ledgerEntriesRefsTable($_db));
+    final cache = $_typedResult.readTableOrNull(_allocationEntriesTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -2226,22 +2511,22 @@ class $$CategoriesTableFilterComposer
     return composer;
   }
 
-  Expression<bool> ledgerEntriesRefs(
-    Expression<bool> Function($$LedgerEntriesTableFilterComposer f) f,
+  Expression<bool> allocationEntries(
+    Expression<bool> Function($$LedgerAllocationsTableFilterComposer f) f,
   ) {
-    final $$LedgerEntriesTableFilterComposer composer = $composerBuilder(
+    final $$LedgerAllocationsTableFilterComposer composer = $composerBuilder(
       composer: this,
       getCurrentColumn: (t) => t.id,
-      referencedTable: $db.ledgerEntries,
+      referencedTable: $db.ledgerAllocations,
       getReferencedColumn: (t) => t.categoryId,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$LedgerEntriesTableFilterComposer(
+          }) => $$LedgerAllocationsTableFilterComposer(
             $db: $db,
-            $table: $db.ledgerEntries,
+            $table: $db.ledgerAllocations,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -2401,28 +2686,29 @@ class $$CategoriesTableAnnotationComposer
     return composer;
   }
 
-  Expression<T> ledgerEntriesRefs<T extends Object>(
-    Expression<T> Function($$LedgerEntriesTableAnnotationComposer a) f,
+  Expression<T> allocationEntries<T extends Object>(
+    Expression<T> Function($$LedgerAllocationsTableAnnotationComposer a) f,
   ) {
-    final $$LedgerEntriesTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.ledgerEntries,
-      getReferencedColumn: (t) => t.categoryId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$LedgerEntriesTableAnnotationComposer(
-            $db: $db,
-            $table: $db.ledgerEntries,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
+    final $$LedgerAllocationsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.ledgerAllocations,
+          getReferencedColumn: (t) => t.categoryId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
                 $removeJoinBuilderFromRootComposer,
-          ),
-    );
+              }) => $$LedgerAllocationsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.ledgerAllocations,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 }
@@ -2440,7 +2726,7 @@ class $$CategoriesTableTableManager
           $$CategoriesTableUpdateCompanionBuilder,
           (CategoryRow, $$CategoriesTableReferences),
           CategoryRow,
-          PrefetchHooks Function({bool parentId, bool ledgerEntriesRefs})
+          PrefetchHooks Function({bool parentId, bool allocationEntries})
         > {
   $$CategoriesTableTableManager(_$AppDatabase db, $CategoriesTable table)
     : super(
@@ -2514,11 +2800,11 @@ class $$CategoriesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({parentId = false, ledgerEntriesRefs = false}) {
+              ({parentId = false, allocationEntries = false}) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
-                    if (ledgerEntriesRefs) db.ledgerEntries,
+                    if (allocationEntries) db.ledgerAllocations,
                   ],
                   addJoins:
                       <
@@ -2552,21 +2838,21 @@ class $$CategoriesTableTableManager
                       },
                   getPrefetchedDataCallback: (items) async {
                     return [
-                      if (ledgerEntriesRefs)
+                      if (allocationEntries)
                         await $_getPrefetchedData<
                           CategoryRow,
                           $CategoriesTable,
-                          LedgerRow
+                          LedgerAllocationRow
                         >(
                           currentTable: table,
                           referencedTable: $$CategoriesTableReferences
-                              ._ledgerEntriesRefsTable(db),
+                              ._allocationEntriesTable(db),
                           managerFromTypedResult: (p0) =>
                               $$CategoriesTableReferences(
                                 db,
                                 table,
                                 p0,
-                              ).ledgerEntriesRefs,
+                              ).allocationEntries,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.categoryId == item.id,
@@ -2593,7 +2879,7 @@ typedef $$CategoriesTableProcessedTableManager =
       $$CategoriesTableUpdateCompanionBuilder,
       (CategoryRow, $$CategoriesTableReferences),
       CategoryRow,
-      PrefetchHooks Function({bool parentId, bool ledgerEntriesRefs})
+      PrefetchHooks Function({bool parentId, bool allocationEntries})
     >;
 typedef $$LedgerEntriesTableCreateCompanionBuilder =
     LedgerEntriesCompanion Function({
@@ -2602,7 +2888,6 @@ typedef $$LedgerEntriesTableCreateCompanionBuilder =
       required int accountId,
       Value<int?> destinationAccountId,
       required int amount,
-      Value<int?> categoryId,
       Value<String> note,
       required int occurredDay,
       required DateTime createdAt,
@@ -2614,7 +2899,6 @@ typedef $$LedgerEntriesTableUpdateCompanionBuilder =
       Value<int> accountId,
       Value<int?> destinationAccountId,
       Value<int> amount,
-      Value<int?> categoryId,
       Value<String> note,
       Value<int> occurredDay,
       Value<DateTime> createdAt,
@@ -2665,20 +2949,21 @@ final class $$LedgerEntriesTableReferences
     );
   }
 
-  static $CategoriesTable _categoryIdTable(_$AppDatabase db) =>
-      db.categories.createAlias('ledger_entries__category_id__categories__id');
+  static MultiTypedResultKey<$LedgerAllocationsTable, List<LedgerAllocationRow>>
+  _allocationsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.ledgerAllocations,
+    aliasName: 'ledger_entries__id__ledger_allocations__entry_id',
+  );
 
-  $$CategoriesTableProcessedTableManager? get categoryId {
-    final $_column = $_itemColumn<int>('category_id');
-    if ($_column == null) return null;
-    final manager = $$CategoriesTableTableManager(
+  $$LedgerAllocationsTableProcessedTableManager get allocations {
+    final manager = $$LedgerAllocationsTableTableManager(
       $_db,
-      $_db.categories,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_categoryIdTable($_db));
-    if (item == null) return manager;
+      $_db.ledgerAllocations,
+    ).filter((f) => f.entryId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_allocationsTable($_db));
     return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
+      manager.$state.copyWith(prefetchedData: cache),
     );
   }
 }
@@ -2768,27 +3053,29 @@ class $$LedgerEntriesTableFilterComposer
     return composer;
   }
 
-  $$CategoriesTableFilterComposer get categoryId {
-    final $$CategoriesTableFilterComposer composer = $composerBuilder(
+  Expression<bool> allocations(
+    Expression<bool> Function($$LedgerAllocationsTableFilterComposer f) f,
+  ) {
+    final $$LedgerAllocationsTableFilterComposer composer = $composerBuilder(
       composer: this,
-      getCurrentColumn: (t) => t.categoryId,
-      referencedTable: $db.categories,
-      getReferencedColumn: (t) => t.id,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.ledgerAllocations,
+      getReferencedColumn: (t) => t.entryId,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$CategoriesTableFilterComposer(
+          }) => $$LedgerAllocationsTableFilterComposer(
             $db: $db,
-            $table: $db.categories,
+            $table: $db.ledgerAllocations,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
                 $removeJoinBuilderFromRootComposer,
           ),
     );
-    return composer;
+    return f(composer);
   }
 }
 
@@ -2876,29 +3163,6 @@ class $$LedgerEntriesTableOrderingComposer
     );
     return composer;
   }
-
-  $$CategoriesTableOrderingComposer get categoryId {
-    final $$CategoriesTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.categoryId,
-      referencedTable: $db.categories,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CategoriesTableOrderingComposer(
-            $db: $db,
-            $table: $db.categories,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 }
 
 class $$LedgerEntriesTableAnnotationComposer
@@ -2976,27 +3240,30 @@ class $$LedgerEntriesTableAnnotationComposer
     return composer;
   }
 
-  $$CategoriesTableAnnotationComposer get categoryId {
-    final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.categoryId,
-      referencedTable: $db.categories,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CategoriesTableAnnotationComposer(
-            $db: $db,
-            $table: $db.categories,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
+  Expression<T> allocations<T extends Object>(
+    Expression<T> Function($$LedgerAllocationsTableAnnotationComposer a) f,
+  ) {
+    final $$LedgerAllocationsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.ledgerAllocations,
+          getReferencedColumn: (t) => t.entryId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
                 $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
+              }) => $$LedgerAllocationsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.ledgerAllocations,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
   }
 }
 
@@ -3016,7 +3283,7 @@ class $$LedgerEntriesTableTableManager
           PrefetchHooks Function({
             bool accountId,
             bool destinationAccountId,
-            bool categoryId,
+            bool allocations,
           })
         > {
   $$LedgerEntriesTableTableManager(_$AppDatabase db, $LedgerEntriesTable table)
@@ -3037,7 +3304,6 @@ class $$LedgerEntriesTableTableManager
                 Value<int> accountId = const Value.absent(),
                 Value<int?> destinationAccountId = const Value.absent(),
                 Value<int> amount = const Value.absent(),
-                Value<int?> categoryId = const Value.absent(),
                 Value<String> note = const Value.absent(),
                 Value<int> occurredDay = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -3047,7 +3313,6 @@ class $$LedgerEntriesTableTableManager
                 accountId: accountId,
                 destinationAccountId: destinationAccountId,
                 amount: amount,
-                categoryId: categoryId,
                 note: note,
                 occurredDay: occurredDay,
                 createdAt: createdAt,
@@ -3059,7 +3324,6 @@ class $$LedgerEntriesTableTableManager
                 required int accountId,
                 Value<int?> destinationAccountId = const Value.absent(),
                 required int amount,
-                Value<int?> categoryId = const Value.absent(),
                 Value<String> note = const Value.absent(),
                 required int occurredDay,
                 required DateTime createdAt,
@@ -3069,7 +3333,6 @@ class $$LedgerEntriesTableTableManager
                 accountId: accountId,
                 destinationAccountId: destinationAccountId,
                 amount: amount,
-                categoryId: categoryId,
                 note: note,
                 occurredDay: occurredDay,
                 createdAt: createdAt,
@@ -3086,11 +3349,13 @@ class $$LedgerEntriesTableTableManager
               ({
                 accountId = false,
                 destinationAccountId = false,
-                categoryId = false,
+                allocations = false,
               }) {
                 return PrefetchHooks(
                   db: db,
-                  explicitlyWatchedTables: [],
+                  explicitlyWatchedTables: [
+                    if (allocations) db.ledgerAllocations,
+                  ],
                   addJoins:
                       <
                         T extends TableManagerState<
@@ -3129,22 +3394,33 @@ class $$LedgerEntriesTableTableManager
                                 .id,
                           ) as T;
                         }
-                        if (categoryId) {
-                          state = state.withJoin(
-                            currentTable: table,
-                            currentColumn: table.categoryId,
-                            referencedTable: $$LedgerEntriesTableReferences
-                                ._categoryIdTable(db),
-                            referencedColumn: $$LedgerEntriesTableReferences
-                                ._categoryIdTable(db)
-                                .id,
-                          ) as T;
-                        }
 
                         return state;
                       },
                   getPrefetchedDataCallback: (items) async {
-                    return [];
+                    return [
+                      if (allocations)
+                        await $_getPrefetchedData<
+                          LedgerRow,
+                          $LedgerEntriesTable,
+                          LedgerAllocationRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$LedgerEntriesTableReferences
+                              ._allocationsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$LedgerEntriesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).allocations,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.entryId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
                   },
                 );
               },
@@ -3167,8 +3443,404 @@ typedef $$LedgerEntriesTableProcessedTableManager =
       PrefetchHooks Function({
         bool accountId,
         bool destinationAccountId,
-        bool categoryId,
+        bool allocations,
       })
+    >;
+typedef $$LedgerAllocationsTableCreateCompanionBuilder =
+    LedgerAllocationsCompanion Function({
+      required int entryId,
+      required int position,
+      required int categoryId,
+      required int amount,
+      Value<int> rowid,
+    });
+typedef $$LedgerAllocationsTableUpdateCompanionBuilder =
+    LedgerAllocationsCompanion Function({
+      Value<int> entryId,
+      Value<int> position,
+      Value<int> categoryId,
+      Value<int> amount,
+      Value<int> rowid,
+    });
+
+final class $$LedgerAllocationsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $LedgerAllocationsTable,
+          LedgerAllocationRow
+        > {
+  $$LedgerAllocationsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $LedgerEntriesTable _entryIdTable(_$AppDatabase db) => db.ledgerEntries
+      .createAlias('ledger_allocations__entry_id__ledger_entries__id');
+
+  $$LedgerEntriesTableProcessedTableManager get entryId {
+    final $_column = $_itemColumn<int>('entry_id')!;
+
+    final manager = $$LedgerEntriesTableTableManager(
+      $_db,
+      $_db.ledgerEntries,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_entryIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $CategoriesTable _categoryIdTable(_$AppDatabase db) => db.categories
+      .createAlias('ledger_allocations__category_id__categories__id');
+
+  $$CategoriesTableProcessedTableManager get categoryId {
+    final $_column = $_itemColumn<int>('category_id')!;
+
+    final manager = $$CategoriesTableTableManager(
+      $_db,
+      $_db.categories,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_categoryIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$LedgerAllocationsTableFilterComposer
+    extends Composer<_$AppDatabase, $LedgerAllocationsTable> {
+  $$LedgerAllocationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get amount => $composableBuilder(
+    column: $table.amount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$LedgerEntriesTableFilterComposer get entryId {
+    final $$LedgerEntriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.entryId,
+      referencedTable: $db.ledgerEntries,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LedgerEntriesTableFilterComposer(
+            $db: $db,
+            $table: $db.ledgerEntries,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CategoriesTableFilterComposer get categoryId {
+    final $$CategoriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableFilterComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LedgerAllocationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LedgerAllocationsTable> {
+  $$LedgerAllocationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get amount => $composableBuilder(
+    column: $table.amount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$LedgerEntriesTableOrderingComposer get entryId {
+    final $$LedgerEntriesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.entryId,
+      referencedTable: $db.ledgerEntries,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LedgerEntriesTableOrderingComposer(
+            $db: $db,
+            $table: $db.ledgerEntries,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CategoriesTableOrderingComposer get categoryId {
+    final $$CategoriesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableOrderingComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LedgerAllocationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LedgerAllocationsTable> {
+  $$LedgerAllocationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumn<int> get amount =>
+      $composableBuilder(column: $table.amount, builder: (column) => column);
+
+  $$LedgerEntriesTableAnnotationComposer get entryId {
+    final $$LedgerEntriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.entryId,
+      referencedTable: $db.ledgerEntries,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LedgerEntriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.ledgerEntries,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$CategoriesTableAnnotationComposer get categoryId {
+    final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.categoryId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LedgerAllocationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LedgerAllocationsTable,
+          LedgerAllocationRow,
+          $$LedgerAllocationsTableFilterComposer,
+          $$LedgerAllocationsTableOrderingComposer,
+          $$LedgerAllocationsTableAnnotationComposer,
+          $$LedgerAllocationsTableCreateCompanionBuilder,
+          $$LedgerAllocationsTableUpdateCompanionBuilder,
+          (LedgerAllocationRow, $$LedgerAllocationsTableReferences),
+          LedgerAllocationRow,
+          PrefetchHooks Function({bool entryId, bool categoryId})
+        > {
+  $$LedgerAllocationsTableTableManager(
+    _$AppDatabase db,
+    $LedgerAllocationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LedgerAllocationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LedgerAllocationsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LedgerAllocationsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> entryId = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<int> categoryId = const Value.absent(),
+                Value<int> amount = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LedgerAllocationsCompanion(
+                entryId: entryId,
+                position: position,
+                categoryId: categoryId,
+                amount: amount,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required int entryId,
+                required int position,
+                required int categoryId,
+                required int amount,
+                Value<int> rowid = const Value.absent(),
+              }) => LedgerAllocationsCompanion.insert(
+                entryId: entryId,
+                position: position,
+                categoryId: categoryId,
+                amount: amount,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$LedgerAllocationsTable, LedgerAllocationRow>(
+                    table,
+                  ),
+                  $$LedgerAllocationsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({entryId = false, categoryId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (entryId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.entryId,
+                        referencedTable: $$LedgerAllocationsTableReferences
+                            ._entryIdTable(db),
+                        referencedColumn: $$LedgerAllocationsTableReferences
+                            ._entryIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+                    if (categoryId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.categoryId,
+                        referencedTable: $$LedgerAllocationsTableReferences
+                            ._categoryIdTable(db),
+                        referencedColumn: $$LedgerAllocationsTableReferences
+                            ._categoryIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$LedgerAllocationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LedgerAllocationsTable,
+      LedgerAllocationRow,
+      $$LedgerAllocationsTableFilterComposer,
+      $$LedgerAllocationsTableOrderingComposer,
+      $$LedgerAllocationsTableAnnotationComposer,
+      $$LedgerAllocationsTableCreateCompanionBuilder,
+      $$LedgerAllocationsTableUpdateCompanionBuilder,
+      (LedgerAllocationRow, $$LedgerAllocationsTableReferences),
+      LedgerAllocationRow,
+      PrefetchHooks Function({bool entryId, bool categoryId})
     >;
 
 class $AppDatabaseManager {
@@ -3180,4 +3852,6 @@ class $AppDatabaseManager {
       $$CategoriesTableTableManager(_db, _db.categories);
   $$LedgerEntriesTableTableManager get ledgerEntries =>
       $$LedgerEntriesTableTableManager(_db, _db.ledgerEntries);
+  $$LedgerAllocationsTableTableManager get ledgerAllocations =>
+      $$LedgerAllocationsTableTableManager(_db, _db.ledgerAllocations);
 }

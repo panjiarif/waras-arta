@@ -17,7 +17,7 @@ void main() {
       () async {
         final document = _backupDocument(createdAtUtc: now);
         final store = _FakeBackupDataStore(
-          databaseSchemaVersion: 3,
+          databaseSchemaVersion: 4,
           documentToExport: document,
         );
         final codec = _testCodec();
@@ -47,7 +47,7 @@ void main() {
       () async {
         final document = _backupDocument(createdAtUtc: now);
         final store = _FakeBackupDataStore(
-          databaseSchemaVersion: 3,
+          databaseSchemaVersion: 4,
           documentToExport: document,
         );
         final codec = _testCodec();
@@ -64,11 +64,30 @@ void main() {
       },
     );
 
-    test('inspect rejects a database schema mismatch before restore', () async {
+    test('inspect accepts a v1/schema 3 backup on target schema 4', () async {
       final document = _backupDocument(
-        databaseSchemaVersion: 2,
+        backupVersion: 1,
+        databaseSchemaVersion: 3,
         createdAtUtc: now,
       );
+      final store = _FakeBackupDataStore(
+        databaseSchemaVersion: 4,
+        documentToExport: document,
+      );
+      final codec = _testCodec();
+      final service = BackupService(dataStore: store, codec: codec);
+      final bytes = await codec.encrypt(document, password: password);
+
+      final plan = await service.inspect(bytes: bytes, password: password);
+      await service.restore(plan);
+
+      expect(plan.document.backupVersion, 1);
+      expect(plan.document.databaseSchemaVersion, 3);
+      expect(store.restoreCalls, 1);
+    });
+
+    test('inspect rejects a valid v2 backup on target schema 3', () async {
+      final document = _backupDocument(createdAtUtc: now);
       final store = _FakeBackupDataStore(
         databaseSchemaVersion: 3,
         documentToExport: document,
@@ -156,11 +175,13 @@ EncryptedBackupCodec _testCodec() {
 }
 
 BackupDocument _backupDocument({
-  int databaseSchemaVersion = 3,
+  int backupVersion = currentBackupVersion,
+  int databaseSchemaVersion = 4,
   required DateTime createdAtUtc,
 }) {
   final rowCreatedAt = DateTime.utc(2026, 9, 5, 4, 30);
   return BackupDocument(
+    backupVersion: backupVersion,
     databaseSchemaVersion: databaseSchemaVersion,
     createdAtUtc: createdAtUtc,
     sequences: const BackupSequences(

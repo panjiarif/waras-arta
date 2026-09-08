@@ -228,7 +228,7 @@ void main() {
   });
 }
 
-EntryDraft expenseDraft() => EntryDraft(
+EntryDraft expenseDraft() => EntryDraft.singleAllocation(
   kind: EntryKind.expense,
   accountId: 1,
   amount: 15000,

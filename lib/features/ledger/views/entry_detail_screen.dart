@@ -8,6 +8,7 @@ import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
 import '../view_models/ledger_view_model.dart';
 import 'entry_form_screen.dart';
+import 'entry_presentation.dart';
 import 'form_widgets.dart';
 
 class EntryDetailScreen extends ConsumerStatefulWidget {
@@ -98,16 +99,11 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(
-                            entry.categoryIconKey == null
-                                ? _entryIcon(entry.kind)
-                                : categoryIconFor(entry.categoryIconKey!),
-                            color: amountColor,
-                          ),
+                          Icon(entry.presentationIcon, color: amountColor),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              entry.categoryName ?? entry.kind.label,
+                              entry.presentationTitle,
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
@@ -166,10 +162,19 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                   },
                   value: accountName(entry.accountId),
                 ),
-              if (entry.parentCategoryName != null)
-                _DetailRow(label: 'Kelompok', value: entry.parentCategoryName!),
-              if (entry.categoryName != null)
-                _DetailRow(label: 'Subkategori', value: entry.categoryName!),
+              if (entry.isSplitEntry) ...[
+                const SizedBox(height: 16),
+                _AllocationDetails(entry: entry),
+                const SizedBox(height: 6),
+              ] else ...[
+                if (entry.parentCategoryName != null)
+                  _DetailRow(
+                    label: 'Kelompok',
+                    value: entry.parentCategoryName!,
+                  ),
+                if (entry.categoryName != null)
+                  _DetailRow(label: 'Subkategori', value: entry.categoryName!),
+              ],
               _DetailRow(
                 label: 'Tanggal kejadian',
                 value: formatDate(entry.occurredAt),
@@ -182,10 +187,12 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                 label: 'Dicatat pada',
                 value: formatDateTime(entry.createdAt),
               ),
-              if (entry.categoryArchived) ...[
+              if (entry.hasArchivedAllocation) ...[
                 const SizedBox(height: 12),
-                const FormMessage(
-                  'Kategori transaksi ini telah diarsipkan. Riwayat tetap utuh dan kategori dapat dipulihkan dari Kelola kategori.',
+                FormMessage(
+                  entry.isSplitEntry
+                      ? 'Satu atau lebih kategori rincian telah diarsipkan. Riwayat tetap utuh dan kategori dapat dipulihkan dari Kelola kategori.'
+                      : 'Kategori transaksi ini telah diarsipkan. Riwayat tetap utuh dan kategori dapat dipulihkan dari Kelola kategori.',
                 ),
               ],
               if (usesArchivedAccount) ...[
@@ -414,9 +421,71 @@ class _DetailRow extends StatelessWidget {
   );
 }
 
-IconData _entryIcon(EntryKind kind) => switch (kind) {
-  EntryKind.income => Icons.south_west,
-  EntryKind.expense => Icons.north_east,
-  EntryKind.transfer => Icons.swap_horiz,
-  EntryKind.adjustment => Icons.savings_outlined,
-};
+class _AllocationDetails extends StatelessWidget {
+  const _AllocationDetails({required this.entry});
+
+  final FinanceEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Rincian transaksi',
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        for (var index = 0; index < entry.allocations.length; index++) ...[
+          Container(
+            key: ValueKey('entry-detail-allocation-$index'),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainer,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  categoryIconFor(entry.allocations[index].categoryIconKey),
+                  color: forest,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.allocations[index].categoryName,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        entry.allocations[index].categoryArchived
+                            ? '${entry.allocations[index].parentCategoryName} • Diarsipkan'
+                            : entry.allocations[index].parentCategoryName,
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    formatRupiah(entry.allocations[index].amount),
+                    key: ValueKey('entry-detail-allocation-amount-$index'),
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (index != entry.allocations.length - 1) const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}

@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
-import '../../../core/category_icons.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
 import '../../ledger/view_models/ledger_view_model.dart';
+import '../../ledger/views/entry_presentation.dart';
 import '../../ledger/views/form_widgets.dart';
 import '../view_models/calendar_view_model.dart';
 
@@ -513,25 +513,20 @@ class _CalendarEntryCard extends ConsumerWidget {
         ? '${accountNames[entry.accountId] ?? 'Rekening'} → '
               '${accountNames[entry.destinationAccountId] ?? 'Rekening'}'
         : accountNames[entry.accountId] ?? 'Rekening';
-    final icon = entry.categoryIconKey != null
-        ? categoryIconFor(entry.categoryIconKey!)
-        : switch (entry.kind) {
-            EntryKind.income => Icons.south_west,
-            EntryKind.expense => Icons.north_east,
-            EntryKind.transfer => Icons.swap_horiz,
-            EntryKind.adjustment => Icons.tune,
-          };
     final details = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          entry.categoryName ?? entry.kind.label,
+          entry.presentationTitle,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 3),
         Text(accountRoute, style: const TextStyle(fontSize: 13)),
-        if (entry.parentCategoryName != null)
-          Text(entry.parentCategoryName!, style: const TextStyle(fontSize: 12)),
+        if (entry.presentationCategorySummary != null)
+          Text(
+            entry.presentationCategorySummary!,
+            style: const TextStyle(fontSize: 12),
+          ),
         if (entry.note.isNotEmpty && entry.note != 'Saldo awal') ...[
           const SizedBox(height: 4),
           Text(entry.note),
@@ -558,7 +553,7 @@ class _CalendarEntryCard extends ConsumerWidget {
               final identity = Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(icon, color: color),
+                  Icon(entry.presentationIcon, color: color),
                   const SizedBox(width: 14),
                   Expanded(child: details),
                 ],

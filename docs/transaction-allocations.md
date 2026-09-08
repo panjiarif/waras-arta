@@ -2,7 +2,7 @@
 
 ## Status dan tujuan
 
-Dokumen ini adalah kontrak implementasi **Alokasi Transaksi v1**. Implementasi belum dimulai. Fitur ini dikerjakan sebelum anggaran karena nominal per subkategori menjadi sumber data bagi progres anggaran, rincian kategori, dan diagram.
+Dokumen ini adalah kontrak implementasi **Alokasi Transaksi v1**. Fondasi schema v4, payload backup v2, form split, serta presentasi riwayat, kalender, dan detail sudah diterapkan dan dilindungi pengujian otomatis. Smoke test akhir pada HP referensi tetap menjadi gerbang sebelum fitur dianggap siap dipakai sebagai catatan nyata. Fitur ini dikerjakan sebelum anggaran karena nominal per subkategori menjadi sumber data bagi progres anggaran, rincian kategori, dan diagram.
 
 Satu pencatatan pemasukan atau pengeluaran tetap tampil sebagai satu transaksi, tetapi dapat dibagi menjadi beberapa pasangan nominal dan subkategori. Contoh: satu pembayaran Rp17.000 dapat terdiri dari **Makan Rp15.000** dan **Parkir Rp2.000**.
 
@@ -85,31 +85,31 @@ Form baru membuka satu baris kosong berisi:
 - pemilih subkategori yang sesuai jenis transaksi;
 - label urutan yang dapat dipahami pembaca layar.
 
-Di bawah daftar tersedia tombol dengan **ikon plus dan teks `Tambah kategori lain`**. Ikon tanpa teks tidak cukup. Menekan tombol menambah satu baris kosong pada posisi terakhir. Tombol dinonaktifkan ketika sudah ada 50 baris dan menampilkan keterangan bahwa batas pembagian tercapai.
+Di bawah daftar tersedia tombol dengan **ikon plus dan teks `Tambah rincian`**. Ikon tanpa teks tidak cukup. Menekan tombol menambah satu baris kosong pada posisi terakhir. Tombol dinonaktifkan ketika sudah ada 50 baris atau tidak ada subkategori aktif unik yang tersisa setelah setiap baris kosong mendapat satu calon pilihan. Form menampilkan alasan serta jalan pintas ke kelola kategori bila kapasitas kategori habis.
 
-Total ditampilkan sebagai ringkasan read-only yang diperbarui ketika nominal berubah. Selama masih ada baris kosong/tidak valid, kategori belum dipilih/duplikat, atau jumlah melampaui batas, labelnya **Total sementara Rp…** dengan pesan bagian yang perlu diperbaiki; jangan menampilkan Rp0 atau total lama seolah final. Setelah semua baris valid, label berubah menjadi **Total transaksi Rp…**. Total bukan `TextFormField` dan tidak dapat diedit tersendiri.
+Ketika terdapat lebih dari satu rincian, total ditampilkan sebagai ringkasan read-only yang diperbarui saat nominal berubah. Jika salah satu nominal kosong/tidak valid, nilainya menjadi **Belum lengkap**; jika semua nominal dapat dibaca, nilainya menampilkan jumlah terbaru. Kategori yang belum dipilih tetap divalidasi dekat barisnya, sedangkan total yang melampaui batas menampilkan error tersendiri. Total bukan `TextFormField` dan tidak dapat diedit tersendiri.
 
 Perilaku baris:
 
 - baris dapat dihapus selama masih tersisa minimal satu;
 - setelah penghapusan, posisi berikutnya dirapatkan kembali menjadi `0..N-1`;
-- pada pemilih suatu baris, kategori yang dipakai baris lain dinonaktifkan dengan subtitle **Dipakai pada Bagian N**; kategori milik baris itu sendiri tetap dapat diganti atau dilepas;
+- pada pemilih suatu baris, kategori yang dipakai baris lain dinonaktifkan dengan subtitle **Sudah dipakai**; kategori milik baris itu sendiri tetap dapat diganti atau dilepas;
 - pilihan subkategori tetap dikelompokkan berdasarkan induk dan menampilkan ikon yang ada;
-- kategori atau induk arsip yang sudah tersimpan tetap tampil pada baris edit dengan badge teks **Arsip**; nominalnya boleh diubah dan barisnya boleh dilepas, tetapi kategori itu tidak tersedia untuk assignment baru;
+- kategori atau induk arsip yang sudah tersimpan tetap tampil pada baris edit dengan penanda teks **Diarsipkan**; nominalnya boleh diubah dan barisnya boleh dilepas, tetapi kategori itu tidak tersedia untuk assignment baru;
 - urutan input disimpan. Drag-and-drop tidak wajib; versi pertama memakai urutan penambahan dan hasil penghapusan yang sudah dirapatkan;
 - error berada dekat baris penyebab dan ringkasan form tetap menjelaskan mengapa simpan ditolak.
 
 Rekening, tanggal kejadian, dan catatan tetap satu untuk seluruh pembayaran. Form tidak menawarkan rekening, tanggal, atau catatan berbeda per alokasi.
 
-Pada lebar 320 px atau text scale 200%, satu bagian wajib disusun vertikal: identitas bagian, pemilih kategori, input nominal, lalu aksi hapus. Jangan memaksa kategori–nominal–hapus ke dalam satu `Row` sempit. Setelah tambah, fokus berpindah ke pemilih kategori bagian baru; setelah hapus, fokus menuju bagian sebelumnya atau tombol tambah.
+Pada lebar 320 px atau text scale 200%, satu rincian disusun vertikal: identitas beserta aksi hapus, input nominal, lalu pemilih kategori. Jangan memaksa kategori–nominal–hapus ke dalam satu `Row` sempit. Setelah tambah, fokus berpindah ke input nominal rincian baru dan form menggulirkannya ke area yang terlihat.
 
-Ringkasan total tidak menjadi live region pada setiap digit karena akan terlalu berisik bagi TalkBack. Perubahan status valid/invalid diumumkan setelah tambah/hapus bagian atau ketika pengguna mencoba menyimpan; semantic label membedakan **total sementara** dari **total transaksi**.
+Ringkasan angka total tidak menjadi live region pada setiap digit karena akan terlalu berisik bagi TalkBack. Error total menjadi live region ketika status validitas berubah, dan setiap rincian mempunyai label serta kontrol beridentitas stabil.
 
 ### Perubahan jenis transaksi
 
-- Pemasukan ↔ pengeluaran mempertahankan nominal dan posisi baris, tetapi harus mengosongkan seluruh kategori lama. Jika setidaknya satu kategori sudah dipilih, tampilkan konfirmasi lebih dahulu; pembatalan mempertahankan jenis dan seluruh baris tanpa perubahan.
-- Pemasukan/pengeluaran → transfer memerlukan konfirmasi bila form sudah berisi data. Nilai total turunan dapat menjadi nilai awal nominal transfer; seluruh alokasi kemudian dilepas.
-- Transfer → pemasukan/pengeluaran membuat satu baris dengan nominal transfer sebagai nilai awal dan subkategori kosong.
+- Pemasukan ↔ pengeluaran mempertahankan nominal dan posisi rincian, tetapi langsung mengosongkan seluruh kategori lama karena jenis kategorinya berbeda.
+- Pemasukan/pengeluaran → transfer memakai total turunan valid sebagai nilai awal nominal transfer. Rincian dipertahankan sementara di state form agar dapat dikembalikan bila pengguna mengubah jenis lagi sebelum menyimpan; total yang belum valid tidak boleh meninggalkan nominal transfer lama.
+- Transfer → pemasukan/pengeluaran memakai nominal transfer sebagai nilai awal hanya bila seluruh input rincian masih kosong, lalu pengguna memilih subkategori yang sesuai.
 - Perubahan jenis tidak pernah meninggalkan alokasi pada transfer atau kategori dengan jenis yang salah.
 
 ### Edit dan penghapusan
@@ -125,9 +125,9 @@ Penekanan tombol simpan/hapus berulang ketika operasi berjalan tidak boleh mengh
 - Satu header selalu menghasilkan satu kartu/baris riwayat, berapa pun jumlah alokasinya.
 - Nominal utama kartu adalah total header.
 - Satu alokasi menampilkan nama serta ikon subkategori seperti perilaku sekarang.
-- Beberapa alokasi memakai ikon netral `receipt_long`, label teks **N kategori**, dan maksimal dua nama subkategori lalu **+N lainnya**; ikon kategori pertama tidak boleh mewakili seluruh transaksi.
-- Semantic label kartu tetap ringkas: jenis, total, rekening, tanggal, dan jumlah kategori; daftar lengkap tersedia pada detail.
-- Detail menampilkan total, rekening, tanggal, catatan, waktu pencatatan, lalu seluruh alokasi sesuai posisi dengan nominal masing-masing. Allocation yang kategorinya diarsipkan mempunyai badge teks **Arsip**, bukan hanya perbedaan warna.
+- Beberapa alokasi memakai ikon netral `call_split`, label teks **N rincian**, dan maksimal dua nama subkategori lalu **+N lainnya**; ikon kategori pertama tidak boleh mewakili seluruh transaksi.
+- Kartu tetap ringkas: jenis, total, rekening, tanggal, dan jumlah rincian; daftar lengkap tersedia pada detail.
+- Detail menampilkan total, rekening, tanggal, catatan, waktu pencatatan, lalu seluruh alokasi sesuai posisi dengan nominal masing-masing. Allocation yang kategorinya diarsipkan mempunyai penanda teks **Diarsipkan**, bukan hanya perbedaan warna.
 - Rename atau perubahan ikon kategori langsung tercermin karena alokasi menyimpan ID, bukan salinan nama.
 - Pagination, urutan tanggal, dan navigasi ke detail menggunakan ID header, bukan row alokasi.
 
@@ -251,11 +251,12 @@ Migrasi harus menjaga data pribadi yang sudah ada dan berlangsung atomik. Strate
 2. catat high-water mark `sqlite_sequence` ledger dan ID maksimum;
 3. buat tabel staging tanpa foreign key berisi `entry_id`, `position = 0`, `category_id`, dan `amount` untuk setiap ledger kind pemasukan/pengeluaran;
 4. pastikan setiap row lama kind 0/1 mempunyai kategori leaf dengan jenis yang cocok sebelum perubahan destruktif;
-5. bangun ulang `ledger_entries` tanpa `category_id`, dengan seluruh ID, jenis, rekening, tujuan, nominal, catatan, tanggal, dan `created_at` lama;
-6. buat `ledger_allocations` dan masukkan seluruh row staging;
-7. hapus staging, buat ulang trigger/indeks schema v4, dan pulihkan sequence ledger sekurang-kurangnya `max(oldSequence, maximumLedgerId)`;
-8. jalankan pemeriksaan integritas serta `PRAGMA foreign_key_check` sebelum commit;
-9. aktifkan kembali foreign key pada blok `finally`.
+5. jatuhkan index `ledger_entries_category_id` serta trigger `ledger_validate_category_insert/update` milik schema v3 agar rebuild tidak mencoba membuatnya ulang setelah `category_id` hilang;
+6. bangun ulang `ledger_entries` tanpa `category_id`, dengan seluruh ID, jenis, rekening, tujuan, nominal, catatan, tanggal, dan `created_at` lama;
+7. buat `ledger_allocations` dan masukkan seluruh row staging;
+8. hapus staging, buat ulang trigger/indeks schema v4, dan pulihkan sequence ledger sekurang-kurangnya `max(oldSequence, maximumLedgerId)`;
+9. jalankan pemeriksaan integritas serta `PRAGMA foreign_key_check` sebelum commit;
+10. aktifkan kembali foreign key pada blok `finally`.
 
 Pembuatan allocation lebih aman dilakukan setelah rebuild header dengan data staging, bukan membuat tabel ber-FK lalu menjatuhkan tabel header yang sedang direferensikan.
 
@@ -376,7 +377,7 @@ Kesalahan apa pun di tengah restore harus me-rollback header dan allocation bers
 - kategori/induk arsip lama boleh dipertahankan, diubah nominalnya, atau dilepas, tetapi tidak ditambahkan kembali;
 - total header selalu sama dengan jumlah allocation dan tidak menerima total input kedua;
 - edit satu→split, split→satu, tambah/hapus baris, perubahan posisi, serta perubahan kind berlangsung atomik;
-- pembatalan konfirmasi perubahan pemasukan↔pengeluaran mempertahankan jenis dan seluruh baris;
+- perubahan pemasukan↔pengeluaran mempertahankan nominal/posisi dan mengosongkan kategori; perpindahan ke/dari transfer membawa nominal hanya ketika sumbernya valid serta tidak meninggalkan nilai transfer lama;
 - transfer dan adjustment menolak setiap allocation;
 - kegagalan insert/update di tengah batch me-rollback header maupun seluruh allocation;
 - delete header menghapus seluruh allocation, sedangkan category referenced tidak dapat dihapus.
@@ -401,8 +402,8 @@ Kesalahan apa pun di tengah restore harus me-rollback header dan allocation bers
 - batch allocation tidak menghasilkan N+1;
 - detail menampilkan seluruh baris dalam urutan posisi dan total yang cocok;
 - edit/hapus memperbarui rekening, bulan/tanggal lama dan baru, kategori, serta stream terkait;
-- form default satu baris, tombol ikon+teks menambah sampai 50, fokus berpindah dengan benar, dan total sementara/final read-only bereaksi sesuai validitas;
-- picker menonaktifkan kategori duplikat dengan sumber bagian, kategori arsip mempunyai badge per baris, serta ikon single/split tidak menyesatkan;
+- form default satu rincian, tombol ikon+teks menambah sampai 50 atau sampai kategori aktif habis, fokus menuju nominal baru, dan total read-only menampilkan nilai turunan atau **Belum lengkap**;
+- picker menonaktifkan kategori duplikat dengan teks **Sudah dipakai**, kategori arsip mempunyai penanda **Diarsipkan**, serta ikon single/split tidak menyesatkan;
 - baris invalid, double submit, dirty Back, layout vertikal 320 px, keyboard, text scale 200%, dan TalkBack tanpa pengumuman setiap digit ditangani;
 - profile benchmark pada data representatif terasa responsif di HP referensi.
 

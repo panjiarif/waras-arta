@@ -123,6 +123,10 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Form pemasukan hanya menawarkan kategori pemasukan dan form pengeluaran hanya kategori pengeluaran.
 - [ ] Form transaksi hanya dapat memilih subkategori; baris kelompok tidak dapat dipilih.
 - [ ] Mengganti jenis pengeluaran ke pemasukan atau transfer membersihkan pilihan subkategori lama.
+- [ ] Form baru membuka satu rincian. Tambahkan Makan Rp15.000 dan Parkir Rp2.000; total harus Rp17.000 dan simpan menghasilkan tepat satu transaksi.
+- [ ] Subkategori yang sudah dipakai rincian lain dinonaktifkan; hapus/tambah rincian tidak menukar nominal atau kategori baris lain.
+- [ ] Riwayat dan kalender menampilkan satu kartu **2 rincian**; detail menampilkan kedua nominal, sedangkan saldo berkurang tepat Rp17.000 sekali.
+- [ ] Edit transaksi split memuat urutan lama; ubah nominal/kategori atau kembali menjadi satu rincian lalu pastikan total, saldo, backup, dan restore ikut konsisten.
 - [ ] Tambah kelompok selalu meminta satu subkategori pertama; nama dan ikon keduanya dapat diedit.
 - [ ] Rename/ubah ikon kategori langsung terlihat di riwayat dan detail transaksi lama.
 - [ ] Kategori arsip hilang dari pilihan transaksi baru, tetap terbaca pada riwayat, dan dapat dipulihkan.
@@ -174,9 +178,8 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 
 1. Jalankan checklist transaksi, kelola rekening, kalender, serta backup/restore pada HP referensi dan perbaiki setiap ketidaksesuaian.
 2. Uji file Downloads dan penyedia dokumen cloud pada perangkat/instalasi terpisah menggunakan data percobaan; ukur juga Argon2id pada HP referensi.
-3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini tetap memakai schema v3.
-4. Setelah jalur pemulihan manual terbukti bekerja, implementasikan fondasi [Alokasi Kategori Transaksi](transaction-allocations.md) bersama schema v4 dan payload backup v2. Migrasikan setiap pemasukan/pengeluaran lama menjadi satu alokasi tanpa mengubah ID transaksi, saldo, atau ringkasan.
-5. Setelah persistence, migrasi, backup/restore, dan alur satu alokasi stabil, tambahkan UI split transaction. Form tetap membuka satu alokasi secara default; tombol **+ Tambah kategori lain** menambahkan baris, dan total transaksi dihitung otomatis dari jumlah seluruh nominal alokasi tanpa input total kedua.
-6. Setelah split transaction lulus pengujian otomatis dan smoke test perangkat, implementasikan [Anggaran v1](budgets.md) bersama schema v5 dan payload backup v3. Progres anggaran harus menjumlahkan nominal alokasi pengeluaran, bukan total header transaksi.
+3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini memakai schema v4 dan payload backup v2.
+4. Jalankan checklist perangkat untuk [Alokasi Kategori Transaksi](transaction-allocations.md): satu rincian, split, edit, perubahan jenis, kategori arsip, backup v2, dan restore file v1/v2.
+5. Setelah split transaction lulus smoke test perangkat, implementasikan [Anggaran v1](budgets.md) bersama schema v5 dan payload backup v3. Progres anggaran harus menjumlahkan nominal alokasi pengeluaran, bukan total header transaksi.
 
 Jangan menjadikan alpha satu-satunya catatan keuangan sebelum restore lintas instalasi berhasil diuji. Setelah itu pun, buat backup rutin secara berkala dan pertahankan beberapa salinan di luar HP; aplikasi belum membuat backup terjadwal. Safety backup yang wajib saat restore hanya melindungi keadaan tepat sebelum replace-all dan bukan pengganti kebiasaan backup rutin.

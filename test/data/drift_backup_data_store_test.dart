@@ -63,7 +63,7 @@ void main() {
     int amount, {
     String note = '',
     int categoryId = 2,
-  }) => EntryDraft(
+  }) => EntryDraft.singleAllocation(
     kind: EntryKind.income,
     accountId: accountId,
     amount: amount,
@@ -73,7 +73,7 @@ void main() {
   );
 
   test(
-    'JSON v1 round-trip replaces dirty data and preserves ID sequences',
+    'JSON v2 split round-trip replaces dirty data and preserves ID sequences',
     () async {
       final walletId = await createAccount(
         sourceFinance,
@@ -83,12 +83,29 @@ void main() {
       final bankId = await createAccount(sourceFinance, 'Bank');
       final disposableId = await createAccount(sourceFinance, 'Sementara');
       await sourceFinance.deleteAccount(disposableId);
+      final bonusCategoryId = await sourceFinance.createSubcategory(
+        const CategoryDraft(
+          parentId: 1,
+          name: 'Bonus tahunan',
+          iconKey: 'redeem',
+          sortOrder: 7,
+        ),
+      );
 
       await sourceFinance.addEntry(
-        income(walletId, 500, note: 'Gaji tambahan'),
+        EntryDraft.withAllocations(
+          kind: EntryKind.income,
+          accountId: walletId,
+          allocations: [
+            const EntryAllocationDraft(categoryId: 2, amount: 300),
+            EntryAllocationDraft(categoryId: bonusCategoryId, amount: 200),
+          ],
+          note: 'Gaji tambahan',
+          occurredAt: occurredAt,
+        ),
       );
       await sourceFinance.addEntry(
-        EntryDraft(
+        EntryDraft.singleAllocation(
           kind: EntryKind.expense,
           accountId: walletId,
           amount: 200,
@@ -98,8 +115,7 @@ void main() {
         ),
       );
       await sourceFinance.addEntry(
-        EntryDraft(
-          kind: EntryKind.transfer,
+        EntryDraft.transfer(
           accountId: walletId,
           destinationAccountId: bankId,
           amount: 100,
@@ -119,14 +135,6 @@ void main() {
         income(bankId, 25, note: 'Akan dihapus'),
       );
       await sourceFinance.deleteEntry(removedEntryId);
-      await sourceFinance.createSubcategory(
-        const CategoryDraft(
-          parentId: 1,
-          name: 'Bonus tahunan',
-          iconKey: 'redeem',
-          sortOrder: 7,
-        ),
-      );
 
       final source = await sourceStore.exportDocument(
         createdAtUtc: createdAtUtc,
@@ -138,6 +146,11 @@ void main() {
       expect(decoded.summary.accountCount, 2);
       expect(decoded.summary.categoryCount, 23);
       expect(decoded.summary.ledgerEntryCount, 5);
+      final split = decoded.ledgerEntries.singleWhere(
+        (entry) => entry.note == 'Gaji tambahan',
+      );
+      expect(split.allocations.map((item) => item.position), [0, 1]);
+      expect(split.allocations.map((item) => item.amount), [300, 200]);
       expect(
         decoded.sequences.accounts,
         greaterThan(_maximumAccountId(decoded)),
@@ -182,10 +195,47 @@ void main() {
     },
   );
 
-  test('backup adapter coverage pins schema v3 tables and persistent columns', () async {
+  test('restores payload v1/schema 3 into schema 4 allocations', () async {
+    final accountId = await createAccount(sourceFinance, 'Sumber lama');
+    await sourceFinance.addEntry(income(accountId, 125, note: 'Transaksi v1'));
+    final current = await sourceStore.exportDocument(
+      createdAtUtc: createdAtUtc,
+    );
+    final legacyJson = (jsonDecode(jsonEncode(current.toJson())) as Map)
+        .cast<String, Object?>();
+    legacyJson['backupVersion'] = 1;
+    legacyJson['databaseSchemaVersion'] = 3;
+    final data = legacyJson['data']! as Map<String, Object?>;
+    final entries = data['ledgerEntries']! as List<Object?>;
+    for (final value in entries) {
+      final entry = value as Map<String, Object?>;
+      final allocations = entry.remove('allocations')! as List<Object?>;
+      entry['categoryId'] = allocations.isEmpty
+          ? null
+          : (allocations.single as Map<String, Object?>)['categoryId'];
+    }
+    final legacy = BackupDocument.fromJson(legacyJson);
+
+    await targetStore.restoreDocument(legacy);
+    final restored = await targetStore.exportDocument(
+      createdAtUtc: createdAtUtc,
+    );
+
+    expect(restored.backupVersion, 2);
+    expect(restored.databaseSchemaVersion, 4);
+    final restoredEntry = restored.ledgerEntries.single;
+    expect(restoredEntry.id, legacy.ledgerEntries.single.id);
+    expect(restoredEntry.amount, 125);
+    expect(restoredEntry.allocations, hasLength(1));
+    expect(restoredEntry.allocations.single.position, 0);
+    expect(restoredEntry.allocations.single.categoryId, 2);
+    expect(restoredEntry.allocations.single.amount, 125);
+  });
+
+  test('backup adapter coverage pins schema v4 tables and persistent columns', () async {
     expect(
       sourceDb.schemaVersion,
-      3,
+      4,
       reason:
           'A database schema bump must update the backup DTO, encoder, restore, '
           'decoder migration, and coverage guard before this expectation.',
@@ -226,11 +276,11 @@ void main() {
           'account_id',
           'destination_account_id',
           'amount',
-          'category_id',
           'note',
           'occurred_day',
           'created_at',
         },
+        'ledger_allocations': {'entry_id', 'position', 'category_id', 'amount'},
       },
       reason:
           'Every persistent table and column must be represented by the backup '
@@ -240,8 +290,8 @@ void main() {
     final document = await sourceStore.exportDocument(
       createdAtUtc: createdAtUtc,
     );
-    expect(document.backupVersion, 1);
-    expect(document.databaseSchemaVersion, 3);
+    expect(document.backupVersion, 2);
+    expect(document.databaseSchemaVersion, 4);
   });
 
   test('export fails closed for an uncovered database schema', () async {
@@ -262,20 +312,17 @@ void main() {
   });
 
   test(
-    'restore fails closed when payload claims an uncovered database schema',
+    'restore fails closed when target database schema is uncovered',
     () async {
       final currentDocument = await sourceStore.exportDocument(
         createdAtUtc: createdAtUtc,
       );
-      final futureJson = currentDocument.toJson();
-      futureJson['databaseSchemaVersion'] = 999;
-      final claimedFutureDocument = BackupDocument.fromJson(futureJson);
       final futureDb = _UncoveredSchemaDatabase(NativeDatabase.memory());
       addTearDown(futureDb.close);
       final futureStore = DriftBackupDataStore(futureDb);
 
       await expectLater(
-        futureStore.restoreDocument(claimedFutureDocument),
+        futureStore.restoreDocument(currentDocument),
         throwsA(
           isA<BackupPersistenceException>().having(
             (error) => error.message,
@@ -294,8 +341,7 @@ void main() {
       income(archivedId, 100, note: 'Riwayat sebelum arsip'),
     );
     await sourceFinance.addEntry(
-      EntryDraft(
-        kind: EntryKind.transfer,
+      EntryDraft.transfer(
         accountId: archivedId,
         destinationAccountId: activeId,
         amount: 100,
@@ -343,11 +389,27 @@ void main() {
   );
 
   test(
-    'database failure midway rolls back rows and sqlite sequences',
+    'allocation insert failure rolls back headers, allocations, and sequences',
     () async {
       final sourceId = await createAccount(sourceFinance, 'Sumber backup');
+      final secondCategoryId = await sourceFinance.createSubcategory(
+        const CategoryDraft(
+          parentId: 1,
+          name: 'Pemicu rollback',
+          iconKey: 'redeem',
+        ),
+      );
       await sourceFinance.addEntry(
-        income(sourceId, 25, note: 'Paksa kegagalan restore'),
+        EntryDraft.withAllocations(
+          kind: EntryKind.income,
+          accountId: sourceId,
+          allocations: [
+            const EntryAllocationDraft(categoryId: 2, amount: 10),
+            EntryAllocationDraft(categoryId: secondCategoryId, amount: 15),
+          ],
+          note: 'Paksa kegagalan restore',
+          occurredAt: occurredAt,
+        ),
       );
       final incoming = await sourceStore.exportDocument(
         createdAtUtc: createdAtUtc,
@@ -360,8 +422,8 @@ void main() {
       );
       await targetDb.customStatement('''
       CREATE TRIGGER test_force_restore_failure
-      BEFORE INSERT ON ledger_entries
-      WHEN NEW.note = 'Paksa kegagalan restore'
+      BEFORE INSERT ON ledger_allocations
+      WHEN NEW.position = 1
       BEGIN SELECT RAISE(ABORT, 'forced restore failure'); END
     ''');
 

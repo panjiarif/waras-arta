@@ -1,6 +1,7 @@
 // dart format width=80
 // ignore_for_file: unused_local_variable, unused_import
 import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
 import 'package:drift_dev/api/migrations_native.dart';
 import 'package:waras_arta/data/database/app_database.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,7 @@ import 'generated/schema.dart';
 import 'generated/schema_v1.dart' as v1;
 import 'generated/schema_v2.dart' as v2;
 import 'generated/schema_v3.dart' as v3;
+import 'generated/schema_v4.dart' as v4;
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -616,112 +618,633 @@ void main() {
     },
   );
 
-  test(
-    'migration from v1 to v3 runs category and account steps in order',
-    () async {
-      const accountsV1 = [
-        v1.AccountsData(
-          id: 1,
-          name: 'Dompet',
-          normalizedName: 'dompet',
-          type: 0,
-          createdAt: 1700000000000,
-        ),
-        v1.AccountsData(
-          id: 2,
-          name: 'Bank',
-          normalizedName: 'bank',
-          type: 1,
-          createdAt: 1700000000001,
-        ),
-      ];
-      const entriesV1 = [
-        v1.LedgerEntriesData(
-          id: 1,
-          kind: 0,
-          accountId: 1,
-          amount: 100,
-          category: 'Lainnya',
-          note: 'lain pemasukan',
-          occurredDay: 20240101,
-          createdAt: 1700000000010,
-        ),
-        v1.LedgerEntriesData(
-          id: 2,
-          kind: 1,
-          accountId: 1,
-          amount: 40,
-          category: 'Lainnya',
-          note: 'lain pengeluaran',
-          occurredDay: 20240102,
-          createdAt: 1700000000020,
-        ),
-        v1.LedgerEntriesData(
-          id: 3,
-          kind: 2,
-          accountId: 1,
-          destinationAccountId: 2,
-          amount: 10,
-          note: 'transfer',
-          occurredDay: 20240103,
-          createdAt: 1700000000030,
-        ),
-        v1.LedgerEntriesData(
-          id: 4,
-          kind: 3,
-          accountId: 2,
-          amount: 5,
-          note: 'Saldo awal',
-          occurredDay: 20240104,
-          createdAt: 1700000000040,
-        ),
-      ];
+  test('migration from v1 to v4 runs category, account, and allocation steps in order', () async {
+    const accountsV1 = [
+      v1.AccountsData(
+        id: 1,
+        name: 'Dompet',
+        normalizedName: 'dompet',
+        type: 0,
+        createdAt: 1700000000000,
+      ),
+      v1.AccountsData(
+        id: 2,
+        name: 'Bank',
+        normalizedName: 'bank',
+        type: 1,
+        createdAt: 1700000000001,
+      ),
+    ];
+    const entriesV1 = [
+      v1.LedgerEntriesData(
+        id: 1,
+        kind: 0,
+        accountId: 1,
+        amount: 100,
+        category: 'Lainnya',
+        note: 'lain pemasukan',
+        occurredDay: 20240101,
+        createdAt: 1700000000010,
+      ),
+      v1.LedgerEntriesData(
+        id: 2,
+        kind: 1,
+        accountId: 1,
+        amount: 40,
+        category: 'Lainnya',
+        note: 'lain pengeluaran',
+        occurredDay: 20240102,
+        createdAt: 1700000000020,
+      ),
+      v1.LedgerEntriesData(
+        id: 3,
+        kind: 2,
+        accountId: 1,
+        destinationAccountId: 2,
+        amount: 10,
+        note: 'transfer',
+        occurredDay: 20240103,
+        createdAt: 1700000000030,
+      ),
+      v1.LedgerEntriesData(
+        id: 4,
+        kind: 3,
+        accountId: 2,
+        amount: 5,
+        note: 'Saldo awal',
+        occurredDay: 20240104,
+        createdAt: 1700000000040,
+      ),
+    ];
 
-      await verifier.testWithDataIntegrity(
-        oldVersion: 1,
-        newVersion: 3,
-        createOld: v1.DatabaseAtV1.new,
-        createNew: v3.DatabaseAtV3.new,
-        openTestedDatabase: AppDatabase.new,
-        createItems: (batch, oldDb) {
-          batch.insertAll(oldDb.accounts, accountsV1);
-          batch.insertAll(oldDb.ledgerEntries, entriesV1);
-        },
-        validateItems: (newDb) async {
-          final accounts = await newDb.select(newDb.accounts).get();
-          accounts.sort((a, b) => a.id.compareTo(b.id));
-          expect(accounts, const [
-            v3.AccountsData(
-              id: 1,
-              name: 'Dompet',
-              normalizedName: 'dompet',
-              type: 0,
-              isArchived: 0,
-              createdAt: 1700000000000,
-            ),
-            v3.AccountsData(
-              id: 2,
-              name: 'Bank',
-              normalizedName: 'bank',
-              type: 1,
-              isArchived: 0,
-              createdAt: 1700000000001,
-            ),
-          ]);
-          final entries = await newDb.select(newDb.ledgerEntries).get();
-          entries.sort((a, b) => a.id.compareTo(b.id));
-          expect(entries.map((row) => row.categoryId), [8, 22, null, null]);
-          expect(entries.map((row) => row.amount), [100, 40, 10, 5]);
-          final categories = await newDb
-              .customSelect('SELECT COUNT(*) AS amount FROM categories')
-              .getSingle();
-          expect(categories.read<int>('amount'), 22);
-          expect(
-            await newDb.customSelect('PRAGMA foreign_key_check').get(),
-            isEmpty,
-          );
-        },
+    await verifier.testWithDataIntegrity(
+      oldVersion: 1,
+      newVersion: 4,
+      createOld: v1.DatabaseAtV1.new,
+      createNew: v4.DatabaseAtV4.new,
+      openTestedDatabase: AppDatabase.new,
+      createItems: (batch, oldDb) {
+        batch.insertAll(oldDb.accounts, accountsV1);
+        batch.insertAll(oldDb.ledgerEntries, entriesV1);
+      },
+      validateItems: (newDb) async {
+        final accounts = await newDb.select(newDb.accounts).get();
+        accounts.sort((a, b) => a.id.compareTo(b.id));
+        expect(accounts, const [
+          v4.AccountsData(
+            id: 1,
+            name: 'Dompet',
+            normalizedName: 'dompet',
+            type: 0,
+            isArchived: 0,
+            createdAt: 1700000000000,
+          ),
+          v4.AccountsData(
+            id: 2,
+            name: 'Bank',
+            normalizedName: 'bank',
+            type: 1,
+            isArchived: 0,
+            createdAt: 1700000000001,
+          ),
+        ]);
+        final entries = await newDb.select(newDb.ledgerEntries).get();
+        entries.sort((a, b) => a.id.compareTo(b.id));
+        expect(entries.map((row) => row.kind), [0, 1, 2, 3]);
+        expect(entries.map((row) => row.amount), [100, 40, 10, 5]);
+        final allocations = await newDb.select(newDb.ledgerAllocations).get();
+        allocations.sort((a, b) => a.entryId.compareTo(b.entryId));
+        expect(allocations, const [
+          v4.LedgerAllocationsData(
+            entryId: 1,
+            position: 0,
+            categoryId: 8,
+            amount: 100,
+          ),
+          v4.LedgerAllocationsData(
+            entryId: 2,
+            position: 0,
+            categoryId: 22,
+            amount: 40,
+          ),
+        ]);
+        final categories = await newDb
+            .customSelect('SELECT COUNT(*) AS amount FROM categories')
+            .getSingle();
+        expect(categories.read<int>('amount'), 22);
+        expect(
+          await newDb.customSelect('PRAGMA foreign_key_check').get(),
+          isEmpty,
+        );
+      },
+    );
+  });
+
+  test('migration from v3 to v4 preserves headers, creates allocations, and keeps the id high-water mark', () async {
+    const accountsV3 = [
+      v3.AccountsData(
+        id: 1,
+        name: 'Dompet',
+        normalizedName: 'dompet',
+        type: 0,
+        isArchived: 0,
+        createdAt: 1700000000000,
+      ),
+      v3.AccountsData(
+        id: 2,
+        name: 'Bank',
+        normalizedName: 'bank',
+        type: 1,
+        isArchived: 0,
+        createdAt: 1700000000001,
+      ),
+    ];
+    const categoriesV3 = [
+      v3.CategoriesData(
+        id: 1,
+        kind: 0,
+        name: 'Gaji',
+        normalizedName: 'gaji',
+        iconKey: 'work',
+        isArchived: 0,
+        sortOrder: 0,
+        systemKey: 'income.salary',
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+      ),
+      v3.CategoriesData(
+        id: 2,
+        parentId: 1,
+        kind: 0,
+        name: 'Umum',
+        normalizedName: 'umum',
+        iconKey: 'work',
+        isArchived: 0,
+        sortOrder: 0,
+        systemKey: 'income.salary.general',
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+      ),
+      v3.CategoriesData(
+        id: 9,
+        kind: 1,
+        name: 'Makan & minum',
+        normalizedName: 'makan & minum',
+        iconKey: 'restaurant',
+        isArchived: 0,
+        sortOrder: 0,
+        systemKey: 'expense.food_drink',
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+      ),
+      v3.CategoriesData(
+        id: 10,
+        parentId: 9,
+        kind: 1,
+        name: 'Umum',
+        normalizedName: 'umum',
+        iconKey: 'restaurant',
+        isArchived: 1,
+        sortOrder: 0,
+        systemKey: 'expense.food_drink.general',
+        createdAt: 1700000000000,
+        updatedAt: 1700000000002,
+      ),
+    ];
+    const entriesV3 = [
+      v3.LedgerEntriesData(
+        id: 5,
+        kind: 0,
+        accountId: 1,
+        amount: 100,
+        categoryId: 2,
+        note: 'pemasukan lama',
+        occurredDay: 20240101,
+        createdAt: 1700000000010,
+      ),
+      v3.LedgerEntriesData(
+        id: 9,
+        kind: 1,
+        accountId: 1,
+        amount: 40,
+        categoryId: 10,
+        note: 'pengeluaran berkategori arsip',
+        occurredDay: 20240102,
+        createdAt: 1700000000020,
+      ),
+      v3.LedgerEntriesData(
+        id: 12,
+        kind: 2,
+        accountId: 1,
+        destinationAccountId: 2,
+        amount: 10,
+        note: 'transfer lama',
+        occurredDay: 20240103,
+        createdAt: 1700000000030,
+      ),
+      v3.LedgerEntriesData(
+        id: 14,
+        kind: 3,
+        accountId: 2,
+        amount: -5,
+        note: 'koreksi turun',
+        occurredDay: 20240104,
+        createdAt: 1700000000040,
+      ),
+    ];
+    const expectedEntriesV4 = [
+      v4.LedgerEntriesData(
+        id: 5,
+        kind: 0,
+        accountId: 1,
+        amount: 100,
+        note: 'pemasukan lama',
+        occurredDay: 20240101,
+        createdAt: 1700000000010,
+      ),
+      v4.LedgerEntriesData(
+        id: 9,
+        kind: 1,
+        accountId: 1,
+        amount: 40,
+        note: 'pengeluaran berkategori arsip',
+        occurredDay: 20240102,
+        createdAt: 1700000000020,
+      ),
+      v4.LedgerEntriesData(
+        id: 12,
+        kind: 2,
+        accountId: 1,
+        destinationAccountId: 2,
+        amount: 10,
+        note: 'transfer lama',
+        occurredDay: 20240103,
+        createdAt: 1700000000030,
+      ),
+      v4.LedgerEntriesData(
+        id: 14,
+        kind: 3,
+        accountId: 2,
+        amount: -5,
+        note: 'koreksi turun',
+        occurredDay: 20240104,
+        createdAt: 1700000000040,
+      ),
+    ];
+
+    await verifier.testWithDataIntegrity(
+      oldVersion: 3,
+      newVersion: 4,
+      createOld: v3.DatabaseAtV3.new,
+      createNew: v4.DatabaseAtV4.new,
+      openTestedDatabase: AppDatabase.new,
+      createItems: (batch, oldDb) {
+        batch.insertAll(oldDb.accounts, accountsV3);
+        batch.insertAll(oldDb.categories, categoriesV3);
+        batch.insertAll(oldDb.ledgerEntries, entriesV3);
+        batch.customStatement(
+          "UPDATE sqlite_sequence SET seq = 70 WHERE name = 'ledger_entries'",
+        );
+        // Generated schema fixtures omit custom extras that exist in real v3
+        // installations. Keep these here to exercise the production upgrade.
+        batch.customStatement('''
+          CREATE INDEX ledger_entries_category_id
+          ON ledger_entries (category_id)
+        ''');
+        batch.customStatement('''
+          CREATE TRIGGER ledger_validate_category_insert
+          BEFORE INSERT ON ledger_entries
+          WHEN NEW.kind IN (0, 1) AND NOT EXISTS (
+            SELECT 1 FROM categories AS category
+            WHERE category.id = NEW.category_id
+              AND category.kind = NEW.kind
+              AND category.parent_id IS NOT NULL)
+          BEGIN SELECT RAISE(ABORT, 'invalid ledger category'); END
+        ''');
+        batch.customStatement('''
+          CREATE TRIGGER ledger_validate_category_update
+          BEFORE UPDATE OF kind, category_id ON ledger_entries
+          WHEN NEW.kind IN (0, 1) AND NOT EXISTS (
+            SELECT 1 FROM categories AS category
+            WHERE category.id = NEW.category_id
+              AND category.kind = NEW.kind
+              AND category.parent_id IS NOT NULL)
+          BEGIN SELECT RAISE(ABORT, 'invalid ledger category'); END
+        ''');
+      },
+      validateItems: (newDb) async {
+        final entries = await newDb.select(newDb.ledgerEntries).get();
+        entries.sort((a, b) => a.id.compareTo(b.id));
+        expect(entries, expectedEntriesV4);
+
+        final allocations = await newDb.select(newDb.ledgerAllocations).get();
+        allocations.sort((a, b) => a.entryId.compareTo(b.entryId));
+        expect(allocations, const [
+          v4.LedgerAllocationsData(
+            entryId: 5,
+            position: 0,
+            categoryId: 2,
+            amount: 100,
+          ),
+          v4.LedgerAllocationsData(
+            entryId: 9,
+            position: 0,
+            categoryId: 10,
+            amount: 40,
+          ),
+        ]);
+
+        final sequence = await newDb.customSelect('''
+            SELECT seq FROM sqlite_sequence WHERE name = 'ledger_entries'
+          ''').getSingle();
+        expect(sequence.read<int>('seq'), 70);
+
+        final schemaObjects = await newDb.customSelect('''
+            SELECT name, type FROM sqlite_schema
+            WHERE name IN (
+              'ledger_allocations_category_entry',
+              'ledger_allocations_validate_insert',
+              'ledger_allocations_validate_update',
+              'ledger_validate_allocations_kind_update',
+              'accounts_archive_order',
+              'ledger_require_active_accounts_insert',
+              'ledger_require_active_accounts_update',
+              'ledger_require_active_accounts_delete'
+            )
+          ''').get();
+        expect(
+          {
+            for (final row in schemaObjects)
+              row.read<String>('name'): row.read<String>('type'),
+          },
+          const {
+            'ledger_allocations_category_entry': 'index',
+            'ledger_allocations_validate_insert': 'trigger',
+            'ledger_allocations_validate_update': 'trigger',
+            'ledger_validate_allocations_kind_update': 'trigger',
+            'accounts_archive_order': 'index',
+            'ledger_require_active_accounts_insert': 'trigger',
+            'ledger_require_active_accounts_update': 'trigger',
+            'ledger_require_active_accounts_delete': 'trigger',
+          },
+        );
+        final retiredObjects = await newDb.customSelect('''
+            SELECT COUNT(*) AS amount FROM sqlite_schema
+            WHERE name IN (
+              'ledger_entries_category_id',
+              'ledger_validate_category_insert',
+              'ledger_validate_category_update'
+            )
+          ''').getSingle();
+        expect(retiredObjects.read<int>('amount'), 0);
+
+        await newDb.customStatement('''
+            INSERT INTO ledger_entries
+              (kind, account_id, amount, note, occurred_day, created_at)
+            VALUES (3, 1, -1, 'setelah migrasi', 20240105, 1700000000050)
+          ''');
+        final inserted = await newDb.customSelect('''
+            SELECT id FROM ledger_entries WHERE note = 'setelah migrasi'
+          ''').getSingle();
+        expect(inserted.read<int>('id'), 71);
+
+        await expectLater(
+          newDb.customStatement('''
+              INSERT INTO ledger_allocations
+                (entry_id, position, category_id, amount)
+              VALUES (12, 0, 2, 10)
+            '''),
+          throwsA(anything),
+        );
+        await expectLater(
+          newDb.customStatement('''
+              UPDATE ledger_allocations SET category_id = 10
+              WHERE entry_id = 5 AND position = 0
+            '''),
+          throwsA(anything),
+        );
+        await expectLater(
+          newDb.customStatement(
+            'UPDATE ledger_entries SET kind = 1 WHERE id = 5',
+          ),
+          throwsA(anything),
+        );
+        expect(
+          await newDb.customSelect('PRAGMA foreign_key_check').get(),
+          isEmpty,
+        );
+      },
+    );
+  });
+
+  test(
+    'fresh v4 enforces row rules and exposes cross-row verification',
+    () async {
+      final db = AppDatabase(NativeDatabase.memory());
+      try {
+        final version = await db
+            .customSelect('PRAGMA user_version')
+            .getSingle();
+        expect(version.read<int>('user_version'), 4);
+        await db.customStatement('''
+        INSERT INTO accounts
+          (id, name, normalized_name, type, is_archived, created_at)
+        VALUES
+          (1, 'Dompet', 'dompet', 0, 0, 1700000000000),
+          (2, 'Bank', 'bank', 1, 0, 1700000000001)
+      ''');
+        await db.customStatement('''
+        INSERT INTO ledger_entries
+          (id, kind, account_id, amount, note, occurred_day, created_at)
+        VALUES (1, 0, 1, 100, 'belum dialokasikan', 20240101, 1700000000010)
+      ''');
+        await expectLater(
+          db.verifyLedgerAllocationIntegrity(entryId: 1),
+          throwsA(isA<StateError>()),
+        );
+        await db.customStatement('''
+        INSERT INTO ledger_allocations
+          (entry_id, position, category_id, amount)
+        VALUES (1, 0, 2, 100)
+      ''');
+        await db.verifyLedgerAllocationIntegrity(entryId: 1);
+
+        await db.customStatement('''
+        INSERT INTO ledger_entries
+          (id, kind, account_id, amount, note, occurred_day, created_at)
+        VALUES (2, 0, 1, 100, 'posisi bercelah', 20240102, 1700000000020)
+      ''');
+        await db.customStatement('''
+        INSERT INTO ledger_allocations
+          (entry_id, position, category_id, amount)
+        VALUES (2, 1, 2, 100)
+      ''');
+        await expectLater(
+          db.verifyLedgerAllocationIntegrity(entryId: 2),
+          throwsA(isA<StateError>()),
+        );
+
+        await db.customStatement('''
+        INSERT INTO ledger_entries
+          (id, kind, account_id, amount, note, occurred_day, created_at)
+        VALUES (3, 0, 1, 100, 'kategori invalid', 20240103, 1700000000030)
+      ''');
+        await expectLater(
+          db.customStatement('''
+          INSERT INTO ledger_allocations
+            (entry_id, position, category_id, amount)
+          VALUES (3, 0, 1, 100)
+        '''),
+          throwsA(anything),
+        );
+        await expectLater(
+          db.customStatement('''
+          INSERT INTO ledger_allocations
+            (entry_id, position, category_id, amount)
+          VALUES (3, 0, 10, 100)
+        '''),
+          throwsA(anything),
+        );
+
+        await db.customStatement('''
+        INSERT INTO ledger_entries
+          (id, kind, account_id, destination_account_id, amount, note,
+           occurred_day, created_at)
+        VALUES (4, 2, 1, 2, 10, 'transfer', 20240104, 1700000000040)
+      ''');
+        await expectLater(
+          db.customStatement('''
+          INSERT INTO ledger_allocations
+            (entry_id, position, category_id, amount)
+          VALUES (4, 0, 2, 10)
+        '''),
+          throwsA(anything),
+        );
+        await expectLater(
+          db.customStatement('''
+          UPDATE ledger_allocations SET category_id = 10
+          WHERE entry_id = 1 AND position = 0
+        '''),
+          throwsA(anything),
+        );
+        await expectLater(
+          db.customStatement('UPDATE ledger_entries SET kind = 1 WHERE id = 1'),
+          throwsA(anything),
+        );
+
+        await db.customStatement('''
+        INSERT INTO ledger_entries
+          (id, kind, account_id, amount, note, occurred_day, created_at)
+        VALUES (5, 0, 1, 200, 'kategori ganda', 20240105, 1700000000050)
+      ''');
+        await db.customStatement('''
+        INSERT INTO ledger_allocations
+          (entry_id, position, category_id, amount)
+        VALUES (5, 0, 2, 100)
+      ''');
+        await expectLater(
+          db.customStatement('''
+          INSERT INTO ledger_allocations
+            (entry_id, position, category_id, amount)
+          VALUES (5, 1, 2, 100)
+        '''),
+          throwsA(anything),
+        );
+        await expectLater(
+          db.customStatement('DELETE FROM categories WHERE id = 2'),
+          throwsA(anything),
+        );
+
+        await db.customStatement(
+          'DELETE FROM ledger_entries WHERE id IN (1, 2, 3, 5)',
+        );
+        final cascaded = await db.customSelect('''
+        SELECT COUNT(*) AS amount FROM ledger_allocations
+        WHERE entry_id IN (1, 2, 3, 5)
+      ''').getSingle();
+        expect(cascaded.read<int>('amount'), 0);
+        await db.verifyLedgerAllocationIntegrity();
+        expect(
+          await db.customSelect('PRAGMA foreign_key_check').get(),
+          isEmpty,
+        );
+      } finally {
+        await db.close();
+      }
+    },
+  );
+
+  test(
+    'invalid v3 category aborts migration before rebuilding ledger',
+    () async {
+      final schema = await verifier.schemaAt(3);
+      final oldDb = v3.DatabaseAtV3(schema.newConnection());
+      await oldDb.batch((batch) {
+        batch.insert(
+          oldDb.accounts,
+          const v3.AccountsData(
+            id: 1,
+            name: 'Dompet',
+            normalizedName: 'dompet',
+            type: 0,
+            isArchived: 0,
+            createdAt: 1700000000000,
+          ),
+        );
+        batch.insert(
+          oldDb.categories,
+          const v3.CategoriesData(
+            id: 1,
+            kind: 0,
+            name: 'Gaji',
+            normalizedName: 'gaji',
+            iconKey: 'work',
+            isArchived: 0,
+            sortOrder: 0,
+            systemKey: 'income.salary',
+            createdAt: 1700000000000,
+            updatedAt: 1700000000000,
+          ),
+        );
+        batch.insert(
+          oldDb.ledgerEntries,
+          const v3.LedgerEntriesData(
+            id: 1,
+            kind: 0,
+            accountId: 1,
+            amount: 100,
+            categoryId: 1,
+            note: 'menunjuk kategori root',
+            occurredDay: 20240101,
+            createdAt: 1700000000010,
+          ),
+        );
+      });
+      await oldDb.close();
+
+      final testedDb = AppDatabase(schema.newConnection());
+      await expectLater(
+        verifier.migrateAndValidate(testedDb, 4),
+        throwsA(isA<StateError>()),
       );
+      await testedDb.close();
+
+      final checkDb = v3.DatabaseAtV3(schema.newConnection());
+      final version = await checkDb
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      expect(version.read<int>('user_version'), 3);
+      final preserved = await checkDb
+          .customSelect('SELECT category_id FROM ledger_entries WHERE id = 1')
+          .getSingle();
+      expect(preserved.read<int>('category_id'), 1);
+      final allocationTable = await checkDb.customSelect('''
+      SELECT COUNT(*) AS amount FROM sqlite_schema
+      WHERE type = 'table' AND name = 'ledger_allocations'
+    ''').getSingle();
+      expect(allocationTable.read<int>('amount'), 0);
+      await checkDb.close();
+      schema.close();
     },
   );
 }

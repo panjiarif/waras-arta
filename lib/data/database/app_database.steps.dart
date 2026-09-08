@@ -415,9 +415,174 @@ class Shape3 extends i0.VersionedTable {
       columnsByName['created_at']! as i1.GeneratedColumn<int>;
 }
 
+final class Schema4 extends i0.VersionedSchema {
+  Schema4({required super.database}) : super(version: 4);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    accounts,
+    categories,
+    ledgerEntries,
+    ledgerAllocations,
+  ];
+  late final Shape3 accounts = Shape3(
+    source: i0.VersionedTable(
+      entityName: 'accounts',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'CHECK(type BETWEEN 0 AND 3)',
+        'CHECK(length(trim(name)) BETWEEN 1 AND 80)',
+        'CHECK(length(trim(normalized_name)) > 0)',
+      ],
+      columns: [
+        _column_0,
+        _column_1,
+        _column_2,
+        _column_3,
+        _column_9,
+        _column_4,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape1 categories = Shape1(
+    source: i0.VersionedTable(
+      entityName: 'categories',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'CHECK(kind IN (0, 1))',
+        'CHECK(parent_id IS NULL OR parent_id <> id)',
+        'CHECK(length(trim(name)) BETWEEN 1 AND 80)',
+        'CHECK(length(trim(normalized_name)) BETWEEN 1 AND 80)',
+        'CHECK(length(trim(icon_key)) BETWEEN 1 AND 40)',
+        'CHECK(sort_order BETWEEN 0 AND 1000000)',
+        'CHECK(system_key IS NULL OR length(trim(system_key)) BETWEEN 1 AND 80)',
+      ],
+      columns: [
+        _column_0,
+        _column_5,
+        _column_6,
+        _column_1,
+        _column_7,
+        _column_8,
+        _column_9,
+        _column_10,
+        _column_11,
+        _column_4,
+        _column_12,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape4 ledgerEntries = Shape4(
+    source: i0.VersionedTable(
+      entityName: 'ledger_entries',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'CHECK(kind BETWEEN 0 AND 3)',
+        'CHECK((kind IN (0, 1, 2) AND amount BETWEEN 1 AND 999999999999)OR(kind = 3 AND amount BETWEEN -999999999999 AND 999999999999 AND amount <> 0))',
+        'CHECK(occurred_day BETWEEN 20000101 AND 99991231)',
+        'CHECK(length(note) <= 500)',
+        'CHECK((kind IN (0, 1) AND destination_account_id IS NULL)OR(kind = 2 AND destination_account_id IS NOT NULL AND destination_account_id <> account_id)OR(kind = 3 AND destination_account_id IS NULL))',
+      ],
+      columns: [
+        _column_0,
+        _column_6,
+        _column_13,
+        _column_14,
+        _column_15,
+        _column_17,
+        _column_18,
+        _column_4,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape5 ledgerAllocations = Shape5(
+    source: i0.VersionedTable(
+      entityName: 'ledger_allocations',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'PRIMARY KEY(entry_id, position)',
+        'UNIQUE(entry_id, category_id)',
+        'CHECK(position BETWEEN 0 AND 49)',
+        'CHECK(amount BETWEEN 1 AND 999999999999)',
+      ],
+      columns: [_column_19, _column_20, _column_21, _column_15],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+}
+
+class Shape4 extends i0.VersionedTable {
+  Shape4({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<int> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get kind =>
+      columnsByName['kind']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get accountId =>
+      columnsByName['account_id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get destinationAccountId =>
+      columnsByName['destination_account_id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get amount =>
+      columnsByName['amount']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get note =>
+      columnsByName['note']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get occurredDay =>
+      columnsByName['occurred_day']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<int>;
+}
+
+class Shape5 extends i0.VersionedTable {
+  Shape5({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<int> get entryId =>
+      columnsByName['entry_id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get position =>
+      columnsByName['position']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get categoryId =>
+      columnsByName['category_id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get amount =>
+      columnsByName['amount']! as i1.GeneratedColumn<int>;
+}
+
+i1.GeneratedColumn<int> _column_19(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'entry_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints:
+          'NOT NULL REFERENCES ledger_entries(id)ON DELETE CASCADE',
+    );
+i1.GeneratedColumn<int> _column_20(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'position',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<int> _column_21(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'category_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints:
+          'NOT NULL REFERENCES categories(id)ON DELETE RESTRICT',
+    );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
+  required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -431,6 +596,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from2To3(migrator, schema);
         return 3;
+      case 3:
+        final schema = Schema4(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from3To4(migrator, schema);
+        return 4;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -440,6 +610,11 @@ i0.MigrationStepWithVersion migrationSteps({
 i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
+  required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
 }) => i0.VersionedSchema.stepByStepHelper(
-  step: migrationSteps(from1To2: from1To2, from2To3: from2To3),
+  step: migrationSteps(
+    from1To2: from1To2,
+    from2To3: from2To3,
+    from3To4: from3To4,
+  ),
 );

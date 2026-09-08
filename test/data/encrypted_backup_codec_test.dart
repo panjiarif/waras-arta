@@ -25,6 +25,181 @@ void main() {
       final decrypted = await codec.decrypt(encrypted, password: password);
 
       expect(decrypted.toJson(), original.toJson());
+      expect(decrypted.backupVersion, 2);
+      expect(decrypted.databaseSchemaVersion, 4);
+      expect(decrypted.ledgerEntries.single.allocations, hasLength(2));
+    });
+
+    test('decodes strict payload v1 into the current allocation model', () {
+      final legacyJson = _legacyV1Json();
+
+      final decoded = BackupDocument.fromJson(legacyJson);
+
+      expect(decoded.backupVersion, 1);
+      expect(decoded.databaseSchemaVersion, 3);
+      expect(decoded.ledgerEntries[0].allocations, hasLength(1));
+      expect(decoded.ledgerEntries[0].allocations.single.position, 0);
+      expect(decoded.ledgerEntries[0].allocations.single.categoryId, 2);
+      expect(decoded.ledgerEntries[0].allocations.single.amount, 100);
+      expect(decoded.ledgerEntries[1].allocations, isEmpty);
+      expect(decoded.ledgerEntries[2].allocations, isEmpty);
+      expect(decoded.toJson(), legacyJson);
+    });
+
+    test('routes payload parsers by an exact version and schema pair', () {
+      final legacyWithWrongSchema = _mutableJson(_legacyV1Json());
+      legacyWithWrongSchema['databaseSchemaVersion'] = 4;
+      final currentWithWrongSchema = _mutableJson(_backupDocument().toJson());
+      currentWithWrongSchema['databaseSchemaVersion'] = 3;
+
+      expect(
+        () => BackupDocument.fromJson(legacyWithWrongSchema),
+        throwsA(isA<BackupFormatException>()),
+      );
+      expect(
+        () => BackupDocument.fromJson(currentWithWrongSchema),
+        throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('uses an explicit restore compatibility matrix', () {
+      final legacy = BackupDocument.fromJson(_legacyV1Json());
+      final current = _backupDocument();
+
+      expect(canRestoreBackupDocumentToSchema(legacy, 3), isTrue);
+      expect(canRestoreBackupDocumentToSchema(legacy, 4), isTrue);
+      expect(canRestoreBackupDocumentToSchema(current, 3), isFalse);
+      expect(canRestoreBackupDocumentToSchema(current, 4), isTrue);
+      expect(canRestoreBackupDocumentToSchema(current, 5), isFalse);
+    });
+
+    test('keeps v1 and v2 ledger shapes strict and separate', () {
+      final legacy = _mutableJson(_legacyV1Json());
+      final legacyData = legacy['data']! as Map<String, Object?>;
+      final legacyEntries = legacyData['ledgerEntries']! as List<Object?>;
+      (legacyEntries.first as Map<String, Object?>)['allocations'] =
+          <Object?>[];
+
+      final current = _mutableJson(_backupDocument().toJson());
+      final currentData = current['data']! as Map<String, Object?>;
+      final currentEntries = currentData['ledgerEntries']! as List<Object?>;
+      (currentEntries.first as Map<String, Object?>)['categoryId'] = 2;
+
+      expect(
+        () => BackupDocument.fromJson(legacy),
+        throwsA(isA<BackupFormatException>()),
+      );
+      expect(
+        () => BackupDocument.fromJson(current),
+        throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('validates v2 allocation count, positions, uniqueness, and sum', () {
+      Map<String, Object?> firstEntry(Map<String, Object?> document) {
+        final data = document['data']! as Map<String, Object?>;
+        final entries = data['ledgerEntries']! as List<Object?>;
+        return entries.first as Map<String, Object?>;
+      }
+
+      final empty = _mutableJson(_backupDocument().toJson());
+      firstEntry(empty)['allocations'] = <Object?>[];
+
+      final positionGap = _mutableJson(_backupDocument().toJson());
+      final positionAllocations =
+          firstEntry(positionGap)['allocations']! as List<Object?>;
+      (positionAllocations[1] as Map<String, Object?>)['position'] = 2;
+
+      final duplicateCategory = _mutableJson(_backupDocument().toJson());
+      final duplicateAllocations =
+          firstEntry(duplicateCategory)['allocations']! as List<Object?>;
+      (duplicateAllocations[1] as Map<String, Object?>)['categoryId'] = 2;
+
+      final mismatchedSum = _mutableJson(_backupDocument().toJson());
+      final mismatchedAllocations =
+          firstEntry(mismatchedSum)['allocations']! as List<Object?>;
+      (mismatchedAllocations[1] as Map<String, Object?>)['amount'] = 2344;
+
+      final tooMany = _mutableJson(_backupDocument().toJson());
+      firstEntry(tooMany)['allocations'] = List<Object?>.generate(
+        maxBackupLedgerAllocationsPerEntry + 1,
+        (index) => <String, Object?>{
+          'position': index,
+          'categoryId': 2,
+          'amount': 1,
+        },
+      );
+
+      for (final invalid in [
+        empty,
+        positionGap,
+        duplicateCategory,
+        mismatchedSum,
+      ]) {
+        expect(
+          () => BackupDocument.fromJson(invalid),
+          throwsA(isA<BackupValidationException>()),
+        );
+      }
+      expect(
+        () => BackupDocument.fromJson(tooMany),
+        throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('payload estimator includes every allocation', () {
+      final single = estimateBackupPayloadUpperBoundBytes(
+        _backupDocument(split: false),
+      );
+      final split = estimateBackupPayloadUpperBoundBytes(_backupDocument());
+
+      expect(split - single, 128);
+    });
+
+    test('rejects a document above the total allocation record limit', () {
+      final oversized = BackupDocument(
+        databaseSchemaVersion: 4,
+        createdAtUtc: DateTime.utc(2026, 9, 6),
+        sequences: const BackupSequences(
+          accounts: 0,
+          categories: 0,
+          ledgerEntries: 1,
+        ),
+        accounts: const [],
+        categories: const [],
+        ledgerEntries: [
+          BackupLedgerEntry(
+            id: 1,
+            kind: EntryKind.income,
+            accountId: 1,
+            destinationAccountId: null,
+            amount: 1,
+            allocations: List<BackupLedgerAllocation>.filled(
+              maxBackupLedgerAllocationRecords + 1,
+              const BackupLedgerAllocation(
+                position: 0,
+                categoryId: 1,
+                amount: 1,
+              ),
+              growable: false,
+            ),
+            note: '',
+            occurredDay: 20260906,
+            createdAtUtc: DateTime.utc(2026, 9, 6),
+          ),
+        ],
+      );
+
+      expect(
+        () => validateBackupDocument(oversized),
+        throwsA(
+          isA<BackupValidationException>().having(
+            (error) => error.message,
+            'message',
+            contains('Jumlah data'),
+          ),
+        ),
+      );
     });
 
     test('normalizes visually equivalent passwords to NFC', () async {
@@ -279,7 +454,7 @@ void main() {
       final entry = entries.single as Map<String, Object?>;
       entry['kind'] = EntryKind.adjustment.name;
       entry['amount'] = -9223372036854775808;
-      entry['categoryId'] = null;
+      entry['allocations'] = <Object?>[];
 
       expect(
         () => BackupDocument.fromJson(json),
@@ -416,14 +591,141 @@ Uint8List _editHeader(
   envelope['header'] = base64Encode(utf8.encode(jsonEncode(header)));
 });
 
-BackupDocument _backupDocument({int databaseSchemaVersion = 3}) {
+Map<String, Object?> _mutableJson(Map<String, Object?> value) =>
+    (jsonDecode(jsonEncode(value)) as Map).cast<String, Object?>();
+
+Map<String, Object?> _legacyV1Json() => <String, Object?>{
+  'format': warasArtaBackupFormat,
+  'backupVersion': 1,
+  'databaseSchemaVersion': 3,
+  'createdAtUtc': '2026-09-06T07:30:00.000Z',
+  'sequences': <String, Object?>{
+    'accounts': 2,
+    'categories': 4,
+    'ledgerEntries': 3,
+  },
+  'data': <String, Object?>{
+    'accounts': <Object?>[
+      <String, Object?>{
+        'id': 1,
+        'name': 'Dompet Lama',
+        'normalizedName': 'dompet lama',
+        'type': 'cash',
+        'isArchived': false,
+        'createdAtUtc': '2026-09-05T04:30:00.000Z',
+      },
+      <String, Object?>{
+        'id': 2,
+        'name': 'Bank Lama',
+        'normalizedName': 'bank lama',
+        'type': 'bank',
+        'isArchived': false,
+        'createdAtUtc': '2026-09-05T04:30:00.000Z',
+      },
+    ],
+    'categories': <Object?>[
+      <String, Object?>{
+        'id': 1,
+        'parentId': null,
+        'kind': 'income',
+        'name': 'Pemasukan',
+        'normalizedName': 'pemasukan',
+        'iconKey': 'work',
+        'isArchived': false,
+        'sortOrder': 0,
+        'systemKey': null,
+        'createdAtUtc': '2026-09-05T04:30:00.000Z',
+        'updatedAtUtc': '2026-09-05T04:30:00.000Z',
+      },
+      <String, Object?>{
+        'id': 2,
+        'parentId': 1,
+        'kind': 'income',
+        'name': 'Umum',
+        'normalizedName': 'umum',
+        'iconKey': 'work',
+        'isArchived': false,
+        'sortOrder': 0,
+        'systemKey': null,
+        'createdAtUtc': '2026-09-05T04:30:00.000Z',
+        'updatedAtUtc': '2026-09-05T04:30:00.000Z',
+      },
+      <String, Object?>{
+        'id': 3,
+        'parentId': null,
+        'kind': 'expense',
+        'name': 'Pengeluaran',
+        'normalizedName': 'pengeluaran',
+        'iconKey': 'restaurant',
+        'isArchived': false,
+        'sortOrder': 0,
+        'systemKey': null,
+        'createdAtUtc': '2026-09-05T04:30:00.000Z',
+        'updatedAtUtc': '2026-09-05T04:30:00.000Z',
+      },
+      <String, Object?>{
+        'id': 4,
+        'parentId': 3,
+        'kind': 'expense',
+        'name': 'Umum',
+        'normalizedName': 'umum',
+        'iconKey': 'restaurant',
+        'isArchived': false,
+        'sortOrder': 0,
+        'systemKey': null,
+        'createdAtUtc': '2026-09-05T04:30:00.000Z',
+        'updatedAtUtc': '2026-09-05T04:30:00.000Z',
+      },
+    ],
+    'ledgerEntries': <Object?>[
+      <String, Object?>{
+        'id': 1,
+        'kind': 'income',
+        'accountId': 1,
+        'destinationAccountId': null,
+        'amount': 100,
+        'categoryId': 2,
+        'note': 'Pemasukan lama',
+        'occurredDay': 20260905,
+        'createdAtUtc': '2026-09-05T04:30:00.000Z',
+      },
+      <String, Object?>{
+        'id': 2,
+        'kind': 'transfer',
+        'accountId': 1,
+        'destinationAccountId': 2,
+        'amount': 10,
+        'categoryId': null,
+        'note': 'Transfer lama',
+        'occurredDay': 20260905,
+        'createdAtUtc': '2026-09-05T04:30:00.000Z',
+      },
+      <String, Object?>{
+        'id': 3,
+        'kind': 'adjustment',
+        'accountId': 2,
+        'destinationAccountId': null,
+        'amount': 5,
+        'categoryId': null,
+        'note': 'Koreksi lama',
+        'occurredDay': 20260905,
+        'createdAtUtc': '2026-09-05T04:30:00.000Z',
+      },
+    ],
+  },
+};
+
+BackupDocument _backupDocument({
+  int databaseSchemaVersion = 4,
+  bool split = true,
+}) {
   final createdAt = DateTime.utc(2026, 9, 5, 4, 30);
   return BackupDocument(
     databaseSchemaVersion: databaseSchemaVersion,
     createdAtUtc: DateTime.utc(2026, 9, 6, 7, 30),
     sequences: const BackupSequences(
       accounts: 1,
-      categories: 4,
+      categories: 5,
       ledgerEntries: 1,
     ),
     accounts: [
@@ -489,6 +791,19 @@ BackupDocument _backupDocument({int databaseSchemaVersion = 3}) {
         createdAtUtc: createdAt,
         updatedAtUtc: createdAt,
       ),
+      BackupCategory(
+        id: 5,
+        parentId: 1,
+        kind: CategoryKind.income,
+        name: 'Bonus',
+        normalizedName: 'bonus',
+        iconKey: 'redeem',
+        isArchived: false,
+        sortOrder: 1,
+        systemKey: null,
+        createdAtUtc: createdAt,
+        updatedAtUtc: createdAt,
+      ),
     ],
     ledgerEntries: [
       BackupLedgerEntry(
@@ -497,7 +812,26 @@ BackupDocument _backupDocument({int databaseSchemaVersion = 3}) {
         accountId: 1,
         destinationAccountId: null,
         amount: 12345,
-        categoryId: 2,
+        allocations: split
+            ? const [
+                BackupLedgerAllocation(
+                  position: 0,
+                  categoryId: 2,
+                  amount: 10000,
+                ),
+                BackupLedgerAllocation(
+                  position: 1,
+                  categoryId: 5,
+                  amount: 2345,
+                ),
+              ]
+            : const [
+                BackupLedgerAllocation(
+                  position: 0,
+                  categoryId: 2,
+                  amount: 12345,
+                ),
+              ],
         note: 'PIN bank 9876',
         occurredDay: 20260905,
         createdAtUtc: createdAt,

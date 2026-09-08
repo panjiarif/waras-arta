@@ -64,7 +64,10 @@ class BackupService implements BackupOperations {
   }) async {
     final document = await codec.decrypt(bytes, password: password);
     validateBackupDocument(document);
-    if (document.databaseSchemaVersion != dataStore.databaseSchemaVersion) {
+    if (!canRestoreBackupDocumentToSchema(
+      document,
+      dataStore.databaseSchemaVersion,
+    )) {
       throw const BackupValidationException(
         'Versi database pada backup belum didukung oleh aplikasi ini.',
       );

@@ -144,7 +144,7 @@ Kelompok **Simpanan & investasi** bukan fitur tujuan keuangan atau pelacakan har
 - Progres tidak disimpan, tetapi dihitung ulang dari alokasi kategori beserta tanggal transaksi induknya agar edit/hapus transaksi tetap konsisten.
 - Pengeluaran tetap boleh dicatat setelah batas terlampaui.
 
-Aturan lengkap, schema yang direncanakan, kompatibilitas backup, dan matriks pengujian tersedia pada [spesifikasi Anggaran v1](budgets.md).
+Aturan lengkap, schema v6 yang aktif, kompatibilitas backup v4, dan matriks pengujian tersedia pada [spesifikasi Anggaran v1](budgets.md).
 
 ### 7. Tujuan Keuangan
 
@@ -197,7 +197,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 - Setelah konfirmasi restore, aplikasi wajib membuat safety backup terenkripsi dari data aktif dengan kata sandi restore yang sama. File harus selesai ditulis, dibuka ulang, serta cocok dalam jumlah byte dan SHA-256 sebelum replace-all dimulai; pembatalan atau kegagalan penulisan/verifikasi menghentikan restore tanpa mengubah database.
 - Penggantian berlangsung atomik: kegagalan membatalkan seluruh perubahan database.
 - Container v1 hanya menerima profil Argon2id produksi secara persis. Ukuran file terenkripsi dibatasi 16 MiB dan plaintext hasil dekripsi dibatasi 10 MiB.
-- Payload v3/schema v5 saat ini mencakup rekening beserta `balanceGroup`, kategori, seluruh header ledger, dan allocation. Payload v1/schema 3 dan v2/schema 4 tetap dapat dibaca dengan `balanceGroup = primary`; Anggaran mendatang menaikkan format ke payload v4/schema v6.
+- Payload v4/schema v6 saat ini mencakup rekening beserta `balanceGroup`, kategori, seluruh header ledger/allocation, serta anggaran dan pilihan subkategorinya. Payload legacy v1/schema 3, v2/schema 4, dan v3/schema 5 tetap dapat dibaca; v1/v2 memakai `balanceGroup = primary`, v3 mempertahankan kelompoknya, dan ketiganya menghasilkan daftar anggaran kosong.
 - Backup adalah snapshot manual, bukan sinkronisasi atau jadwal otomatis. Lokasi cloud dipilih pengguna melalui penyedia dokumen Android; aplikasi tidak mengunggah file sendiri.
 - Ekspor CSV disediakan sebagai laporan terpisah dan bukan format utama restore.
 
@@ -237,7 +237,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 ### Versi 0.2 — Perencanaan dan Analisis
 
 - fondasi alokasi kategori transaksi dan alur split transaction *(sudah tersedia pada alpha saat ini)*;
-- anggaran multi-kategori;
+- anggaran multi-kategori bulanan/tahunan/kustom *(sudah tersedia pada alpha saat ini)*;
 - tujuan keuangan;
 - diagram;
 - kustomisasi dashboard;
@@ -317,11 +317,12 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Hapus rekening permanen hanya berlaku jika tidak ada referensi ledger dan tidak menghapus transaksi secara berantai.
 - Migrasi schema v2 ke v3 menambahkan siklus arsip rekening dan dukungan penyesuaian saldo bertanda tanpa mengubah arus kas lama.
 - Kalender diperkenalkan dengan memakai `occurredDay` dan indeks ledger yang sudah ada tanpa menaikkan schema 3; schema aktif kemudian naik ke v4 untuk allocation transaksi.
-- Schema aktif v5 menambahkan `balanceGroup` rekening. Migrasi memberi seluruh rekening lama nilai `primary`, dan payload backup v3 membawa nilai `primary` atau `savingsInvestment` secara eksplisit.
+- Schema v5 menambahkan `balanceGroup` rekening. Migrasi memberi seluruh rekening lama nilai `primary`, dan payload backup v3 membawa nilai `primary` atau `savingsInvestment` secara eksplisit.
+- Schema aktif v6 menambahkan Anggaran v1 dengan periode bulanan/tahunan/kustom, mapping multi-subkategori, progres dari allocation, serta penolakan overlap inklusif; payload backup v4 membawa seluruh data tersebut dan tetap dapat merestore v1–v3 dengan anggaran kosong.
 - Kalender dibatasi Januari 2000 sampai hari ini, menggunakan pekan Senin–Minggu, dan menyertakan seluruh jenis transaksi pada daftar harian.
 - Backup manual menggunakan file `.warasarta` terenkripsi berbasis kata sandi, sedangkan restore memakai validasi, preview, konfirmasi replace-all, dan transaksi atomik.
 - Enkripsi backup tidak berarti database SQLite aktif sudah terenkripsi; perlindungan database kerja dan PIN/biometrik tetap keputusan terpisah.
 - Backup/restore harus diverifikasi pada Downloads, penyedia dokumen cloud, dan instalasi/perangkat berbeda sebelum aplikasi dipercaya sebagai satu-satunya catatan keuangan.
 - Pemasukan/pengeluaran mempunyai 1–50 alokasi kategori dengan satu alokasi sebagai default. Tombol plus menambah rincian kategori tanpa mengubah transaksi menjadi beberapa pergerakan saldo.
 - Total transaksi menjadi sumber perubahan saldo dan arus kas, sedangkan nominal alokasi menjadi sumber laporan kategori serta progres anggaran; keduanya wajib selalu berjumlah sama.
-- Fondasi alokasi kategori dan split transaction sudah dikerjakan sebelum Anggaran v1 agar anggaran sejak awal menghitung bagian kategori, bukan menggandakan total transaksi.
+- Fondasi alokasi kategori dan split transaction dikerjakan sebelum Anggaran v1 sehingga progres anggaran menghitung bagian kategori, bukan menggandakan total transaksi.

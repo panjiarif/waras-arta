@@ -14,15 +14,15 @@ Waras Arta memakai MVVM dengan repository dan aliran data satu arah. Pemisahan V
 Interaksi pengguna
         |
         v
-View -> ViewModel -> FinanceRepository -> Drift / SQLite
+View -> ViewModel -> Repository -> Drift / SQLite
   ^         ^                                |
   |         +----------- data ---------------+
   +-------------- state ---------------------+
 ```
 
 - **View:** widget Material 3 berbahasa Indonesia, input form, tampilan loading/error, dan navigasi.
-- **ViewModel:** pilihan bulan riwayat, batas jumlah riwayat, bulan/tanggal kalender, operasi transaksi, serta state proses backup/restore. Tidak menyimpan `BuildContext` atau mengakses SQL, kriptografi, maupun pemilih dokumen platform secara langsung.
-- **Domain:** model immutable, jenis rekening/transaksi/kategori, DTO backup berversi, draft input, dan kontrak repository/data store. Belum ada lapisan use case umum yang terpisah.
+- **ViewModel:** pilihan bulan riwayat, batas jumlah riwayat, bulan/tanggal kalender, operasi transaksi, filter dan aksi anggaran, serta state proses backup/restore. Tidak menyimpan `BuildContext` atau mengakses SQL, kriptografi, maupun pemilih dokumen platform secara langsung.
+- **Domain:** model immutable, jenis rekening/transaksi/kategori, periode dan progres anggaran, DTO backup berversi, draft input, dan kontrak repository/data store. Belum ada lapisan use case umum yang terpisah.
 - **Repository/data store:** validasi aturan keuangan, operasi database, pemetaan hasil query, ekspor snapshot konsisten, dan restore atomik.
 - **Database:** tabel, constraint, indeks, dan koneksi persisten. SQLite adalah sumber data utama, bukan cache tampilan.
 - **Backup service:** mengorkestrasi snapshot, codec terenkripsi, nama file, dan preview sebelum restore tanpa mencampurkan tanggung jawab tersebut ke repository keuangan.
@@ -33,6 +33,7 @@ lib/
 ├── main.dart
 ├── app/
 │   ├── app.dart
+│   ├── providers.dart
 │   ├── router.dart
 │   └── theme.dart
 ├── core/
@@ -41,6 +42,8 @@ lib/
 ├── domain/
 │   ├── backup.dart
 │   ├── backup_repository.dart
+│   ├── budget.dart
+│   ├── budget_repository.dart
 │   ├── finance.dart
 │   └── finance_repository.dart
 ├── data/
@@ -54,11 +57,20 @@ lib/
 │   │   ├── app_database.g.dart
 │   │   └── app_database.steps.dart
 │   └── repositories/
+│       ├── drift_budget_repository.dart
 │       └── drift_finance_repository.dart
 └── features/
     ├── backup/
     │   ├── view_models/backup_view_model.dart
     │   └── views/backup_screen.dart
+    ├── budgets/
+    │   ├── view_models/budget_view_model.dart
+    │   └── views/
+    │       ├── active_budget_summary_card.dart
+    │       ├── budget_detail_screen.dart
+    │       ├── budget_form_screen.dart
+    │       ├── budget_list_screen.dart
+    │       └── budget_widgets.dart
     ├── calendar/
     │   ├── view_models/calendar_view_model.dart
     │   └── views/calendar_view.dart
@@ -87,7 +99,7 @@ lib/
 
 Fitur rekening dan transaksi dikelompokkan sebagai satu irisan `ledger` untuk tahap awal. Kalender menjadi irisan tersendiri, tetapi memakai model ledger dan rute detail/form transaksi yang sama. Pecah menjadi fitur terpisah ketika tanggung jawabnya bertambah, bukan dengan menambahkan direktori kosong sejak awal. `go_router` menangani rute layar; [Riverpod](https://riverpod.dev/docs/introduction/getting_started) menghubungkan repository dan ViewModel agar dependensi bisa diganti saat pengujian.
 
-Navigasi utama HP menggunakan empat tujuan `NavigationBar`: Ikhtisar, Riwayat, Kalender, dan Rekening. Kalender tidak membuka tumpukan rute baru ketika tanggal dipilih; detail transaksi dan form pencatatan tetap memakai rute ledger yang sudah ada. Backup/restore merupakan alur pemeliharaan data yang dibuka dari menu aplikasi, bukan tujuan navigasi utama kelima.
+Navigasi utama HP menggunakan empat tujuan `NavigationBar`: Ikhtisar, Riwayat, Kalender, dan Rekening. Kalender tidak membuka tumpukan rute baru ketika tanggal dipilih; detail transaksi dan form pencatatan tetap memakai rute ledger yang sudah ada. Anggaran dibuka dari ringkasan Ikhtisar atau menu menuju daftar/detail/form tersendiri. Backup/restore merupakan alur pemeliharaan data yang dibuka dari menu aplikasi, bukan tujuan navigasi utama kelima.
 
 ## Model saldo dan transaksi
 
@@ -107,7 +119,7 @@ Aturan alpha:
 - Membuat rekening dengan saldo awal positif juga membuat entri penyesuaian dalam satu transaksi database. Saldo awal nol tidak memerlukan entri bernilai nol.
 - Koreksi saldo menerima target saldo aktual. Repository membandingkannya dengan saldo ledger saat ini, lalu menyimpan selisih nonnol sebagai entri penyesuaian positif atau negatif. Mengubah angka saldo rekening secara langsung tidak diperbolehkan.
 - Penyesuaian tidak dihitung sebagai pemasukan/pengeluaran dan tidak memakai kategori. Seluruh entri penyesuaian, termasuk saldo awal, tidak dapat diedit atau dihapus agar jejak koreksi tetap utuh.
-- Sejak schema v4, pemasukan dan pengeluaran mempunyai 1–50 alokasi nominal–subkategori. Transfer dan saldo awal tidak memiliki alokasi kategori; schema v5 mempertahankan bentuk ini sambil menambahkan kelompok saldo rekening.
+- Sejak schema v4, pemasukan dan pengeluaran mempunyai 1–50 alokasi nominal–subkategori. Transfer dan saldo awal tidak memiliki alokasi kategori; schema v5 mempertahankan bentuk ini sambil menambahkan kelompok saldo rekening, dan schema v6 menambahkan anggaran tanpa mengubah bentuk ledger.
 - Saldo negatif akibat pengeluaran atau transfer diperbolehkan untuk pencatatan manual; aplikasi bukan sistem otorisasi pembayaran bank.
 - Transaksi biasa dapat dilihat, diedit, dan dihapus permanen setelah konfirmasi. Edit mempertahankan `id` serta `createdAt`; nilai lama belum memiliki audit trail atau undo.
 - Edit atau hapus transaksi menghitung ulang saldo sepanjang waktu dan ringkasan bulan terkait. Transaksi dapat berpindah jenis, rekening, atau bulan selama hasil akhirnya memenuhi seluruh validasi ledger.
@@ -141,7 +153,7 @@ Kategori dibatasi tepat dua tingkat. Baris induk adalah kelompok, sedangkan alok
 - Ikon disimpan sebagai semantic string key yang dipetakan ke katalog Material terbatas. `IconData.codePoint` dan berkas gambar tidak disimpan di database.
 - Upload gambar ditunda sampai spesifikasi backup mampu membawa database dan aset sebagai satu paket tervalidasi.
 
-Rencana anggaran mendukung periode bulanan, tahunan kalender, dan rentang tanggal kustom. Semuanya menggunakan ID subkategori pengeluaran dan menghitung progres dari `ledger_allocations.amount`. Kontrak produk, schema v6, payload backup v4, serta batas implementasinya dijelaskan dalam [spesifikasi Anggaran v1](budgets.md).
+Anggaran v1 mendukung CRUD untuk periode bulanan, tahunan kalender, dan rentang tanggal kustom dengan satu atau beberapa ID subkategori pengeluaran. Progres dihitung dari `ledger_allocations.amount`, sedangkan constraint/repository menolak kategori yang sama pada rentang inklusif yang beririsan. Kontrak produk, schema v6, payload backup v4, serta batas implementasinya dijelaskan dalam [spesifikasi Anggaran v1](budgets.md).
 
 ## Tanggal dan periode
 
@@ -161,14 +173,14 @@ Ringkasan dihitung melalui agregasi database, dan riwayat dimuat bertahap dengan
 
 Backup memakai dua bentuk yang sengaja dipisahkan:
 
-1. snapshot logis JSON dengan `backupVersion`, versi schema database, timestamp UTC, rekening, kategori, ledger, ID, dan high-water mark ID SQLite;
+1. snapshot logis JSON dengan `backupVersion`, versi schema database, timestamp UTC, rekening, kategori, anggaran, ledger, ID, dan high-water mark ID SQLite;
 2. container terenkripsi `.warasarta` dengan versi sendiri.
 
-Saldo, ringkasan, dan data kalender tidak diduplikasi karena dapat dihitung ulang dari ledger. Format payload dibuat eksplisit dan berversi, tidak memakai serialisasi generated Drift sebagai kontrak permanen. Payload v3/schema 5 adalah format saat ini: bentuk allocation dari v2 dipertahankan dan setiap rekening membawa `balanceGroup`. Payload v1/schema 3 serta v2/schema 4 tetap dapat dibaca dan dinormalisasi; rekening dari kedua format lama dipetakan ke Saldo utama. Anggaran mendatang menaikkan format menjadi payload v4/schema 6 tanpa mengubah container enkripsi v1.
+Saldo, ringkasan, data kalender, dan nilai progres anggaran tidak diduplikasi karena dapat dihitung ulang dari ledger serta mapping anggaran. Format payload dibuat eksplisit dan berversi, tidak memakai serialisasi generated Drift sebagai kontrak permanen. Payload v4/schema 6 adalah format saat ini: allocation dan `balanceGroup` dipertahankan, lalu seluruh anggaran beserta pilihan kategori dan sequence ditambahkan. Payload v1/schema 3, v2/schema 4, serta v3/schema 5 tetap dapat dibaca dan dinormalisasi. Rekening dari v1/v2 dipetakan ke Saldo utama, v3 mempertahankan kelompoknya, dan semua payload legacy menghasilkan daftar anggaran kosong. Container enkripsi tetap v1.
 
 Kata sandi dinormalisasi ke Unicode NFC, lalu kunci 256-bit diturunkan menggunakan Argon2id dan salt acak. Snapshot dienkripsi serta diautentikasi dengan XChaCha20-Poly1305 dan nonce acak; header keamanan ikut diautentikasi. Kata sandi maupun kunci tidak disimpan. Akibatnya, kata sandi yang terlupa tidak dapat dipulihkan dan file tidak dapat direstore. Decoder container v1 hanya menerima profil produksi secara persis: Argon2 versi 19, normalisasi NFC, memori 19.456 KiB, 2 iterasi, paralelisme 1, dan panjang kunci 32 byte. Parameter berbeda ditolak; perubahan profil harus diperkenalkan melalui versi container atau jalur migrasi baru. Ukuran container terenkripsi dibatasi 16 MiB dan plaintext hasil dekripsi dibatasi 10 MiB.
 
-Ekspor membaca seluruh tabel terkait dalam satu transaksi baca. Restore memvalidasi container, payload, relasi, dan ringkasan sebelum meminta konfirmasi replace-all. Setelah konfirmasi, satu operasi terkoordinasi pada `BackupController` mengekspor data aktif, mengenkripsinya dengan kata sandi yang sama seperti file restore, lalu mewajibkan pengguna menyimpannya melalui Save As sebagai safety backup. Hanya penyimpanan yang berhasil yang mengizinkan restore berlanjut; pembatalan atau kegagalan menghentikan alur sebelum database diubah. Penggantian rekening, kategori, header ledger, allocation, ID, serta sequence kemudian berlangsung dalam satu transaksi database; kegagalan membuat transaksi di-rollback. Versi ini tidak melakukan merge.
+Ekspor membaca seluruh tabel terkait dalam satu transaksi baca. Restore memvalidasi container, payload, relasi, dan ringkasan sebelum meminta konfirmasi replace-all. Setelah konfirmasi, satu operasi terkoordinasi pada `BackupController` mengekspor data aktif, mengenkripsinya dengan kata sandi yang sama seperti file restore, lalu mewajibkan pengguna menyimpannya melalui Save As sebagai safety backup. Hanya penyimpanan yang berhasil yang mengizinkan restore berlanjut; pembatalan atau kegagalan menghentikan alur sebelum database diubah. Penggantian rekening, kategori, anggaran/mapping, header ledger, allocation, ID, serta sequence kemudian berlangsung dalam satu transaksi database; kegagalan membuat transaksi di-rollback. Versi ini tidak melakukan merge.
 
 Pemilih dokumen Android menjadi batas penyimpanan. `SafBackupFileGateway` berbicara melalui `MethodChannel` dengan adapter native pada `MainActivity`, menggunakan `ACTION_CREATE_DOCUMENT` dan `ACTION_OPEN_DOCUMENT` tanpa dependency `file_picker`. Dokumen pilihan dibaca langsung dari URI penyedia sebagai stream berbatas 16 MiB, tanpa salinan cache perantara milik aplikasi. Setelah penulisan, URI dibuka kembali dan jumlah byte serta SHA-256 harus sama dengan container sumber sebelum operasi dinyatakan berhasil. Karena itu, safety backup yang batal, gagal ditulis, atau gagal diverifikasi tidak dapat membuka jalan ke replace-all.
 
@@ -176,11 +188,11 @@ Pengguna dapat memilih Downloads atau penyedia seperti Google Drive bila tersedi
 
 Enkripsi file backup tidak mengubah database kerja: SQLite aktif masih belum dienkripsi khusus oleh Waras Arta. Alpha juga belum menambahkan PIN atau biometrik. Android Auto Backup serta device-to-device extraction dinonaktifkan dan seluruh domain data aplikasi dikecualikan melalui aturan Android 11 dan Android 12+ agar database plaintext tidak berpindah di luar alur `.warasarta`. Penyimpanan privat Android bukan pengganti backup; uninstall, hapus data, kerusakan, atau kehilangan HP dapat menghilangkan perubahan sejak snapshot manual terakhir.
 
-## Skema dan pengembangan berikutnya
+## Skema aktif dan pengembangan berikutnya
 
-Skema database saat ini versi **5**. Snapshot v1 sampai v5 disimpan di `drift_schemas/app_database/`. Migrasi v1 ke v2 membuat kategori dua tingkat, memetakan setiap kategori teks lama ke subkategori `Umum`, lalu membangun ulang ledger dengan foreign key. Migrasi v2 ke v3 menambahkan status arsip rekening dan membangun ulang constraint nominal ledger agar penyesuaian dapat menyimpan delta bertanda. Migrasi v3 ke v4 membangun `ledger_entries` sebagai header tanpa `category_id` dan memindahkan kategori serta nominal pemasukan/pengeluaran ke `ledger_allocations`. Migrasi v4 ke v5 menambahkan `balance_group` dengan default `primary`, sehingga seluruh rekening lama tetap tampil sebagai Saldo utama. Langkah migrasi dijalankan berurutan untuk instalasi yang berpindah langsung dari versi lama ke v5.
+Skema database saat ini versi **6**. Snapshot v1 sampai v6 disimpan di `drift_schemas/app_database/`. Migrasi v1 ke v2 membuat kategori dua tingkat, memetakan setiap kategori teks lama ke subkategori `Umum`, lalu membangun ulang ledger dengan foreign key. Migrasi v2 ke v3 menambahkan status arsip rekening dan membangun ulang constraint nominal ledger agar penyesuaian dapat menyimpan delta bertanda. Migrasi v3 ke v4 membangun `ledger_entries` sebagai header tanpa `category_id` dan memindahkan kategori serta nominal pemasukan/pengeluaran ke `ledger_allocations`. Migrasi v4 ke v5 menambahkan `balance_group` dengan default `primary`, sehingga seluruh rekening lama tetap tampil sebagai Saldo utama. Migrasi v5 ke v6 menambahkan `budgets`, `budget_categories`, constraint, trigger, dan indeks tanpa menulis ulang data lama. Langkah migrasi dijalankan berurutan untuk instalasi yang berpindah langsung dari versi lama ke v6.
 
-Uji migrasi memverifikasi jalur versi lama menuju schema v5, termasuk v4→v5 dan upgrade berurutan dari schema awal, beserta struktur schema, identitas, urutan allocation, nominal, kelompok rekening, tanggal, catatan, saldo, ringkasan, trigger, indeks, dan pemeriksaan integritas.
+Uji migrasi memverifikasi jalur versi lama menuju schema v6, termasuk v5→v6 dan upgrade berurutan dari schema awal, beserta struktur schema, identitas, urutan allocation, nominal, kelompok rekening, tanggal, catatan, saldo, ringkasan, tabel/mapping anggaran, trigger, indeks, foreign key, dan pemeriksaan integritas.
 
 Sebelum menaikkan `schemaVersion` berikutnya:
 
@@ -188,6 +200,6 @@ Sebelum menaikkan `schemaVersion` berikutnya:
 2. Tulis langkah migrasi yang menjaga rekening dan ledger.
 3. Uji upgrade menggunakan data representatif, termasuk transfer dan tanggal lampau.
 4. Verifikasi saldo dan ringkasan sebelum/sesudah upgrade.
-5. Perluas DTO, ekspor, restore, dan migrasi decoder backup untuk semua data semantik baru; naikkan `backupVersion` bila kontrak payload berubah, lalu baru perbarui guard cakupan adapter dan tesnya. Guard ekspor maupun restore saat ini sengaja mematok adapter v3 pada schema v5 serta nama tabel dan kolom persisten rekening (termasuk `balance_group`), kategori, ledger, dan allocation secara persis. Penambahan tabel atau kolom—bahkan bila `schemaVersion` lupa dinaikkan—akan berhenti secara fail-closed, bukan menghasilkan backup parsial atau menyisakan data baru saat replace-all.
+5. Perluas DTO, ekspor, restore, dan migrasi decoder backup untuk semua data semantik baru; naikkan `backupVersion` bila kontrak payload berubah, lalu baru perbarui guard cakupan adapter dan tesnya. Guard ekspor maupun restore saat ini sengaja mematok adapter v4 pada schema v6 serta nama tabel dan kolom persisten rekening (termasuk `balance_group`), kategori, anggaran/mapping, ledger, dan allocation secara persis. Penambahan tabel atau kolom—bahkan bila `schemaVersion` lupa dinaikkan—akan berhenti secara fail-closed, bukan menghasilkan backup parsial atau menyisakan data baru saat replace-all.
 
-Kalender dan split transaction memakai `ledger_allocations` sejak schema v4/payload v2. Kelompok Saldo utama serta Simpanan & investasi menaikkan versi aktif menjadi schema v5/payload v3 dengan `balanceGroup`; restore v1/v2 tetap didukung dan memetakan rekening lama ke Saldo utama. Setelah smoke test perangkat untuk alur ini selesai, evolusi data berikutnya adalah Anggaran schema v6/payload v4. Anggaran, tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha saat ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.
+Kalender dan split transaction memakai `ledger_allocations` sejak schema v4/payload v2. Kelompok Saldo utama serta Simpanan & investasi memakai schema v5/payload v3 dengan `balanceGroup`. Anggaran kini aktif pada schema v6/payload v4; restore v1–v3 tetap didukung dengan anggaran kosong, sementara v1/v2 memetakan rekening lama ke Saldo utama. Smoke test perangkat fisik untuk alur Anggaran dan backup v4 masih menjadi gerbang manual. Tujuan keuangan, diagram, serta utang/piutang belum termasuk alpha saat ini. Lihat [product brief](product-brief.md) untuk urutan ruang lingkup produk.

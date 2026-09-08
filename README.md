@@ -6,7 +6,7 @@ Aplikasi keuangan pribadi berbasis Flutter dengan pendekatan local-first. Target
 
 ## Status: alpha pertama
 
-Ini adalah irisan awal menuju versi 0.1 pada [product brief](docs/product-brief.md), **belum MVP lengkap**.
+Ini adalah alpha aktif menuju versi 0.1 pada [product brief](docs/product-brief.md), **belum MVP lengkap**. Fondasi alokasi transaksi dan Anggaran v1 dari ruang lingkup 0.2 sudah dibawa lebih awal agar perhitungan kategori dibangun di atas model data yang benar.
 
 Yang tersedia:
 
@@ -25,16 +25,17 @@ Yang tersedia:
 - Detail transaksi beserta nama rekening, tanggal kejadian, catatan, waktu pencatatan, dan seluruh rincian split.
 - Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
 - Hapus permanen transaksi biasa melalui dialog konfirmasi.
+- Mengelola anggaran bulanan, tahunan, atau rentang kustom dengan satu atau beberapa subkategori pengeluaran; progres mengikuti nominal alokasi transaksi dan konflik kategori pada periode beririsan ditolak.
 - Penyimpanan persisten lokal menggunakan Drift/SQLite.
-- Migrasi schema bertahap v1 sampai v5 yang menjaga transaksi serta saldo lama ketika kategori, siklus rekening, alokasi transaksi, dan kelompok saldo berevolusi.
+- Migrasi schema bertahap v1 sampai v6 yang menjaga transaksi serta saldo lama ketika kategori, siklus rekening, alokasi transaksi, kelompok saldo, dan anggaran berevolusi.
 - Backup manual terenkripsi ke file `.warasarta` melalui pemilih dokumen Android; hasil simpan dibuka ulang dan diverifikasi sebelum dianggap berhasil.
 - Restore replace-all dengan pemeriksaan kata sandi, ringkasan isi, konfirmasi, transaksi database atomik, dan safety backup terenkripsi yang wajib disimpan lebih dahulu.
 
 `Saldo utama` dan `Simpanan & investasi` adalah kelompok rekening aktif, sedangkan arsip merupakan status terpisah. Rekening arsip disembunyikan secara default, tetap dapat ditampilkan, menyimpan kelompok aktif terakhirnya untuk pemulihan, serta tidak dapat dipilih untuk transaksi baru. Entri penyesuaian, termasuk saldo awal, bersifat tetap agar jejak perubahan saldo tidak ditulis ulang.
 
-Backup aktif memakai payload v3/schema v5 dan membawa `balanceGroup` setiap rekening. Restore payload v1/schema 3 atau v2/schema 4 tetap didukung; karena format lama belum mempunyai field tersebut, seluruh rekening lama dipetakan ke `Saldo utama`.
+Backup aktif memakai payload v4/schema v6 dan membawa `balanceGroup`, seluruh anggaran, pilihan subkategori, serta sequence terkait. Restore payload v1/schema 3, v2/schema 4, dan v3/schema 5 tetap didukung. Rekening dari v1/v2 dipetakan ke `Saldo utama`, v3 mempertahankan `balanceGroup`, dan seluruh format legacy dipulihkan dengan daftar anggaran kosong karena belum menyimpan data tersebut.
 
-Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, anggaran, tujuan keuangan, diagram, dan utang/piutang.
+Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, tujuan keuangan, diagram, dan utang/piutang.
 
 Backup rutin adalah snapshot manual saat tombol ditekan; aplikasi belum menjadwalkan, mengunggah, merotasi, atau memverifikasi backup secara otomatis. Verifikasi tepat setelah penulisan hanya memastikan ukuran dan SHA-256 file yang baru disimpan cocok pada saat itu, bukan memantau retensi file berikutnya. Pengecualiannya adalah jalur restore: setelah pengguna mengonfirmasi restore, aplikasi wajib menyimpan safety backup terenkripsi dari data aktif dengan kata sandi yang sama sebelum melakukan replace-all. Jika penyimpanan dibatalkan, gagal, atau tidak lolos verifikasi penulisan, restore tidak dijalankan. Simpan beberapa file di luar HP, misalnya pada penyedia dokumen cloud dan komputer, lalu uji restore menggunakan data percobaan sebelum mengandalkannya. **Kata sandi backup tidak disimpan dan tidak dapat dipulihkan. Jika lupa, file tersebut tidak dapat direstore.**
 

@@ -29,12 +29,15 @@ dart run build_runner build
 dart format lib test
 flutter analyze
 flutter test
+flutter test test/domain/budget_test.dart
+flutter test test/data/drift_budget_repository_test.dart
 flutter test test/drift/app_database/migration_test.dart
 flutter test test/data/drift_backup_data_store_test.dart
 flutter test test/data/encrypted_backup_codec_test.dart
 flutter test test/data/backup_file_gateway_test.dart
 flutter test test/data/backup_service_test.dart
 flutter test test/features/backup/backup_screen_test.dart
+flutter test test/features/budgets
 git diff --check
 git status --short
 git diff
@@ -92,9 +95,20 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 7. Buat lebih dari 50 entri dalam satu bulan dengan beberapa entri pada satu tanggal. Pastikan penanda, total harian, dan daftar tanggal terpilih mencakup semuanya walaupun riwayat bulanan belum dimuat lanjut.
 8. Edit tanggal atau nominal sebuah transaksi, kemudian hapus transaksi percobaan. Pastikan penanda, total, dan daftar pada tanggal lama maupun baru bereaksi tanpa membuka ulang aplikasi.
 
+### Skenario anggaran
+
+1. Buat anggaran bulanan dengan dua subkategori pengeluaran, lalu pastikan kartu Ikhtisar, daftar, dan detail menampilkan nama, periode, batas, kategori, serta progres yang sama.
+2. Catat satu pengeluaran split yang hanya sebagian alokasinya memakai kategori anggaran. Pastikan progres bertambah sebesar allocation yang cocok, bukan total header transaksi.
+3. Edit nominal/kategori/tanggal transaksi tersebut dan kemudian hapusnya. Progres anggaran harus bereaksi tanpa membuka ulang aplikasi.
+4. Buat anggaran tahunan dan rentang kustom, termasuk periode satu hari. Pastikan filter aktif/mendatang/riwayat dan label periode mengikuti tanggal lokal perangkat.
+5. Coba memakai subkategori yang sama pada rentang inklusif yang beririsan, termasuk lintas jenis periode. Penyimpanan harus ditolak; rentang yang hanya bersebelahan tanpa tanggal sama tetap boleh.
+6. Edit nama, batas, serta pilihan kategori. Jenis dan tanggal periode harus tetap read-only pada edit; hapus anggaran hanya menghapus definisi/mapping, bukan kategori atau transaksi.
+7. Arsipkan kategori yang sudah dipakai anggaran. Histori dan progres tetap terbaca; kategori tersebut tidak dapat ditambahkan kembali ke anggaran lain sampai dipulihkan.
+8. Uji layar sempit, keyboard, ukuran teks besar, double submit, Back dengan form kotor, dan performa daftar/progres pada HP referensi.
+
 ### Skenario backup dan restore
 
-Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan snapshot percobaan yang mencakup kedua kelompok rekening aktif, rekening arsip beserta kelompok tersimpannya, kategori kustom/arsip, seluruh jenis ledger, dan tanggal lampau.
+Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan snapshot percobaan yang mencakup kedua kelompok rekening aktif, rekening arsip beserta kelompok tersimpannya, kategori kustom/arsip, seluruh jenis ledger, tanggal lampau, dan anggaran bulanan/tahunan/kustom multi-subkategori.
 
 1. Buka menu **Backup & pulihkan data**. Pastikan peringatan menjelaskan bahwa kata sandi tidak disimpan dan file tidak dapat dipulihkan jika kata sandi dilupakan.
 2. Coba kata sandi kosong, kurang dari 12 karakter, dan konfirmasi berbeda. Dialog penyimpanan tidak boleh terbuka.
@@ -103,14 +117,14 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 5. Tambah transaksi setelah backup dibuat. Ingat bahwa transaksi ini tidak berada dalam snapshot lama.
 6. Pilih file backup lalu masukkan kata sandi salah. File harus ditolak dan seluruh data aktif tetap sama.
 7. Rusak atau potong **salinan** file backup percobaan. File harus ditolak tanpa perubahan database; jangan merusak satu-satunya salinan yang valid.
-8. Buka backup valid dengan kata sandi benar. Cocokkan waktu pembuatan serta jumlah rekening, kategori, dan transaksi pada ringkasan, lalu tekan **Batal** dan pastikan tidak ada data berubah.
+8. Buka backup valid dengan kata sandi benar. Cocokkan waktu pembuatan serta jumlah rekening, kategori, transaksi, dan anggaran pada ringkasan, lalu tekan **Batal** dan pastikan tidak ada data berubah.
 9. Konfirmasikan replace-all dan pastikan aplikasi membuka Save As untuk safety backup terenkripsi dari data aktif sebelum ada data yang diganti.
 10. Batalkan Save As tersebut. Restore harus ikut dibatalkan dan data aktif tidak boleh berubah.
 11. Ulangi restore, simpan safety backup dengan berhasil, lalu pastikan replace-all baru berjalan setelah penyimpanan dan verifikasi baca ulang selesai.
 12. Buka safety backup dengan kata sandi restore yang sama untuk memastikan keadaan sebelum restore dapat dipulihkan.
 13. Uji kegagalan penulisan atau baca ulang safety backup bila memungkinkan. Restore harus berhenti dan data aktif tidak boleh berubah.
-14. Bandingkan kelompok rekening aktif/arsip, kategori, riwayat, Saldo utama, subtotal simpanan, total seluruh rekening, ringkasan bulanan, dan kalender dengan data sumber.
-15. Restore fixture payload v1 dan v2 lalu pastikan semua rekening lama masuk ke Saldo utama; restore payload v3 harus mempertahankan kedua kelompok. Setelah itu tambahkan rekening, kategori, dan transaksi untuk memastikan ID baru tidak bertabrakan.
+14. Bandingkan kelompok rekening aktif/arsip, kategori, riwayat, anggaran beserta progres/kategorinya, Saldo utama, subtotal simpanan, total seluruh rekening, ringkasan bulanan, dan kalender dengan data sumber.
+15. Restore fixture payload v1 dan v2 lalu pastikan semua rekening lama masuk ke Saldo utama; restore payload v3 harus mempertahankan kedua kelompok. Ketiga format legacy harus memperingatkan bahwa anggaran akan kosong. Restore payload v4 harus mempertahankan anggaran, lalu penambahan rekening, kategori, transaksi, dan anggaran baru tidak boleh menabrak ID.
 16. Ulangi dari instalasi atau perangkat terpisah dengan mengambil file dari Downloads/Drive. Tutup aplikasi sepenuhnya setelah restore, buka lagi, dan pastikan data tetap sama.
 17. Pastikan dokumen restore lebih dari 16 MiB ditolak selama pembacaan berbatas, plaintext lebih dari 10 MiB ditolak, dan parameter KDF container v1 yang tidak sama persis dengan profil produksi ditolak tanpa mengubah database.
 18. Pada HP referensi, periksa waktu derivasi kata sandi, penggunaan memori, layar sempit, ukuran teks besar, keyboard, pembatalan pemilih dokumen, dan ketukan tombol berulang.
@@ -131,6 +145,10 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Subkategori yang sudah dipakai rincian lain dinonaktifkan; hapus/tambah rincian tidak menukar nominal atau kategori baris lain.
 - [ ] Riwayat dan kalender menampilkan satu kartu **2 rincian**; detail menampilkan kedua nominal, sedangkan saldo berkurang tepat Rp17.000 sekali.
 - [ ] Edit transaksi split memuat urutan lama; ubah nominal/kategori atau kembali menjadi satu rincian lalu pastikan total, saldo, backup, dan restore ikut konsisten.
+- [ ] Form anggaran membuat periode bulanan, tahunan, dan kustom dengan satu atau beberapa subkategori; edit mempertahankan periode serta memungkinkan perubahan nama, batas, dan kategori.
+- [ ] Progres anggaran menjumlahkan nominal allocation pengeluaran yang cocok dan bereaksi terhadap create/edit/delete transaksi tanpa menghitung transfer atau penyesuaian.
+- [ ] Konflik kategori pada rentang inklusif yang beririsan ditolak, sedangkan kategori berbeda atau rentang yang hanya bersebelahan tetap dapat disimpan.
+- [ ] Hapus anggaran tidak menghapus transaksi/kategori; kategori arsip yang sudah terhubung tetap terbaca pada histori.
 - [ ] Tambah kelompok selalu meminta satu subkategori pertama; nama dan ikon keduanya dapat diedit.
 - [ ] Rename/ubah ikon kategori langsung terlihat di riwayat dan detail transaksi lama.
 - [ ] Kategori arsip hilang dari pilihan transaksi baru, tetap terbaca pada riwayat, dan dapat dipulihkan.
@@ -182,8 +200,8 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 
 1. Jalankan checklist transaksi, kelola rekening, kalender, serta backup/restore pada HP referensi dan perbaiki setiap ketidaksesuaian.
 2. Uji file Downloads dan penyedia dokumen cloud pada perangkat/instalasi terpisah menggunakan data percobaan; ukur juga Argon2id pada HP referensi.
-3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini memakai schema v5 dan payload backup v3 dengan `balanceGroup` rekening.
-4. Jalankan checklist perangkat untuk [Alokasi Kategori Transaksi](transaction-allocations.md): satu rincian, split, edit, perubahan jenis, kategori arsip, backup v3, serta restore file v1/v2/v3. Fixture v1/v2 harus menghasilkan rekening Saldo utama.
-5. Setelah kelompok rekening dan split transaction lulus smoke test perangkat, implementasikan [Anggaran v1](budgets.md) bersama schema v6 dan payload backup v4. Progres anggaran harus menjumlahkan nominal alokasi pengeluaran, bukan total header transaksi.
+3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini memakai schema v6 dan payload backup v4 dengan `balanceGroup`, allocation, serta anggaran.
+4. Jalankan checklist perangkat untuk [Alokasi Kategori Transaksi](transaction-allocations.md): satu rincian, split, edit, perubahan jenis, kategori arsip, backup v4, serta restore file legacy v1/v2/v3 dan file aktif v4. Fixture v1/v2 harus menghasilkan rekening Saldo utama; seluruh fixture legacy harus menghasilkan anggaran kosong.
+5. Jalankan checklist perangkat untuk [Anggaran v1](budgets.md), termasuk CRUD bulanan/tahunan/kustom, multi-subkategori, progres allocation, overlap, kategori arsip, dan round-trip backup v4. Setelah alur ini stabil, lanjutkan fitur produk berikutnya tanpa mengubah kontrak data Anggaran secara diam-diam.
 
 Jangan menjadikan alpha satu-satunya catatan keuangan sebelum restore lintas instalasi berhasil diuji. Setelah itu pun, buat backup rutin secara berkala dan pertahankan beberapa salinan di luar HP; aplikasi belum membuat backup terjadwal. Safety backup yang wajib saat restore hanya melindungi keadaan tepat sebelum replace-all dan bukan pengganti kebiasaan backup rutin.

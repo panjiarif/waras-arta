@@ -2,7 +2,7 @@
 
 ## Status dan tujuan
 
-Dokumen ini adalah kontrak implementasi **Alokasi Transaksi v1**. Fondasi allocation lahir pada schema v4/payload backup v2; form split serta presentasi riwayat, kalender, dan detail sudah diterapkan dan dilindungi pengujian otomatis. Schema aktif kemudian naik ke v5/payload v3 untuk menambahkan kelompok saldo rekening tanpa mengubah bentuk allocation. Smoke test akhir pada HP referensi tetap menjadi gerbang sebelum fitur dianggap siap dipakai sebagai catatan nyata. Fitur ini dikerjakan sebelum anggaran karena nominal per subkategori menjadi sumber data bagi progres anggaran, rincian kategori, dan diagram.
+Dokumen ini adalah kontrak implementasi **Alokasi Transaksi v1**. Fondasi allocation lahir pada schema v4/payload backup v2; form split serta presentasi riwayat, kalender, dan detail sudah diterapkan dan dilindungi pengujian otomatis. Schema aktif kini v6/payload v4: kelompok saldo rekening dan Anggaran v1 ditambahkan tanpa mengubah bentuk allocation. Smoke test akhir pada HP referensi tetap menjadi gerbang sebelum fitur dianggap siap dipakai sebagai catatan nyata. Fitur ini dikerjakan sebelum anggaran karena nominal per subkategori menjadi sumber data bagi progres anggaran, rincian kategori, dan diagram.
 
 Satu pencatatan pemasukan atau pengeluaran tetap tampil sebagai satu transaksi, tetapi dapat dibagi menjadi beberapa pasangan nominal dan subkategori. Contoh: satu pembayaran Rp17.000 dapat terdiri dari **Makan Rp15.000** dan **Parkir Rp2.000**.
 
@@ -306,7 +306,7 @@ Matrix format yang dikunci:
 | v1 | 3 | satu `categoryId` langsung pada record ledger kind 0/1 | tidak ada; decoder memakai `primary` | tidak ada |
 | v2 | 4 | `allocations` pada record ledger kind 0/1 | tidak ada; decoder memakai `primary` | tidak ada |
 | v3 | 5 | `allocations` | `balanceGroup` eksplisit | tidak ada |
-| v4 (direncanakan) | 6 (direncanakan) | `allocations` | `balanceGroup` eksplisit | `data.budgets` |
+| v4 | 6 | `allocations` | `balanceGroup` eksplisit | `data.budgets` (aktif) |
 
 Versi container enkripsi tetap 1 untuk seluruh payload tersebut. Perubahan algoritme atau profil kriptografi tidak diperlukan oleh perubahan payload logis ini.
 
@@ -347,11 +347,11 @@ Batas plaintext 10 MiB serta container 16 MiB tetap berlaku. Estimator pra-encod
 - Aplikasi schema 3 menolak payload v2. Aplikasi schema 4 menerima v1/v2.
 - Parser v3 strict terhadap pasangan payload v3/schema 5 dan mewajibkan `balanceGroup` rekening; exporter schema 5 selalu menghasilkan payload v3.
 - Aplikasi schema 5 menerima v1/v2/v3. Restore v1 atau v2 mempertahankan allocation yang tersedia dan memberi seluruh rekening `balanceGroup = primary`.
-- Ketika Anggaran schema 6 ditambahkan, payload v4 mempertahankan bentuk allocation serta kelompok rekening dan menambahkan anggaran. Aplikasi schema 6 menerima v1/v2/v3/v4; restore v1, v2, atau v3 menghasilkan `budgets = []` dan sequence budget 0, dengan dampaknya dijelaskan pada preview.
+- Pada schema 6 yang aktif, payload v4 mempertahankan bentuk allocation serta kelompok rekening dan menambahkan anggaran. Aplikasi schema 6 menerima v1/v2/v3/v4; restore v1, v2, atau v3 menghasilkan `budgets = []` dan sequence budget 0, dengan dampaknya dijelaskan pada preview.
 
 ## Restore atomik
 
-Restore schema v4 tetap menggunakan replace-all dan safety backup wajib. Setelah file didekripsi, parser menormalisasi v1 maupun v2 ke model allocation terkini serta memvalidasi seluruh invariant sebelum transaksi mutasi. Schema aktif v5 mempertahankan alur atomik yang sama, menambahkan validasi `balanceGroup`, dan memberi rekening dari payload v1/v2 kelompok `primary`.
+Restore schema v4 tetap menggunakan replace-all dan safety backup wajib. Setelah file didekripsi, parser menormalisasi v1 maupun v2 ke model allocation terkini serta memvalidasi seluruh invariant sebelum transaksi mutasi. Schema v5 menambahkan validasi `balanceGroup` dan memberi rekening dari payload v1/v2 kelompok `primary`; schema aktif v6 mempertahankan alur atomik tersebut serta memvalidasi/memulihkan anggaran payload v4.
 
 Urutan konseptual schema v4:
 
@@ -364,9 +364,9 @@ Urutan konseptual schema v4:
 7. periksa foreign key, jumlah row, posisi, jenis, category uniqueness, jumlah nominal, saldo arsip, serta sequence;
 8. commit hanya bila semua pemeriksaan lulus.
 
-Urutan konseptual schema v6 mendatang juga harus menghapus `ledger_allocations` dan `budget_categories` sebelum kategori. Insert berlangsung accounts → categories → budgets → budget mappings → ledger headers → allocations, lalu kelompok/status arsip dan seluruh sequence dipulihkan.
+Urutan schema v6 aktif menghapus `ledger_allocations` dan `budget_categories` sebelum kategori. Insert berlangsung accounts → categories → budgets → budget mappings → ledger headers → allocations, lalu kelompok/status arsip dan seluruh sequence dipulihkan.
 
-Sebelum replace-all v1 maupun v2, aplikasi schema v4 membuat safety backup payload v2 dari keadaan aktif dan mewajibkan penyimpanan serta verifikasi ukuran/SHA-256 berhasil. Pembatalan atau kegagalan safety backup menghentikan restore tanpa perubahan database. Aplikasi schema v5 saat ini selalu membuat safety backup payload v3 sebelum restore v1/v2/v3; aplikasi schema v6 kelak membuat payload v4 sebelum restore v1/v2/v3/v4.
+Sebelum replace-all v1 maupun v2, aplikasi schema v4 membuat safety backup payload v2 dari keadaan aktif dan mewajibkan penyimpanan serta verifikasi ukuran/SHA-256 berhasil. Pembatalan atau kegagalan safety backup menghentikan restore tanpa perubahan database. Aplikasi schema v5 membuat safety backup payload v3 sebelum restore v1/v2/v3; aplikasi schema v6 yang aktif selalu membuat payload v4 sebelum restore v1/v2/v3/v4.
 
 Kesalahan apa pun di tengah restore harus me-rollback header dan allocation bersama-sama. Tidak boleh ada keadaan berhasil yang kehilangan satu bagian split.
 
@@ -418,8 +418,10 @@ Kesalahan apa pun di tengah restore harus me-rollback header dan allocation bers
 - estimator byte menghitung allocation; batas plaintext/container tetap ditegakkan;
 - restore v1 dan v2 menjaga ID serta sequence, memberi rekening kelompok `primary`, lalu insert baru tidak bertabrakan;
 - round-trip payload v3 menjaga allocation dan `balanceGroup` tanpa mengubah total header;
+- round-trip payload v4 menjaga allocation, `balanceGroup`, anggaran, mapping kategori, timestamp, dan sequence;
 - kegagalan restore setelah sebagian header/allocation ditulis me-rollback seluruh database;
-- safety backup v3 dibuat dan diverifikasi sebelum restore v1/v2/v3 pada aplikasi schema aktif;
+- restore legacy v1/v2/v3 menghasilkan anggaran kosong, sedangkan allocation yang tersedia dan aturan kelompok rekening masing-masing versi tetap dipertahankan;
+- safety backup v4 dibuat dan diverifikasi sebelum restore v1/v2/v3/v4 pada aplikasi schema aktif;
 - guard cakupan gagal bila schema, tabel, atau kolom berubah tanpa evolusi adapter.
 
 ## Di luar ruang lingkup v1
@@ -441,10 +443,10 @@ Kesalahan apa pun di tengah restore harus me-rollback header dan allocation bers
 2. `feat(ledger): normalize allocations and evolve backup v2`
 3. `feat(ledger): add split transaction form and presentation`
 4. `docs: document implemented allocation workflow`
-5. revisi dan implementasikan Anggaran v1 di atas schema v6/payload v4.
+5. `feat(budgets): implement Anggaran v1 on schema v6/payload v4`
 
 Schema v4, migrasi, repository, payload v2, decoder v1, restore, guard cakupan, dan test fondasi harus berada dalam satu commit fitur yang utuh. Jangan pernah meninggalkan commit yang dapat menulis allocation tetapi membuat backup tanpa membawanya.
 
 ## Kriteria selesai
 
-Alokasi Transaksi v1 selesai ketika pengguna dapat mencatat dan mengedit satu pembayaran sebagai satu sampai 50 pasangan nominal–subkategori; total selalu diturunkan tanpa input ganda; riwayat, detail, kalender, saldo, dan ringkasan tetap menghitung satu header secara benar; migrasi schema lama serta backup v1 aman; payload v2 menjaga seluruh split; restore atomik; dan alur utama nyaman pada HP referensi.
+Implementasi dan kontrak data Alokasi Transaksi v1 telah selesai: pengguna dapat mencatat dan mengedit satu pembayaran sebagai satu sampai 50 pasangan nominal–subkategori; total diturunkan tanpa input ganda; riwayat, detail, kalender, saldo, ringkasan, dan progres anggaran memakai header/allocation secara benar; migrasi lama serta payload v1–v4 aman; dan restore berlangsung atomik. Kenyamanan serta performa alur utama pada HP referensi tetap merupakan gerbang manual sebelum pemakaian nyata.

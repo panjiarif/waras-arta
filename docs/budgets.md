@@ -1,8 +1,10 @@
 # Anggaran Waras Arta
 
-## Status dan tujuan
+## Status implementasi dan tujuan
 
-Dokumen ini adalah kontrak implementasi **Anggaran v1** untuk versi produk 0.2. Implementasi belum dimulai. Perubahan aturan di dokumen ini harus disertai penyesuaian model, migrasi database, format backup, dan pengujian sebelum fitur dianggap selesai.
+Dokumen ini adalah kontrak **Anggaran v1** untuk versi produk 0.2. Status implementasi: **selesai pada 8 September 2026** dengan schema database v6 dan payload backup v4 aktif. Domain, persistence, CRUD bulanan/tahunan/kustom, pilihan multi-subkategori, progres dari allocation, penolakan overlap, backup/restore, dan pengujian otomatis sudah tersedia. Smoke test pada perangkat fisik tetap menjadi verifikasi manual sebelum aplikasi dipakai sebagai satu-satunya catatan keuangan; dokumen ini tidak menyatakan bahwa smoke test tersebut sudah dilakukan.
+
+Perubahan aturan di dokumen ini harus disertai penyesuaian model, migrasi database, format backup, dan pengujian agar kontrak implementasi tetap sinkron.
 
 Anggaran membantu pengguna membatasi pengeluaran untuk suatu rentang tanggal. Anggaran bukan rekening, pemindahan uang, atau tujuan keuangan. Membuat atau mengubah anggaran tidak mengubah saldo serta tidak membuat transaksi.
 
@@ -204,7 +206,7 @@ Filter tanggal hanya menentukan anggaran mana yang tampil. `spentAmount` selalu 
 
 Invariant minimal satu mapping tidak dapat dinyatakan sebagai constraint row langsung atau trigger commit-tertunda di SQLite karena row `budgets` harus ada sebelum mapping pertama. Create/update dijalankan dalam satu transaksi, jumlah mapping diperiksa setelah penulisan dan sebelum commit, dan pemeriksaan integritas restore mengulang aturan yang sama. Trigger tidak boleh memblokir keadaan kosong sementara yang diperlukan untuk mengganti seluruh pilihan atau menjalankan cascade saat anggaran dihapus.
 
-Anggaran dibangun setelah fondasi alokasi kategori pada [spesifikasi alokasi transaksi](transaction-allocations.md). Sebelum fitur ditambahkan, `databaseProvider` dipindahkan dari irisan `ledger` ke composition root netral, misalnya `lib/app/providers.dart`. Ledger, kategori, kalender, backup, dan anggaran kemudian mengonsumsi provider bersama tanpa dependensi silang antarfitur.
+Anggaran dibangun setelah fondasi alokasi kategori pada [spesifikasi alokasi transaksi](transaction-allocations.md). `databaseProvider` sudah ditempatkan pada composition root netral di `lib/app/providers.dart`. Ledger, kategori, kalender, backup, dan anggaran mengonsumsi provider bersama tanpa dependensi silang antarfitur.
 
 ## Schema Drift v6
 
@@ -277,7 +279,7 @@ Indeks awal:
 
 Query progres berjalan dari `budget_categories` ke `ledger_allocations` berdasarkan `category_id`, lalu ke header `ledger_entries` untuk jenis dan tanggal. Evaluasi `EXPLAIN QUERY PLAN` terhadap reverse index allocation dari schema v4. Kandidat terukur adalah menambahkan `amount` sebagai kolom covering pada indeks allocation dan/atau partial index header `ledger_entries(occurred_day, id) WHERE kind = 1`; jangan menambah indeks sebelum benchmark menunjukkan manfaat.
 
-Migrasi v5 ke v6 hanya membuat tabel, constraint, trigger, dan indeks anggaran. Rekening beserta `balanceGroup`, kategori, header ledger, allocation, saldo, serta ID lama tidak ditulis ulang. Snapshot schema v6, fresh-create v6, dan jalur migrasi v1→v6, v2→v6, v3→v6, v4→v6, serta v5→v6 wajib diuji agar schema extras dibuat pada `onCreate` maupun `onUpgrade`.
+Migrasi v5 ke v6 hanya membuat tabel, constraint, trigger, dan indeks anggaran. Rekening beserta `balanceGroup`, kategori, header ledger, allocation, saldo, serta ID lama tidak ditulis ulang. Snapshot schema v6, fresh-create v6, dan jalur migrasi v1→v6, v2→v6, v3→v6, v4→v6, serta v5→v6 diuji agar schema extras dibuat pada `onCreate` maupun `onUpgrade`.
 
 ## Query dan performa
 
@@ -291,9 +293,9 @@ Target performa menggunakan data representatif sampai batas ledger yang didukung
 
 ## Backup payload v4
 
-Penambahan schema anggaran harus berada dalam perubahan yang sama dengan evolusi backup agar aplikasi tidak pernah menghasilkan backup parsial.
+Schema anggaran dan evolusi backup telah diterapkan bersama agar aplikasi tidak menghasilkan backup parsial.
 
-- Setelah kelompok rekening memakai payload v3/schema 5, `currentBackupVersion` naik dari 3 ke 4 ketika anggaran ditambahkan.
+- Setelah kelompok rekening memakai payload v3/schema 5, `currentBackupVersion` telah naik dari 3 ke 4 bersama penambahan anggaran.
 - Versi container enkripsi tetap 1; algoritme, kata sandi, peringatan lupa kata sandi, dan ekstensi `.warasarta` tidak berubah.
 - Backup baru berasal dari schema 6 dan selalu menghasilkan payload v4.
 - `data.budgets` ditambahkan. Setiap record berisi `id`, `periodKind` sebagai string `monthly`/`yearly`/`custom`, `startDay`, `endDay`, `name`, `normalizedName`, `limitAmount`, `categoryIds`, `createdAtUtc`, dan `updatedAtUtc`.
@@ -441,15 +443,15 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 - histori perubahan batas atau audit log anggaran;
 - tujuan keuangan, utang/piutang, serta sinkronisasi cloud.
 
-## Urutan implementasi dan commit
+## Lokasi implementasi dan pengujian
 
-1. `refactor(di): centralize database provider`
-2. `feat(budgets): add persistence and backup v4`
-3. `feat(budgets): add flexible budget management UI`
-4. `docs: document implemented budget workflow`
-
-Schema v6, migrasi, repository, backup v4, decoder v1/v2/v3, dan seluruh test fondasi berada pada commit fitur yang sama agar tidak ada commit yang meninggalkan backup dalam keadaan tidak lengkap.
+- Domain dan kontrak repository: `lib/domain/budget.dart` serta `lib/domain/budget_repository.dart`.
+- Schema, migrasi, constraint, trigger, dan integritas: `lib/data/database/app_database.dart`, `lib/data/database/app_database.steps.dart`, serta snapshot `drift_schemas/app_database/drift_schema_v6.json`.
+- Repository Drift: `lib/data/repositories/drift_budget_repository.dart`.
+- State dan antarmuka CRUD/progres: `lib/features/budgets/`, dengan dependency wiring di `lib/app/providers.dart`, rute di `lib/app/router.dart`, dan ringkasan aktif pada Ikhtisar.
+- Backup v4 dan restore legacy: `lib/domain/backup.dart` serta `lib/data/backup/`.
+- Pengujian utama: `test/domain/budget_test.dart`, `test/data/drift_budget_repository_test.dart`, `test/drift/app_database/migration_test.dart`, `test/data/drift_backup_data_store_test.dart`, `test/data/encrypted_backup_codec_test.dart`, `test/features/budgets/`, dan `test/app_test.dart`.
 
 ## Kriteria selesai
 
-Anggaran v1 selesai ketika pengguna dapat membuat, melihat, mengubah, dan menghapus anggaran bulanan, tahunan, maupun kustom dengan banyak subkategori; progres selalu mengikuti nominal allocation pada seluruh rentang; overlap lintas jenis ditolak; histori kategori arsip tetap akurat; backup v1, v2, v3, dan v4 dapat dipulihkan sesuai kontrak; migrasi lama aman; dan alur utama nyaman pada HP referensi.
+Kriteria implementasi dan integritas data Anggaran v1 telah dipenuhi: pengguna dapat membuat, melihat, mengubah, dan menghapus anggaran bulanan, tahunan, maupun kustom dengan banyak subkategori; progres mengikuti nominal allocation pada seluruh rentang; overlap lintas jenis ditolak; histori kategori arsip tetap akurat; backup v1, v2, v3, dan v4 dipulihkan sesuai kontrak; serta migrasi lama aman. Kenyamanan, aksesibilitas, dan performa alur utama pada HP referensi tetap harus dibuktikan lewat checklist perangkat fisik sebelum pemakaian nyata atau rilis.

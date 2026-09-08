@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
-import '../../ledger/view_models/ledger_view_model.dart';
-import '../../ledger/views/entry_presentation.dart';
+import '../../ledger/views/compact_transaction_row.dart';
 import '../../ledger/views/form_widgets.dart';
 import '../view_models/calendar_view_model.dart';
 
@@ -482,123 +480,14 @@ class _DayEntries extends StatelessWidget {
     }
     return Column(
       children: [
-        for (var index = 0; index < entries.length; index++) ...[
-          _CalendarEntryCard(entry: entries[index], accountNames: accountNames),
-          if (index != entries.length - 1) const SizedBox(height: 10),
-        ],
-      ],
-    );
-  }
-}
-
-class _CalendarEntryCard extends ConsumerWidget {
-  const _CalendarEntryCard({required this.entry, required this.accountNames});
-
-  final FinanceEntry entry;
-  final Map<int, String> accountNames;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final negative =
-        entry.kind == EntryKind.expense ||
-        (entry.kind == EntryKind.adjustment && entry.amount < 0);
-    final color = negative ? const Color(0xFF9D492B) : forest;
-    final prefix = switch (entry.kind) {
-      EntryKind.income => '+ ',
-      EntryKind.expense => '− ',
-      EntryKind.adjustment when entry.amount > 0 => '+ ',
-      _ => '',
-    };
-    final accountRoute = entry.kind == EntryKind.transfer
-        ? '${accountNames[entry.accountId] ?? 'Rekening'} → '
-              '${accountNames[entry.destinationAccountId] ?? 'Rekening'}'
-        : accountNames[entry.accountId] ?? 'Rekening';
-    final details = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          entry.presentationTitle,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 3),
-        Text(accountRoute, style: const TextStyle(fontSize: 13)),
-        if (entry.presentationCategorySummary != null)
-          Text(
-            entry.presentationCategorySummary!,
-            style: const TextStyle(fontSize: 12),
+        for (var index = 0; index < entries.length; index++)
+          CompactTransactionRow(
+            entry: entries[index],
+            names: accountNames,
+            first: index == 0,
+            last: index == entries.length - 1,
           ),
-        if (entry.note.isNotEmpty && entry.note != 'Saldo awal') ...[
-          const SizedBox(height: 4),
-          Text(entry.note),
-        ],
       ],
-    );
-    final amountLabel = '$prefix${formatRupiah(entry.amount)}';
-    final amountStyle = TextStyle(color: color, fontWeight: FontWeight.w700);
-    return Card(
-      child: InkWell(
-        key: ValueKey('calendar-entry-${entry.id}'),
-        borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          ref.read(financeActionsProvider.notifier).clearError();
-          context.push('/transactions/${entry.id}');
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact =
-                  constraints.maxWidth < 360 ||
-                  MediaQuery.textScalerOf(context).scale(1) > 1.4;
-              final identity = Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(entry.presentationIcon, color: color),
-                  const SizedBox(width: 14),
-                  Expanded(child: details),
-                ],
-              );
-              if (compact) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    identity,
-                    const SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          amountLabel,
-                          maxLines: 1,
-                          softWrap: false,
-                          style: amountStyle,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: identity),
-                  const SizedBox(width: 8),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 180),
-                    child: Text(
-                      amountLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: amountStyle,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
     );
   }
 }

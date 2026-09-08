@@ -149,7 +149,7 @@ Rencana anggaran mendukung periode bulanan, tahunan kalender, dan rentang tangga
 
 Ringkasan bulanan, riwayat, dan kalender menggunakan tanggal kejadian. Saldo rekening dan saldo total tetap **sepanjang waktu**, tidak berubah menjadi saldo historis ketika pengguna berpindah bulan. Transaksi bertanggal lampau langsung memengaruhi saldo saat ini dan ringkasan bulan lampau.
 
-Kalender menampilkan grid bulanan ringan dari Senin sampai Minggu. Navigasi bulan dibatasi Januari 2000 sampai bulan berjalan; tanggal setelah hari ini pada bulan berjalan terlihat nonaktif. Titik aktivitas membedakan pemasukan, pengeluaran, dan aktivitas lain berupa transfer atau penyesuaian. Ketika tanggal dipilih, layar menampilkan total pemasukan/pengeluaran, jumlah semua jenis entri, dan daftar lengkap pemasukan, pengeluaran, transfer, serta penyesuaian. Entri dapat diketuk menuju detail. Tombol tambah di tab ini membuka form transaksi dengan tanggal sipil yang dipilih sebagai nilai awal.
+Kalender menampilkan grid bulanan ringan dari Senin sampai Minggu. Navigasi bulan dibatasi Januari 2000 sampai bulan berjalan; tanggal setelah hari ini pada bulan berjalan terlihat nonaktif. Titik aktivitas membedakan pemasukan, pengeluaran, dan aktivitas lain berupa transfer atau penyesuaian. Ketika tanggal dipilih, layar menampilkan total pemasukan/pengeluaran, jumlah semua jenis entri, dan daftar lengkap pemasukan, pengeluaran, transfer, serta penyesuaian memakai komponen baris ringkas yang sama dengan Ikhtisar dan Riwayat. Entri dapat diketuk menuju detail lengkap. Tombol tambah di tab ini membuka form transaksi dengan tanggal sipil yang dipilih sebagai nilai awal.
 
 ## Penyimpanan, performa, dan keamanan
 

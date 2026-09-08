@@ -11,6 +11,7 @@ import 'package:waras_arta/domain/finance.dart';
 import 'package:waras_arta/domain/finance_repository.dart';
 import 'package:waras_arta/features/calendar/view_models/calendar_view_model.dart';
 import 'package:waras_arta/features/ledger/views/category_selection_field.dart';
+import 'package:waras_arta/features/ledger/views/compact_transaction_row.dart';
 
 void main() {
   setUpAll(() => initializeDateFormatting('id_ID'));
@@ -1807,19 +1808,47 @@ void main() {
     expect(find.text('Februari 2024'), findsOneWidget);
     await tester.drag(find.byType(ListView).first, const Offset(0, -620));
     await tester.pumpAndSettle();
-    expect(find.text('29 Feb 2024'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('calendar-selected-date'))).data,
+      '29 Feb 2024',
+    );
     expect(find.text('Rp 90.000'), findsOneWidget);
     expect(find.text('Rp 15.000'), findsOneWidget);
     expect(find.text('4 catatan • 1 transfer • 1 penyesuaian'), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-entry-31')), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-entry-32')), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-entry-33')), findsOneWidget);
-    expect(find.byKey(const ValueKey('calendar-entry-34')), findsOneWidget);
+    expect(find.byType(CompactTransactionRow), findsNWidgets(4));
+    expect(find.byKey(const ValueKey('entry-row-31')), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-row-32')), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-row-33')), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-row-34')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('entry-title-31'))).data,
+      'Gaji bulanan',
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('entry-account-33'))).data,
+      'Dompet → Bank',
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('entry-amount-32'))).data,
+      '− Rp 15.000',
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('entry-date-33'))).data,
+      '29 Feb 2024',
+    );
+    expect(find.text('Koreksi saldo'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('entry-row-33')),
+        matching: find.byType(Card),
+      ),
+      findsNothing,
+    );
 
-    await tester.ensureVisible(find.byKey(const ValueKey('calendar-entry-33')));
+    await tester.ensureVisible(find.byKey(const ValueKey('entry-33')));
     await tester.drag(find.byType(ListView).first, const Offset(0, -140));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('calendar-entry-33')));
+    await tester.tap(find.byKey(const ValueKey('entry-33')));
     await tester.pumpAndSettle();
     expect(find.text('Detail transaksi'), findsOneWidget);
     expect(find.text('Dari rekening'), findsOneWidget);
@@ -1890,13 +1919,25 @@ void main() {
       findsOneWidget,
     );
     await tester.dragUntilVisible(
-      find.byKey(const ValueKey('calendar-entry-41')),
+      find.byKey(const ValueKey('entry-row-41')),
       find.byType(ListView).first,
       const Offset(0, -250),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('calendar-entry-41')), findsOneWidget);
-    expect(find.text('+ Rp 999.999.999.999'), findsOneWidget);
+    expect(find.byType(CompactTransactionRow), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-row-41')), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-title-41')), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-account-41')), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-date-41')), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-amount-fit-41')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('entry-amount-41'))).data,
+      '+ Rp 999.999.999.999',
+    );
+    expect(
+      find.text('Catatan panjang untuk menguji kartu pada perangkat sempit.'),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 }

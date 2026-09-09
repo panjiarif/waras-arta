@@ -51,6 +51,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('more-menu')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('manage-budgets-menu')), findsNothing);
+    expect(find.text('Kelola anggaran'), findsNothing);
     await tester.tap(find.text('Backup & pulihkan data'));
     await tester.pumpAndSettle();
 
@@ -129,7 +131,7 @@ void main() {
   ) async {
     final repository = _UiRepository(withAccounts: true);
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Rekening').last);
+    await tester.tap(find.byKey(const Key('accounts-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('account-1')));
     await tester.pumpAndSettle();
@@ -192,7 +194,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.tap(find.text('Rekening').last);
+    await tester.tap(find.byKey(const Key('accounts-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('account-1')));
     await tester.pumpAndSettle();
@@ -227,7 +229,7 @@ void main() {
   ) async {
     final repository = _UiRepository(withAccounts: true);
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Rekening').last);
+    await tester.tap(find.byKey(const Key('accounts-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('account-2')));
     await tester.pumpAndSettle();
@@ -370,7 +372,7 @@ void main() {
       ),
     );
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Rekening').last);
+    await tester.tap(find.byKey(const Key('accounts-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('account-1')));
     await tester.pumpAndSettle();
@@ -393,7 +395,7 @@ void main() {
   ) async {
     final repository = _UiRepository(withAccounts: true);
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Rekening').last);
+    await tester.tap(find.byKey(const Key('accounts-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('account-2')));
     await tester.pumpAndSettle();
@@ -1039,7 +1041,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await pumpApp(tester, _UiRepository(withAccounts: true));
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('Rekening').last);
+    await tester.tap(find.byKey(const Key('accounts-tab')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('account-1')),
@@ -1197,6 +1199,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('budget tab remains available when the finance snapshot fails', (
+    tester,
+  ) async {
+    await pumpApp(tester, _UiRepository(failRead: true));
+
+    await tester.tap(find.byKey(const Key('budget-tab')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('budget-tab-heading')), findsOneWidget);
+    expect(find.byKey(const Key('budget-status-filter')), findsOneWidget);
+    expect(find.byKey(const Key('add-budget')), findsOneWidget);
+    expect(find.text('Coba lagi'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('budget action replaces the transaction action immediately', (
+    tester,
+  ) async {
+    await pumpApp(tester, _UiRepository(withAccounts: true));
+    expect(find.byKey(const Key('primary-action')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('budget-tab')));
+    await tester.pump();
+
+    expect(find.byKey(const Key('primary-action')), findsNothing);
+    expect(find.byKey(const Key('add-budget')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('add-budget')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('budget-name')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('overview and history use the same compact transaction row', (
     tester,
   ) async {
@@ -1247,7 +1282,7 @@ void main() {
     }
 
     expectCompactRow();
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       row,
@@ -1290,7 +1325,7 @@ void main() {
     );
     await pumpApp(tester, repository);
 
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     final row = find.byKey(const ValueKey('entry-row-28'));
     await tester.scrollUntilVisible(
@@ -1333,7 +1368,7 @@ void main() {
     final repository = _UiRepository(withAccounts: true, entry: entry);
     await pumpApp(tester, repository);
 
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     expect(
       tester.widget<Text>(find.byKey(const ValueKey('entry-title-7'))).data,
@@ -1409,7 +1444,7 @@ void main() {
     final repository = _UiRepository(withAccounts: true, entry: entry);
     await pumpApp(tester, repository);
 
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     expect(find.text('2 rincian'), findsOneWidget);
     expect(
@@ -1506,7 +1541,7 @@ void main() {
       ),
     );
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('entry-8')));
     await tester.pumpAndSettle();
@@ -1546,7 +1581,7 @@ void main() {
       ),
     );
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('entry-9')));
     await tester.pumpAndSettle();
@@ -1579,7 +1614,7 @@ void main() {
       ),
     );
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('entry-10')));
     await tester.pumpAndSettle();
@@ -1666,7 +1701,7 @@ void main() {
     repository.onUpdateEntry = (_, _) async =>
         throw const FinanceValidationException('Transaksi tidak dapat diubah.');
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('entry-10')));
     await tester.pumpAndSettle();
@@ -1705,7 +1740,7 @@ void main() {
           'Transaksi belum dapat dihapus.',
         );
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('entry-11')));
     await tester.pumpAndSettle();
@@ -1742,7 +1777,7 @@ void main() {
       ),
     );
     await pumpApp(tester, repository);
-    await tester.tap(find.text('Riwayat').last);
+    await tester.tap(find.byKey(const Key('history-tab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('entry-12')));
     await tester.pumpAndSettle();
@@ -1955,9 +1990,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('overview budget CTA selects the embedded budget tab', (
+    tester,
+  ) async {
+    final budgets = FakeBudgetRepository(items: [fakeBudgetProgress(id: 1)]);
+    await pumpApp(
+      tester,
+      _UiRepository(withAccounts: true),
+      today: DateTime(2026, 2, 10),
+      budgetRepository: budgets,
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('view-all-budgets')),
+      140,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.byKey(const Key('view-all-budgets')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      3,
+    );
+    expect(find.byKey(const Key('budget-tab-heading')), findsOneWidget);
+    expect(find.byType(Scaffold), findsOneWidget);
+    expect(find.byType(BackButton), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'budget summary, grouped list, filters, and detail fit narrow enlarged text',
     (tester) async {
+      final semanticsHandle = tester.ensureSemantics();
       tester.view.physicalSize = const Size(320, 800);
       tester.view.devicePixelRatio = 1;
       tester.platformDispatcher.textScaleFactorTestValue = 2.0;
@@ -2000,11 +2065,30 @@ void main() {
       );
       expect(tester.takeException(), isNull);
 
-      await tester.tap(find.byKey(const Key('more-menu')));
+      expect(find.byType(NavigationDestination), findsNWidgets(5));
+      expect(
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).labelBehavior,
+        NavigationDestinationLabelBehavior.alwaysHide,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.bySemanticsLabel(RegExp('Anggaran')),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('budget-tab')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('manage-budgets-menu')));
-      await tester.pumpAndSettle();
+      expect(
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+        3,
+      );
+      expect(find.byKey(const Key('budget-tab-heading')), findsOneWidget);
       expect(find.byKey(const Key('budget-status-filter')), findsOneWidget);
+      expect(find.byType(Scaffold), findsOneWidget);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.byKey(const Key('add-budget')), findsOneWidget);
+      expect(find.byKey(const Key('primary-action')), findsNothing);
       expect(
         find.byKey(const ValueKey('budget-group-20260201-20260228')),
         findsOneWidget,
@@ -2046,10 +2130,15 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('budget-kind-monthly')));
       await tester.pumpAndSettle();
       expect(find.text('Tidak ada hasil untuk filter ini'), findsOneWidget);
-      expect(
-        find.byKey(const Key('budget-reset-filters'), skipOffstage: false),
-        findsOneWidget,
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('budget-reset-filters')),
+        120,
+        scrollable: find.descendant(
+          of: find.byKey(const PageStorageKey('budget-empty-list')),
+          matching: find.byType(Scrollable),
+        ),
       );
+      expect(find.byKey(const Key('budget-reset-filters')), findsOneWidget);
       await tester.tap(find.byKey(const Key('budget-kind-filter')));
       await tester.pumpAndSettle();
       expect(
@@ -2058,6 +2147,139 @@ void main() {
             .selected,
         isTrue,
       );
+      expect(tester.takeException(), isNull);
+      semanticsHandle.dispose();
+    },
+  );
+
+  testWidgets(
+    'budget tab keeps filters when switching tabs and opening detail',
+    (tester) async {
+      final budgets = FakeBudgetRepository(
+        items: [
+          fakeBudgetProgress(id: 1),
+          for (var id = 2; id <= 14; id++)
+            fakeBudgetProgress(
+              id: id,
+              name: 'Rencana tahunan $id',
+              period: BudgetPeriod.yearly(2027),
+            ),
+        ],
+      );
+      await pumpApp(
+        tester,
+        _UiRepository(withAccounts: true),
+        today: DateTime(2026, 2, 10),
+        budgetRepository: budgets,
+      );
+
+      await tester.tap(find.byKey(const Key('budget-tab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('budget-status-upcoming')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('budget-kind-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('budget-kind-yearly')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('budget-card-2')), findsOneWidget);
+      expect(find.text('Jenis: Tahunan'), findsOneWidget);
+      final budgetListScrollable = find.descendant(
+        of: find.byKey(const PageStorageKey('budget-list')),
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('budget-card-14')),
+        180,
+        scrollable: budgetListScrollable,
+      );
+      final offsetBeforeSwitch = tester
+          .state<ScrollableState>(budgetListScrollable)
+          .position
+          .pixels;
+      expect(offsetBeforeSwitch, greaterThan(0));
+
+      await tester.tap(find.byKey(const Key('overview-tab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('budget-tab')));
+      await tester.pumpAndSettle();
+      final restoredBudgetListScrollable = find.descendant(
+        of: find.byKey(const PageStorageKey('budget-list')),
+        matching: find.byType(Scrollable),
+      );
+      final offsetAfterSwitch = tester
+          .state<ScrollableState>(restoredBudgetListScrollable)
+          .position
+          .pixels;
+      expect(offsetAfterSwitch, closeTo(offsetBeforeSwitch, 1));
+      expect(find.byKey(const ValueKey('budget-card-14')), findsOneWidget);
+      expect(find.text('Jenis: Tahunan'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('open-budget-14')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('budget-detail-progress')), findsOneWidget);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('budget-tab-heading')), findsOneWidget);
+      expect(find.byKey(const ValueKey('budget-card-14')), findsOneWidget);
+      expect(find.text('Jenis: Tahunan'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'standalone budget route resets filters and keeps its back stack',
+    (tester) async {
+      final budgets = FakeBudgetRepository(
+        items: [
+          fakeBudgetProgress(id: 1),
+          fakeBudgetProgress(
+            id: 2,
+            name: 'Rencana tahunan',
+            period: BudgetPeriod.yearly(2027),
+          ),
+        ],
+      );
+      await pumpApp(
+        tester,
+        _UiRepository(withAccounts: true),
+        today: DateTime(2026, 2, 10),
+        budgetRepository: budgets,
+      );
+
+      await tester.tap(find.byKey(const Key('budget-tab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('budget-status-upcoming')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('budget-kind-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('budget-kind-yearly')));
+      await tester.pumpAndSettle();
+      final homeContext = tester.element(find.byType(NavigationBar));
+
+      unawaited(GoRouter.of(homeContext).push<void>('/budgets'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kelola anggaran'), findsOneWidget);
+      expect(find.text('Jenis: Semua'), findsOneWidget);
+      expect(
+        tester
+            .widget<SegmentedButton<BudgetTemporalStatus>>(
+              find.byKey(const Key('budget-status-filter')),
+            )
+            .selected,
+        {BudgetTemporalStatus.active},
+      );
+      await tester.tap(find.byKey(const ValueKey('open-budget-1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('budget-detail-progress')), findsOneWidget);
+
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('Kelola anggaran'), findsOneWidget);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('budget-tab-heading')), findsOneWidget);
+      expect(find.byType(BackButton), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -2073,12 +2295,9 @@ void main() {
         budgetRepository: budgets,
       );
 
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('create-budget-from-summary')),
-        180,
-        scrollable: find.byType(Scrollable).last,
-      );
-      await tester.tap(find.byKey(const Key('create-budget-from-summary')));
+      await tester.tap(find.byKey(const Key('budget-tab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('add-budget')));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('budget-name')),
@@ -2102,10 +2321,7 @@ void main() {
       expect(budgets.createdDraft?.period, BudgetPeriod.monthly(2026, 2));
       expect(budgets.createdDraft?.categoryIds, {10});
 
-      await tester.tap(find.byKey(const Key('more-menu')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('manage-budgets-menu')));
-      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('budget-tab-heading')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('open-budget-1')));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const Key('open-budget-edit')));

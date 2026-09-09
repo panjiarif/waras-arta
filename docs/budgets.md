@@ -2,11 +2,11 @@
 
 ## Status implementasi dan tujuan
 
-Dokumen ini adalah kontrak **Anggaran v1** untuk versi produk 0.2. Status implementasi: **selesai pada 8 September 2026** dengan schema database v6 dan payload backup v4 aktif. Domain, persistence, CRUD bulanan/tahunan/kustom, pilihan multi-subkategori, progres dari allocation, penolakan overlap, backup/restore, dan pengujian otomatis sudah tersedia. Smoke test pada perangkat fisik tetap menjadi verifikasi manual sebelum aplikasi dipakai sebagai satu-satunya catatan keuangan; dokumen ini tidak menyatakan bahwa smoke test tersebut sudah dilakukan.
+Dokumen ini adalah kontrak **Anggaran v1** untuk versi produk 0.2. Status implementasi: **selesai pada 8 September 2026** dengan schema database v6 dan payload backup v4 aktif. Domain, persistence, CRUD bulanan/tahunan/kustom, pilihan multi-subkategori, progres dari allocation, penolakan overlap, backup/restore, dan pengujian otomatis sudah tersedia. Smoke test Anggaran serta backup–restore v4 pada perangkat fisik berhasil pada 9 September 2026; evaluasi kenyamanan dan performa jangka panjang tetap berlanjut selama pemakaian nyata.
 
 Perubahan aturan di dokumen ini harus disertai penyesuaian model, migrasi database, format backup, dan pengujian agar kontrak implementasi tetap sinkron.
 
-Anggaran membantu pengguna membatasi pengeluaran untuk suatu rentang tanggal. Anggaran bukan rekening, pemindahan uang, atau tujuan keuangan. Membuat atau mengubah anggaran tidak mengubah saldo serta tidak membuat transaksi.
+Anggaran membantu pengguna membatasi pengeluaran untuk suatu rentang tanggal. Anggaran bukan rekening, pemindahan uang, atau [tujuan keuangan](financial-goals.md). Membuat atau mengubah anggaran tidak mengubah saldo serta tidak membuat transaksi.
 
 Versi pertama mendukung tiga alternatif periode:
 
@@ -114,13 +114,15 @@ Keadaan tampilan:
 
 ## Pengalaman pengguna v1
 
-Anggaran tidak menambah tujuan kelima pada bottom navigation. Empat tujuan utama tetap **Ikhtisar**, **Riwayat**, **Kalender**, dan **Rekening**.
+Navigasi utama memakai lima tujuan `NavigationBar`: **Ikhtisar**, **Riwayat**, **Kalender**, **Anggaran**, dan **Rekening**. Anggaran berada sebelum Rekening karena lebih sering dipantau daripada pengelolaan tempat uang. Pada ruang sempit label hanya ditampilkan untuk tujuan terpilih; pada 320 px dengan text scale 200% seluruh label visual dapat disembunyikan, tetapi label semantics tetap lengkap dan isi tab mempunyai heading **Anggaran**.
 
 Pintu masuk:
 
-- kartu **Anggaran aktif** pada Ikhtisar;
-- item **Kelola anggaran** pada menu aplikasi;
-- rute khusus untuk daftar serta form tambah/edit.
+- tab **Anggaran** sebagai pintu utama;
+- kartu **Anggaran aktif** pada Ikhtisar; aksi **Lihat semua** memilih tab Anggaran tanpa menambah layar daftar kedua pada back stack;
+- rute `/budgets` tetap tersedia untuk akses mandiri/deep link, sedangkan form dan detail memakai rute khusus yang didorong di atas layar asal.
+
+Item **Kelola anggaran** di menu aplikasi dihapus setelah tab tersedia agar tidak ada dua pola navigasi yang tampak setara. Tab menanam isi daftar di dalam shell Home yang sama sehingga hanya ada satu AppBar, satu bottom navigation, dan satu FAB. FAB berubah menjadi **Tambah anggaran** ketika tab ini aktif. Filter dan posisi gulir dipertahankan saat pengguna berpindah tab atau kembali dari detail; kunjungan baru melalui rute mandiri kembali ke filter default.
 
 ### Daftar anggaran
 
@@ -437,11 +439,12 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 - hierarki anggaran tahunan dengan child bulanan pada kategori yang sama;
 - mengedit jenis atau tanggal periode setelah dibuat;
 - notifikasi ambang 50/80/100%;
+- alert proaktif pada saat transaksi disimpan dan mulai mendekati atau melampaui batas;
 - rekomendasi batas otomatis;
 - pemblokiran transaksi ketika batas tercapai;
 - pembagian anggaran per rekening;
 - histori perubahan batas atau audit log anggaran;
-- tujuan keuangan, utang/piutang, serta sinkronisasi cloud.
+- [tujuan keuangan](financial-goals.md), utang/piutang, serta sinkronisasi cloud.
 
 ## Lokasi implementasi dan pengujian
 
@@ -454,4 +457,4 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 
 ## Kriteria selesai
 
-Kriteria implementasi dan integritas data Anggaran v1 telah dipenuhi: pengguna dapat membuat, melihat, mengubah, dan menghapus anggaran bulanan, tahunan, maupun kustom dengan banyak subkategori; progres mengikuti nominal allocation pada seluruh rentang; overlap lintas jenis ditolak; histori kategori arsip tetap akurat; backup v1, v2, v3, dan v4 dipulihkan sesuai kontrak; serta migrasi lama aman. Kenyamanan, aksesibilitas, dan performa alur utama pada HP referensi tetap harus dibuktikan lewat checklist perangkat fisik sebelum pemakaian nyata atau rilis.
+Kriteria implementasi dan integritas data Anggaran v1 telah dipenuhi: pengguna dapat membuat, melihat, mengubah, dan menghapus anggaran bulanan, tahunan, maupun kustom dengan banyak subkategori; progres mengikuti nominal allocation pada seluruh rentang; overlap lintas jenis ditolak; histori kategori arsip tetap akurat; backup v1, v2, v3, dan v4 dipulihkan sesuai kontrak; serta migrasi lama aman. Smoke test dasar pada HP referensi, termasuk backup–restore v4, telah berhasil; evaluasi aksesibilitas, performa jangka panjang, dan penyempurnaan berdasarkan pemakaian nyata tetap berlanjut.

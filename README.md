@@ -25,7 +25,7 @@ Yang tersedia:
 - Detail transaksi beserta nama rekening, tanggal kejadian, catatan, waktu pencatatan, dan seluruh rincian split.
 - Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
 - Hapus permanen transaksi biasa melalui dialog konfirmasi.
-- Mengelola anggaran bulanan, tahunan, atau rentang kustom dengan satu atau beberapa subkategori pengeluaran; progres mengikuti nominal alokasi transaksi dan konflik kategori pada periode beririsan ditolak.
+- Mengelola anggaran bulanan, tahunan, atau rentang kustom langsung dari tab **Anggaran**, dengan satu atau beberapa subkategori pengeluaran; progres mengikuti nominal alokasi transaksi dan konflik kategori pada periode beririsan ditolak.
 - Penyimpanan persisten lokal menggunakan Drift/SQLite.
 - Migrasi schema bertahap v1 sampai v6 yang menjaga transaksi serta saldo lama ketika kategori, siklus rekening, alokasi transaksi, kelompok saldo, dan anggaran berevolusi.
 - Backup manual terenkripsi ke file `.warasarta` melalui pemilih dokumen Android; hasil simpan dibuka ulang dan diverifikasi sebelum dianggap berhasil.
@@ -35,7 +35,7 @@ Yang tersedia:
 
 Backup aktif memakai payload v4/schema v6 dan membawa `balanceGroup`, seluruh anggaran, pilihan subkategori, serta sequence terkait. Restore payload v1/schema 3, v2/schema 4, dan v3/schema 5 tetap didukung. Rekening dari v1/v2 dipetakan ke `Saldo utama`, v3 mempertahankan `balanceGroup`, dan seluruh format legacy dipulihkan dengan daftar anggaran kosong karena belum menyimpan data tersebut.
 
-Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, tujuan keuangan, diagram, dan utang/piutang.
+Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, implementasi [Tujuan Keuangan v1](docs/financial-goals.md), diagram, dan utang/piutang. Kontrak Tujuan Keuangan sudah ditulis, tetapi schema/payload aktif belum memuatnya.
 
 Backup rutin adalah snapshot manual saat tombol ditekan; aplikasi belum menjadwalkan, mengunggah, merotasi, atau memverifikasi backup secara otomatis. Verifikasi tepat setelah penulisan hanya memastikan ukuran dan SHA-256 file yang baru disimpan cocok pada saat itu, bukan memantau retensi file berikutnya. Pengecualiannya adalah jalur restore: setelah pengguna mengonfirmasi restore, aplikasi wajib menyimpan safety backup terenkripsi dari data aktif dengan kata sandi yang sama sebelum melakukan replace-all. Jika penyimpanan dibatalkan, gagal, atau tidak lolos verifikasi penulisan, restore tidak dijalankan. Simpan beberapa file di luar HP, misalnya pada penyedia dokumen cloud dan komputer, lalu uji restore menggunakan data percobaan sebelum mengandalkannya. **Kata sandi backup tidak disimpan dan tidak dapat dipulihkan. Jika lupa, file tersebut tidak dapat direstore.**
 
@@ -65,6 +65,7 @@ Flutter/Dart, Material 3, MVVM dengan Riverpod, repository, Drift/SQLite dengan 
 - [Product brief dan ruang lingkup versi](docs/product-brief.md)
 - [Spesifikasi Alokasi Kategori Transaksi](docs/transaction-allocations.md)
 - [Spesifikasi Anggaran v1](docs/budgets.md)
+- [Spesifikasi Tujuan Keuangan v1](docs/financial-goals.md)
 - [Arsitektur dan aturan data](docs/architecture.md)
 - [Format, keamanan, dan pemulihan backup](docs/backup-restore.md)
 - [Pengembangan, verifikasi, dan commit](docs/development.md)

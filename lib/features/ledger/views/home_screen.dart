@@ -8,6 +8,7 @@ import '../../../app/theme.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
 import '../../budgets/views/active_budget_summary_card.dart';
+import '../../budgets/views/budget_list_screen.dart';
 import '../../calendar/view_models/calendar_view_model.dart';
 import '../../calendar/views/calendar_view.dart';
 import '../view_models/ledger_view_model.dart';
@@ -77,7 +78,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final accounts = snapshot.asData?.value.accounts;
     final ready = accounts != null;
     final hasActiveAccount = accounts?.any((account) => !account.isArchived);
-    final addAccount = _tab == _HomeTab.accounts || hasActiveAccount != true;
+    final isBudgetTab = _tab == _HomeTab.budgets;
+    final addAccount =
+        !isBudgetTab && (_tab == _HomeTab.accounts || hasActiveAccount != true);
     final selectedCalendarDay = _tab == _HomeTab.calendar
         ? ref.watch(calendarStateProvider.select((value) => value.selectedDay))
         : null;
@@ -86,6 +89,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         : selectedCalendarDay != null
         ? '/transactions/new?date=${civilDate(selectedCalendarDay)}'
         : '/transactions/new';
+    final navigationLabelBehavior =
+        MediaQuery.sizeOf(context).width <= 320 &&
+            MediaQuery.textScalerOf(context).scale(1) >= 2
+        ? NavigationDestinationLabelBehavior.alwaysHide
+        : MediaQuery.sizeOf(context).width < 340 ||
+              MediaQuery.textScalerOf(context).scale(1) > 1.3
+        ? NavigationDestinationLabelBehavior.onlyShowSelected
+        : NavigationDestinationLabelBehavior.alwaysShow;
+    final Widget? primaryAction;
+    if (isBudgetTab) {
+      primaryAction = const BudgetAddButton();
+    } else if (ready) {
+      primaryAction = FloatingActionButton.extended(
+        key: const Key('primary-action'),
+        onPressed: () => _open(primaryRoute),
+        icon: const Icon(Icons.add),
+        label: Text(addAccount ? 'Tambah rekening' : 'Catat transaksi'),
+      );
+    } else {
+      primaryAction = null;
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -114,22 +138,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             tooltip: 'Menu lainnya',
             onSelected: (action) {
               switch (action) {
-                case _HomeMenuAction.budgets:
-                  context.push('/budgets');
                 case _HomeMenuAction.backup:
                   context.push('/backup');
               }
             },
             itemBuilder: (context) => const [
-              PopupMenuItem(
-                key: Key('manage-budgets-menu'),
-                value: _HomeMenuAction.budgets,
-                child: ListTile(
-                  leading: Icon(Icons.savings_outlined),
-                  title: Text('Kelola anggaran'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
               PopupMenuItem(
                 value: _HomeMenuAction.backup,
                 child: ListTile(
@@ -148,42 +161,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 760),
-            child: snapshot.when(
-              skipLoadingOnReload: false,
-              data: (data) => _content(data),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) => Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const FormMessage(
-                      'Data lokal belum dapat dibaca. Jangan hapus data aplikasi; coba buka kembali.',
-                      isError: true,
+            child: isBudgetTab
+                ? const BudgetListScreen(embedded: true)
+                : snapshot.when(
+                    skipLoadingOnReload: false,
+                    data: (data) => _content(data),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (_, _) => Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const FormMessage(
+                            'Data lokal belum dapat dibaca. Jangan hapus data aplikasi; coba buka kembali.',
+                            isError: true,
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: () =>
+                                ref.invalidate(financeSnapshotProvider),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Coba lagi'),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () => ref.invalidate(financeSnapshotProvider),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Coba lagi'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
           ),
         ),
       ),
-      floatingActionButton: ready
-          ? FloatingActionButton.extended(
-              key: const Key('primary-action'),
-              onPressed: () => _open(primaryRoute),
-              icon: const Icon(Icons.add),
-              label: Text(addAccount ? 'Tambah rekening' : 'Catat transaksi'),
-            )
-          : null,
+      floatingActionButton: primaryAction == null
+          ? null
+          : KeyedSubtree(
+              key: const ValueKey('home-fab-slot'),
+              child: primaryAction,
+            ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab.index,
+        labelBehavior: navigationLabelBehavior,
         onDestinationSelected: (value) => setState(() {
           _tab = _HomeTab.values[value];
         }),
@@ -205,6 +221,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             icon: Icon(Icons.calendar_month_outlined),
             selectedIcon: Icon(Icons.calendar_month),
             label: 'Kalender',
+          ),
+          NavigationDestination(
+            key: Key('budget-tab'),
+            icon: Icon(Icons.donut_small_outlined),
+            selectedIcon: Icon(Icons.donut_small),
+            label: 'Anggaran',
           ),
           NavigationDestination(
             key: Key('accounts-tab'),
@@ -261,7 +283,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         const SizedBox(height: 16),
         _BalanceCard(total: data.primaryBalance, count: primaryAccounts.length),
         const SizedBox(height: 16),
-        const ActiveBudgetSummaryCard(),
+        ActiveBudgetSummaryCard(
+          onViewAll: () => setState(() => _tab = _HomeTab.budgets),
+        ),
         const SizedBox(height: 24),
       ] else ...[
         Text(
@@ -436,9 +460,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 }
 
-enum _HomeMenuAction { budgets, backup }
+enum _HomeMenuAction { backup }
 
-enum _HomeTab { overview, history, calendar, accounts }
+enum _HomeTab { overview, history, calendar, budgets, accounts }
 
 class _AccountSectionHeader extends StatelessWidget {
   const _AccountSectionHeader({

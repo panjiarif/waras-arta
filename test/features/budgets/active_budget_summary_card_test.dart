@@ -14,8 +14,9 @@ void main() {
 
   Future<void> pumpSummary(
     WidgetTester tester,
-    FakeBudgetRepository repository,
-  ) async {
+    FakeBudgetRepository repository, {
+    VoidCallback? onViewAll,
+  }) async {
     addTearDown(repository.dispose);
     await tester.pumpWidget(
       ProviderScope(
@@ -23,8 +24,8 @@ void main() {
           budgetRepositoryProvider.overrideWithValue(repository),
           currentDateProvider.overrideWithValue(DateTime(2026, 2, 10)),
         ],
-        child: const MaterialApp(
-          home: Scaffold(body: ActiveBudgetSummaryCard()),
+        child: MaterialApp(
+          home: Scaffold(body: ActiveBudgetSummaryCard(onViewAll: onViewAll)),
         ),
       ),
     );
@@ -144,5 +145,19 @@ void main() {
         findsNothing,
       );
     }
+  });
+
+  testWidgets('uses the supplied view-all action inside a navigation shell', (
+    tester,
+  ) async {
+    var calls = 0;
+    final repository = FakeBudgetRepository(items: [fakeBudgetProgress(id: 1)]);
+
+    await pumpSummary(tester, repository, onViewAll: () => calls++);
+    await tester.tap(find.byKey(const Key('view-all-budgets')));
+    await tester.pump();
+
+    expect(calls, 1);
+    expect(tester.takeException(), isNull);
   });
 }

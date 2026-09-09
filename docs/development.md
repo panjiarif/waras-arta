@@ -97,14 +97,14 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 
 ### Skenario anggaran
 
-1. Buat anggaran bulanan dengan dua subkategori pengeluaran, lalu pastikan kartu Ikhtisar, daftar, dan detail menampilkan nama, periode, batas, kategori, serta progres yang sama.
+1. Buka tab **Anggaran**, buat anggaran bulanan dengan dua subkategori pengeluaran, lalu pastikan kartu Ikhtisar, daftar, dan detail menampilkan nama, periode, batas, kategori, serta progres yang sama.
 2. Catat satu pengeluaran split yang hanya sebagian alokasinya memakai kategori anggaran. Pastikan progres bertambah sebesar allocation yang cocok, bukan total header transaksi.
 3. Edit nominal/kategori/tanggal transaksi tersebut dan kemudian hapusnya. Progres anggaran harus bereaksi tanpa membuka ulang aplikasi.
 4. Buat anggaran tahunan dan rentang kustom, termasuk periode satu hari. Pastikan filter aktif/mendatang/riwayat dan label periode mengikuti tanggal lokal perangkat.
 5. Coba memakai subkategori yang sama pada rentang inklusif yang beririsan, termasuk lintas jenis periode. Penyimpanan harus ditolak; rentang yang hanya bersebelahan tanpa tanggal sama tetap boleh.
 6. Edit nama, batas, serta pilihan kategori. Jenis dan tanggal periode harus tetap read-only pada edit; hapus anggaran hanya menghapus definisi/mapping, bukan kategori atau transaksi.
 7. Arsipkan kategori yang sudah dipakai anggaran. Histori dan progres tetap terbaca; kategori tersebut tidak dapat ditambahkan kembali ke anggaran lain sampai dipulihkan.
-8. Uji layar sempit, keyboard, ukuran teks besar, double submit, Back dengan form kotor, dan performa daftar/progres pada HP referensi.
+8. Uji lima destination pada layar sempit dan text scale besar: label boleh menyesuaikan, tetapi tab tetap dapat dikenali pembaca layar, hanya ada satu AppBar/FAB, dan tidak terjadi overflow. Uji juga keyboard, double submit, Back dengan form kotor, serta performa daftar/progres pada HP referensi.
 
 ### Skenario backup dan restore
 
@@ -146,6 +146,7 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Riwayat dan kalender menampilkan satu kartu **2 rincian**; detail menampilkan kedua nominal, sedangkan saldo berkurang tepat Rp17.000 sekali.
 - [ ] Edit transaksi split memuat urutan lama; ubah nominal/kategori atau kembali menjadi satu rincian lalu pastikan total, saldo, backup, dan restore ikut konsisten.
 - [ ] Form anggaran membuat periode bulanan, tahunan, dan kustom dengan satu atau beberapa subkategori; edit mempertahankan periode serta memungkinkan perubahan nama, batas, dan kategori.
+- [ ] Tab Anggaran dapat dibuka langsung, kartu Ikhtisar memilih tab yang sama, filter/posisi daftar bertahan ketika berpindah tab atau kembali dari detail, dan menu aplikasi tidak lagi menduplikasi **Kelola anggaran**.
 - [ ] Progres anggaran menjumlahkan nominal allocation pengeluaran yang cocok dan bereaksi terhadap create/edit/delete transaksi tanpa menghitung transfer atau penyesuaian.
 - [ ] Konflik kategori pada rentang inklusif yang beririsan ditolak, sedangkan kategori berbeda atau rentang yang hanya bersebelahan tetap dapat disimpan.
 - [ ] Hapus anggaran tidak menghapus transaksi/kategori; kategori arsip yang sudah terhubung tetap terbaca pada histori.

@@ -2,9 +2,11 @@
 
 ## Status dan tujuan
 
-Dokumen ini adalah kontrak implementasi **Alokasi Transaksi v1**. Fondasi allocation lahir pada schema v4/payload backup v2; form split serta presentasi riwayat, kalender, dan detail sudah diterapkan dan dilindungi pengujian otomatis. Schema aktif kini v6/payload v4: kelompok saldo rekening dan Anggaran v1 ditambahkan tanpa mengubah bentuk allocation. Smoke test akhir pada HP referensi tetap menjadi gerbang sebelum fitur dianggap siap dipakai sebagai catatan nyata. Fitur ini dikerjakan sebelum anggaran karena nominal per subkategori menjadi sumber data bagi progres anggaran, rincian kategori, dan diagram.
+Dokumen ini adalah kontrak implementasi **Alokasi Transaksi v1**. Fondasi allocation lahir pada schema v4/payload backup v2; form split serta presentasi riwayat, kalender, dan detail sudah diterapkan dan dilindungi pengujian otomatis. Schema aktif kini v6/payload v4: kelompok saldo rekening dan Anggaran v1 ditambahkan tanpa mengubah bentuk allocation. Smoke test alur utama serta backup–restore aktif pada HP referensi berhasil pada 9 September 2026; evaluasi kenyamanan dan performa jangka panjang tetap berlanjut selama pemakaian nyata. Fitur ini dikerjakan sebelum anggaran karena nominal per subkategori menjadi sumber data bagi progres anggaran, rincian kategori, dan diagram.
 
 Satu pencatatan pemasukan atau pengeluaran tetap tampil sebagai satu transaksi, tetapi dapat dibagi menjadi beberapa pasangan nominal dan subkategori. Contoh: satu pembayaran Rp17.000 dapat terdiri dari **Makan Rp15.000** dan **Parkir Rp2.000**.
+
+`ledger_allocations` pada dokumen ini hanya mengklasifikasikan nominal transaksi untuk kategori, anggaran, dan laporan. Rancangan [Tujuan Keuangan v1](financial-goals.md) memakai `goal_allocations` terpisah untuk menandai sebagian saldo rekening tanpa membuat atau mengubah transaksi; kedua jenis allocation tidak boleh dipertukarkan.
 
 Tujuan versi pertama:
 
@@ -449,4 +451,4 @@ Schema v4, migrasi, repository, payload v2, decoder v1, restore, guard cakupan, 
 
 ## Kriteria selesai
 
-Implementasi dan kontrak data Alokasi Transaksi v1 telah selesai: pengguna dapat mencatat dan mengedit satu pembayaran sebagai satu sampai 50 pasangan nominal–subkategori; total diturunkan tanpa input ganda; riwayat, detail, kalender, saldo, ringkasan, dan progres anggaran memakai header/allocation secara benar; migrasi lama serta payload v1–v4 aman; dan restore berlangsung atomik. Kenyamanan serta performa alur utama pada HP referensi tetap merupakan gerbang manual sebelum pemakaian nyata.
+Implementasi dan kontrak data Alokasi Transaksi v1 telah selesai: pengguna dapat mencatat dan mengedit satu pembayaran sebagai satu sampai 50 pasangan nominal–subkategori; total diturunkan tanpa input ganda; riwayat, detail, kalender, saldo, ringkasan, dan progres anggaran memakai header/allocation secara benar; migrasi lama serta payload v1–v4 aman; dan restore berlangsung atomik. Smoke test dasar pada HP referensi telah berhasil; kenyamanan serta performa jangka panjang tetap dievaluasi sebelum rilis stabil.

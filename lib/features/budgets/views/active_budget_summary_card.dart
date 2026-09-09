@@ -8,7 +8,9 @@ import '../view_models/budget_view_model.dart';
 import 'budget_widgets.dart';
 
 class ActiveBudgetSummaryCard extends ConsumerWidget {
-  const ActiveBudgetSummaryCard({super.key});
+  const ActiveBudgetSummaryCard({super.key, this.onViewAll});
+
+  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -30,11 +32,13 @@ class ActiveBudgetSummaryCard extends ConsumerWidget {
               return _ActiveSummary(
                 snapshot: snapshot,
                 referenceDay: referenceDay,
+                onViewAll: onViewAll,
               );
             }
             return _NoActiveSummary(
               upcoming: ref.watch(upcomingBudgetSummaryProvider),
               referenceDay: referenceDay,
+              onViewAll: onViewAll,
             );
           },
         ),
@@ -44,10 +48,15 @@ class ActiveBudgetSummaryCard extends ConsumerWidget {
 }
 
 class _ActiveSummary extends StatelessWidget {
-  const _ActiveSummary({required this.snapshot, required this.referenceDay});
+  const _ActiveSummary({
+    required this.snapshot,
+    required this.referenceDay,
+    this.onViewAll,
+  });
 
   final BudgetListSnapshot snapshot;
   final int referenceDay;
+  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +76,7 @@ class _ActiveSummary extends StatelessWidget {
       children: [
         _SummaryHeader(
           referenceDay: referenceDay,
+          onViewAll: onViewAll,
           subtitle:
               '${snapshot.items.length} aktif'
               '${attentionCount == 0 ? '' : ' · $attentionCount perlu perhatian'}',
@@ -89,10 +99,15 @@ class _ActiveSummary extends StatelessWidget {
 }
 
 class _NoActiveSummary extends StatelessWidget {
-  const _NoActiveSummary({required this.upcoming, required this.referenceDay});
+  const _NoActiveSummary({
+    required this.upcoming,
+    required this.referenceDay,
+    this.onViewAll,
+  });
 
   final AsyncValue<BudgetListSnapshot> upcoming;
   final int referenceDay;
+  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +119,7 @@ class _NoActiveSummary extends StatelessWidget {
       children: [
         _SummaryHeader(
           referenceDay: referenceDay,
+          onViewAll: onViewAll,
           subtitle: 'Belum ada yang aktif hari ini',
         ),
         const SizedBox(height: 12),
@@ -135,10 +151,15 @@ class _NoActiveSummary extends StatelessWidget {
 }
 
 class _SummaryHeader extends StatelessWidget {
-  const _SummaryHeader({required this.referenceDay, required this.subtitle});
+  const _SummaryHeader({
+    required this.referenceDay,
+    required this.subtitle,
+    this.onViewAll,
+  });
 
   final int referenceDay;
   final String subtitle;
+  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +187,7 @@ class _SummaryHeader extends StatelessWidget {
         );
         final action = TextButton(
           key: const Key('view-all-budgets'),
-          onPressed: () => context.push('/budgets'),
+          onPressed: onViewAll ?? () => context.push('/budgets'),
           child: const Text('Lihat semua'),
         );
         if (stacked) {

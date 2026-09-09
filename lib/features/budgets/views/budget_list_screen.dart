@@ -8,7 +8,9 @@ import '../view_models/budget_view_model.dart';
 import 'budget_widgets.dart';
 
 class BudgetListScreen extends ConsumerStatefulWidget {
-  const BudgetListScreen({super.key});
+  const BudgetListScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<BudgetListScreen> createState() => _BudgetListScreenState();
@@ -20,7 +22,9 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(budgetFilterProvider.notifier).reset();
+      if (!widget.embedded) {
+        ref.read(budgetFilterProvider.notifier).reset();
+      }
       ref.read(budgetActionsProvider.notifier).clearError();
     });
   }
@@ -35,119 +39,121 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
         MediaQuery.sizeOf(context).width < 360 ||
         MediaQuery.textScalerOf(context).scale(14) > 20;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Kelola anggaran')),
-      floatingActionButton: stackStatus
-          ? FloatingActionButton(
-              key: const Key('add-budget'),
-              tooltip: 'Tambah anggaran',
-              onPressed: actions.isSaving
-                  ? null
-                  : () => context.push('/budgets/new'),
-              child: const Icon(Icons.add),
-            )
-          : FloatingActionButton.extended(
-              key: const Key('add-budget'),
-              onPressed: actions.isSaving
-                  ? null
-                  : () => context.push('/budgets/new'),
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah anggaran'),
-            ),
-      body: SafeArea(
-        top: false,
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SegmentedButton<BudgetTemporalStatus>(
-                        key: const Key('budget-status-filter'),
-                        direction: stackStatus
-                            ? Axis.vertical
-                            : Axis.horizontal,
-                        expandedInsets: stackStatus ? null : EdgeInsets.zero,
-                        segments: [
-                          for (final status in BudgetTemporalStatus.values)
-                            ButtonSegment(
-                              value: status,
-                              label: Text(
-                                status.label,
-                                key: ValueKey('budget-status-${status.name}'),
-                              ),
-                            ),
-                        ],
-                        selected: {selection.temporalStatus},
-                        showSelectedIcon: false,
-                        onSelectionChanged: actions.isSaving
-                            ? null
-                            : (values) => ref
-                                  .read(budgetFilterProvider.notifier)
-                                  .selectStatus(values.single),
-                      ),
-                      const SizedBox(height: 10),
-                      OutlinedButton(
-                        key: const Key('budget-kind-filter'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                          alignment: Alignment.centerLeft,
-                        ),
-                        onPressed: actions.isSaving
-                            ? null
-                            : () => _showKindFilter(selection.periodKind),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.filter_list),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Jenis: '
-                                '${selection.periodKind?.label ?? 'Semua'}',
-                              ),
-                            ),
-                            const Icon(Icons.expand_more),
-                          ],
+    final content = SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (widget.embedded) ...[
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          'Anggaran',
+                          key: const Key('budget-tab-heading'),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
-                      if (actions.error != null) ...[
-                        const SizedBox(height: 10),
-                        FormMessage(actions.error!, isError: true),
-                      ],
+                      if (!stackStatus) ...[
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Atur batas pengeluaran dan pantau pemakaiannya.',
+                        ),
+                        const SizedBox(height: 16),
+                      ] else
+                        const SizedBox(height: 8),
                     ],
-                  ),
-                ),
-                Expanded(
-                  child: budgets.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (_, _) => BudgetLoadState(
-                      message: 'Daftar anggaran belum dapat dimuat. Data di perangkat tidak diubah.',
-                      onRetry: () => ref.invalidate(
-                        budgetSnapshotProvider(
-                          ref.read(budgetListQueryProvider),
-                        ),
+                    SegmentedButton<BudgetTemporalStatus>(
+                      key: const Key('budget-status-filter'),
+                      direction: stackStatus ? Axis.vertical : Axis.horizontal,
+                      expandedInsets: stackStatus ? null : EdgeInsets.zero,
+                      segments: [
+                        for (final status in BudgetTemporalStatus.values)
+                          ButtonSegment(
+                            value: status,
+                            label: Text(
+                              status.label,
+                              key: ValueKey('budget-status-${status.name}'),
+                            ),
+                          ),
+                      ],
+                      selected: {selection.temporalStatus},
+                      showSelectedIcon: false,
+                      onSelectionChanged: actions.isSaving
+                          ? null
+                          : (values) => ref
+                                .read(budgetFilterProvider.notifier)
+                                .selectStatus(values.single),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      key: const Key('budget-kind-filter'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                        alignment: Alignment.centerLeft,
+                      ),
+                      onPressed: actions.isSaving
+                          ? null
+                          : () => _showKindFilter(selection.periodKind),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.filter_list),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Jenis: '
+                              '${selection.periodKind?.label ?? 'Semua'}',
+                            ),
+                          ),
+                          const Icon(Icons.expand_more),
+                        ],
                       ),
                     ),
-                    data: (snapshot) => snapshot.items.isEmpty
-                        ? _BudgetEmptyState(
-                            selection: selection,
-                            upcoming: upcoming,
-                          )
-                        : _BudgetGroupList(snapshot: snapshot),
-                  ),
+                    if (actions.error != null) ...[
+                      const SizedBox(height: 10),
+                      FormMessage(actions.error!, isError: true),
+                    ],
+                  ],
                 ),
-              ],
-            ),
+              ),
+              Expanded(
+                child: budgets.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (_, _) => BudgetLoadState(
+                    message: 'Daftar anggaran belum dapat dimuat. Data di perangkat tidak diubah.',
+                    onRetry: () => ref.invalidate(
+                      budgetSnapshotProvider(ref.read(budgetListQueryProvider)),
+                    ),
+                  ),
+                  data: (snapshot) => snapshot.items.isEmpty
+                      ? _BudgetEmptyState(
+                          selection: selection,
+                          upcoming: upcoming,
+                        )
+                      : _BudgetGroupList(snapshot: snapshot),
+                ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+
+    if (widget.embedded) return content;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Kelola anggaran')),
+      floatingActionButton: const BudgetAddButton(),
+      body: content,
     );
   }
 
@@ -185,6 +191,40 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
     if (option != null && mounted) {
       ref.read(budgetFilterProvider.notifier).selectKind(option.kind);
     }
+  }
+}
+
+class BudgetAddButton extends ConsumerWidget {
+  const BudgetAddButton({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isSaving = ref.watch(
+      budgetActionsProvider.select((state) => state.isSaving),
+    );
+    final compact =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(14) > 20;
+
+    void openForm() {
+      ref.read(budgetActionsProvider.notifier).clearError();
+      context.push('/budgets/new');
+    }
+
+    if (compact) {
+      return FloatingActionButton(
+        key: const Key('add-budget'),
+        tooltip: 'Tambah anggaran',
+        onPressed: isSaving ? null : openForm,
+        child: const Icon(Icons.add),
+      );
+    }
+    return FloatingActionButton.extended(
+      key: const Key('add-budget'),
+      onPressed: isSaving ? null : openForm,
+      icon: const Icon(Icons.add),
+      label: const Text('Tambah anggaran'),
+    );
   }
 }
 
@@ -260,6 +300,7 @@ class _BudgetEmptyState extends ConsumerWidget {
         : 'Buat anggaran untuk membatasi pengeluaran tanpa mengubah saldo rekening.';
 
     return ListView(
+      key: const PageStorageKey('budget-empty-list'),
       padding: const EdgeInsets.fromLTRB(24, 40, 24, 120),
       children: [
         Icon(

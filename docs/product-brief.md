@@ -6,7 +6,7 @@
 
 - **Status:** Draft
 - **Versi produk awal:** `0.1.0`
-- **Terakhir diperbarui:** 8 September 2026
+- **Terakhir diperbarui:** 9 September 2026
 - **Platform pertama:** Android
 - **Repository:** `waras-arta`
 - **Package Dart:** `waras_arta`
@@ -143,6 +143,7 @@ Kelompok **Simpanan & investasi** bukan fitur tujuan keuangan atau pelacakan har
 - Satu subkategori dicegah berada pada beberapa anggaran dengan rentang tanggal yang beririsan, termasuk antarjenis periode.
 - Progres tidak disimpan, tetapi dihitung ulang dari alokasi kategori beserta tanggal transaksi induknya agar edit/hapus transaksi tetap konsisten.
 - Pengeluaran tetap boleh dicatat setelah batas terlampaui.
+- Daftar dan progres dapat dibuka langsung melalui tab **Anggaran** pada navigasi utama.
 
 Aturan lengkap, schema v6 yang aktif, kompatibilitas backup v4, dan matriks pengujian tersedia pada [spesifikasi Anggaran v1](budgets.md).
 
@@ -154,6 +155,10 @@ Tujuan keuangan digunakan untuk kebutuhan seperti dana darurat, tabungan perangk
 - Dana tujuan dapat dialokasikan dari satu atau beberapa rekening nyata.
 - Alokasi tujuan tidak dianggap sebagai pemasukan atau pengeluaran.
 - Jika uang benar-benar dipindahkan ke rekening atau celengan terpisah, pengguna membuat rekening baru dan mencatat transfer.
+
+Rancangan current-state allocation, aturan saldo yang tersedia untuk dialokasikan, peringatan saldo sumber kurang, schema v7, payload backup v5, dan matriks pengujian tersedia pada [spesifikasi Tujuan Keuangan v1](financial-goals.md). Fitur tersebut belum diimplementasikan; schema aktif tetap v6 dan payload aktif tetap v4.
+
+Tujuan Keuangan tidak otomatis menjadi tab keenam. Akses awal direncanakan melalui kartu Ikhtisar dan menu; bila pemakaian nyata nantinya menunjukkan Anggaran serta Tujuan sama-sama perlu satu ketukan, keduanya dapat dievaluasi sebagai satu hub **Rencana** yang menggantikan tab Anggaran.
 
 ### 8. Utang
 
@@ -174,7 +179,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 
 ### 10. Kalender
 
-- Menambah navigasi bawah utama menjadi empat tujuan untuk penggunaan di HP.
+- Menjadi salah satu dari lima tujuan navigasi bawah utama untuk penggunaan di HP.
 - Menampilkan grid bulanan ringan dengan urutan Senin sampai Minggu, mulai Januari 2000 hingga bulan berjalan.
 - Menonaktifkan tanggal setelah hari ini karena versi awal belum mendukung transaksi masa depan.
 - Memberi penanda terpisah untuk pemasukan, pengeluaran, dan aktivitas lain berupa transfer atau penyesuaian.
@@ -238,7 +243,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 
 - fondasi alokasi kategori transaksi dan alur split transaction *(sudah tersedia pada alpha saat ini)*;
 - anggaran multi-kategori bulanan/tahunan/kustom *(sudah tersedia pada alpha saat ini)*;
-- tujuan keuangan;
+- tujuan keuangan *(spesifikasi v1 tersedia; implementasi belum dimulai)*;
 - diagram;
 - kustomisasi dashboard;
 - pencarian dan filter lanjutan;
@@ -295,7 +300,6 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Perlukah penguncian aplikasi menggunakan PIN atau biometrik pada MVP?
 - Apakah transaksi berulang perlu dimajukan ke versi 0.2?
 - Apakah hanya rupiah yang didukung pada versi awal?
-- Apakah alokasi tujuan keuangan perlu dibatasi agar tidak melebihi saldo rekening?
 
 ## Keputusan yang Sudah Disepakati
 
@@ -305,6 +309,8 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Transfer adalah jenis transaksi tersendiri dan netral terhadap pemasukan/pengeluaran.
 - Rekening aktif dibagi menjadi **Saldo utama** dan **Simpanan & investasi**; Ikhtisar menampilkan Saldo utama, sedangkan arsip tetap merupakan status terpisah.
 - Tujuan keuangan dipisahkan dari rekening nyata.
+- Kenaikan alokasi tujuan dibatasi oleh saldo rekening yang belum dialokasikan saat operasi berlangsung. Transaksi nyata berikutnya tidak diblokir; saldo sumber yang kemudian kurang ditampilkan sebagai peringatan tanpa mengubah alokasi secara otomatis.
+- Tujuan Keuangan v1 menyimpan nominal alokasi saat ini per rekening, bukan histori kontribusi. Histori dan grafik perubahan progres memerlukan evolusi model terpisah.
 - Koreksi saldo harus dapat ditelusuri.
 - Backup dan restore merupakan bagian dari produk, bukan fitur tambahan opsional.
 - MVP didahulukan sebelum dashboard yang sangat fleksibel dan analitik lanjutan.
@@ -326,3 +332,5 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Pemasukan/pengeluaran mempunyai 1–50 alokasi kategori dengan satu alokasi sebagai default. Tombol plus menambah rincian kategori tanpa mengubah transaksi menjadi beberapa pergerakan saldo.
 - Total transaksi menjadi sumber perubahan saldo dan arus kas, sedangkan nominal alokasi menjadi sumber laporan kategori serta progres anggaran; keduanya wajib selalu berjumlah sama.
 - Fondasi alokasi kategori dan split transaction dikerjakan sebelum Anggaran v1 sehingga progres anggaran menghitung bagian kategori, bukan menggandakan total transaksi.
+- Navigasi utama memakai urutan **Ikhtisar**, **Riwayat**, **Kalender**, **Anggaran**, dan **Rekening**. **Ikhtisar** adalah label antarmuka; “dashboard” hanya istilah deskriptif pada dokumentasi.
+- Fitur baru tidak otomatis ditambahkan ke bottom navigation. Tujuan Keuangan dimulai dari kartu Ikhtisar dan menu, bukan sebagai tab keenam; hub **Rencana** baru dievaluasi jika pemakaian nyata membutuhkannya.

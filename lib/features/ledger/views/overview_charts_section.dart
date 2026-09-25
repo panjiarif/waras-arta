@@ -8,6 +8,13 @@ import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
 
 const _expenseColor = Color(0xFF9D492B);
+const _expenseChartHeight = 156.0;
+const _expenseChartTopInset = 28.0;
+const _expenseValueLabelHeight = 22.0;
+const _balanceChartHeight = 144.0;
+const _balanceChartVerticalInset = 12.0;
+const _balanceAxisGutter = 58.0;
+const _balanceAxisLabelHeight = 20.0;
 
 /// Recent trends shown on the Overview screen.
 ///
@@ -113,16 +120,10 @@ class _WeeklyExpenseCard extends StatelessWidget {
                 const SizedBox(height: 16),
                 RepaintBoundary(
                   child: ExcludeSemantics(
-                    child: CustomPaint(
-                      key: const Key('weekly-expense-bars'),
-                      painter: _ExpenseBarsPainter(
-                        values: points
-                            .map((point) => math.max(0, point.expense))
-                            .toList(growable: false),
-                        barColor: _expenseColor,
-                        gridColor: Theme.of(context).colorScheme.outlineVariant,
-                      ),
-                      child: const SizedBox(height: 132),
+                    child: _ExpenseBarsChart(
+                      values: points
+                          .map((point) => math.max(0, point.expense))
+                          .toList(growable: false),
                     ),
                   ),
                 ),
@@ -261,17 +262,10 @@ class _PrimaryBalanceTrendCard extends StatelessWidget {
                 const SizedBox(height: 16),
                 RepaintBoundary(
                   child: ExcludeSemantics(
-                    child: CustomPaint(
-                      key: const Key('primary-balance-line'),
-                      painter: _BalanceLinePainter(
-                        values: points
-                            .map((point) => point.balance)
-                            .toList(growable: false),
-                        lineColor: forest,
-                        gridColor: Theme.of(context).colorScheme.outlineVariant,
-                        zeroColor: Theme.of(context).colorScheme.outline,
-                      ),
-                      child: const SizedBox(height: 144),
+                    child: _BalanceLineChart(
+                      values: points
+                          .map((point) => point.balance)
+                          .toList(growable: false),
                     ),
                   ),
                 ),
@@ -336,6 +330,7 @@ class _BalanceLabels extends StatelessWidget {
               ),
             ),
           ),
+        const SizedBox(width: _balanceAxisGutter),
       ],
     );
   }
@@ -360,6 +355,142 @@ String _formatCompactDateRange(DateTime start, DateTime end) {
   return '${start.day} $startMonth ${start.year}–${end.day} $endMonth ${end.year}';
 }
 
+class _ExpenseBarsChart extends StatelessWidget {
+  const _ExpenseBarsChart({required this.values});
+
+  final List<int> values;
+
+  @override
+  Widget build(BuildContext context) {
+    final gridColor = Theme.of(context).colorScheme.outlineVariant;
+    return SizedBox(
+      key: const Key('weekly-expense-bars'),
+      height: _expenseChartHeight,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (values.isEmpty || constraints.maxWidth <= 0) {
+            return const SizedBox.shrink();
+          }
+          final maxValue = values.fold<int>(0, math.max);
+          final slotWidth = constraints.maxWidth / values.length;
+          final baseline = _expenseChartHeight - 1;
+          final plotHeight = baseline - _expenseChartTopInset;
+
+          return Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _ExpenseBarsPainter(
+                    values: values,
+                    barColor: _expenseColor,
+                    gridColor: gridColor,
+                  ),
+                ),
+              ),
+              for (var index = 0; index < values.length; index++)
+                Positioned(
+                  left: slotWidth * index,
+                  top: math.max(
+                    0,
+                    baseline -
+                        _expenseBarHeight(values[index], maxValue, plotHeight) -
+                        _expenseValueLabelHeight -
+                        3,
+                  ),
+                  width: slotWidth,
+                  height: _expenseValueLabelHeight,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _formatExactNumber(values[index]),
+                        key: ValueKey('expense-value-label-$index'),
+                        maxLines: 1,
+                        softWrap: false,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: _expenseColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BalanceLineChart extends StatelessWidget {
+  const _BalanceLineChart({required this.values});
+
+  final List<int> values;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = _BalanceScale.fromValues(values);
+    final colorScheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      key: const Key('primary-balance-line'),
+      height: _balanceChartHeight,
+      child: values.isEmpty
+          ? const SizedBox.shrink()
+          : LayoutBuilder(
+              builder: (context, constraints) => Stack(
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _BalanceLinePainter(
+                        values: values,
+                        scale: scale,
+                        lineColor: forest,
+                        gridColor: colorScheme.outlineVariant,
+                        zeroColor: colorScheme.outline,
+                      ),
+                    ),
+                  ),
+                  for (var index = 0; index < scale.axisTicks.length; index++)
+                    Positioned(
+                      right: 0,
+                      top:
+                          (scale.yFor(
+                                    scale.axisTicks[index],
+                                    _balanceChartHeight,
+                                  ) -
+                                  _balanceAxisLabelHeight / 2)
+                              .clamp(
+                                0,
+                                _balanceChartHeight - _balanceAxisLabelHeight,
+                              ),
+                      width: _balanceAxisGutter - 4,
+                      height: _balanceAxisLabelHeight,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            _formatCompactAxisValue(scale.axisTicks[index]),
+                            key: ValueKey('balance-axis-label-$index'),
+                            maxLines: 1,
+                            softWrap: false,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: colorScheme.outline),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
 class _ExpenseBarsPainter extends CustomPainter {
   const _ExpenseBarsPainter({
     required this.values,
@@ -379,12 +510,13 @@ class _ExpenseBarsPainter extends CustomPainter {
     final slotWidth = size.width / count;
     final barWidth = math.min(24.0, slotWidth * .56);
     final baseline = size.height - 1;
+    final plotHeight = math.max(0.0, baseline - _expenseChartTopInset);
     final gridPaint = Paint()
       ..color = gridColor
       ..strokeWidth = 1;
 
     for (var step = 0; step <= 2; step++) {
-      final y = baseline * step / 2;
+      final y = _expenseChartTopInset + plotHeight * step / 2;
       canvas.drawLine(
         Offset.zero.translate(0, y),
         Offset(size.width, y),
@@ -395,8 +527,7 @@ class _ExpenseBarsPainter extends CustomPainter {
     final radius = Radius.circular(math.min(5, barWidth / 2));
     for (var index = 0; index < count; index++) {
       final value = math.max(0, values[index]);
-      final normalized = maxValue == 0 ? 0.0 : value / maxValue;
-      final height = value == 0 ? 3.0 : math.max(5.0, normalized * baseline);
+      final height = _expenseBarHeight(value, maxValue, plotHeight);
       final left = slotWidth * index + (slotWidth - barWidth) / 2;
       final rect = Rect.fromLTWH(left, baseline - height, barWidth, height);
       canvas.drawRRect(
@@ -417,12 +548,14 @@ class _ExpenseBarsPainter extends CustomPainter {
 class _BalanceLinePainter extends CustomPainter {
   const _BalanceLinePainter({
     required this.values,
+    required this.scale,
     required this.lineColor,
     required this.gridColor,
     required this.zeroColor,
   });
 
   final List<int> values;
+  final _BalanceScale scale;
   final Color lineColor;
   final Color gridColor;
   final Color zeroColor;
@@ -430,44 +563,23 @@ class _BalanceLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (values.isEmpty || size.isEmpty) return;
-    const horizontalInset = 7.0;
-    const verticalInset = 7.0;
-    final plotWidth = math.max(0.0, size.width - horizontalInset * 2);
-    final plotHeight = math.max(0.0, size.height - verticalInset * 2);
-    var low = math.min(0, values.reduce(math.min)).toDouble();
-    var high = math.max(0, values.reduce(math.max)).toDouble();
-
-    if (low == high) {
-      low -= 1;
-      high += 1;
-    } else {
-      final padding = (high - low) * .08;
-      if (low < 0) low -= padding;
-      if (high > 0) high += padding;
-    }
-
-    double yFor(num value) =>
-        verticalInset + (high - value) / (high - low) * plotHeight;
-    double xFor(int index) => values.length == 1
-        ? size.width / 2
-        : horizontalInset + plotWidth * index / (values.length - 1);
+    final plotWidth = math.max(0.0, size.width - _balanceAxisGutter);
+    final slotWidth = plotWidth / values.length;
+    double yFor(num value) => scale.yFor(value, size.height);
+    double xFor(int index) => slotWidth * (index + .5);
 
     final gridPaint = Paint()
       ..color = gridColor
       ..strokeWidth = 1;
-    for (var step = 0; step <= 2; step++) {
-      final y = verticalInset + plotHeight * step / 2;
-      canvas.drawLine(
-        Offset(horizontalInset, y),
-        Offset(size.width - horizontalInset, y),
-        gridPaint,
-      );
+    for (final tick in scale.gridTicks) {
+      final y = yFor(tick);
+      canvas.drawLine(Offset(0, y), Offset(plotWidth, y), gridPaint);
     }
 
-    final zeroY = yFor(0).clamp(verticalInset, size.height - verticalInset);
+    final zeroY = yFor(0);
     canvas.drawLine(
-      Offset(horizontalInset, zeroY),
-      Offset(size.width - horizontalInset, zeroY),
+      Offset(0, zeroY),
+      Offset(plotWidth, zeroY),
       Paint()
         ..color = zeroColor
         ..strokeWidth = 1.25,
@@ -503,10 +615,99 @@ class _BalanceLinePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _BalanceLinePainter oldDelegate) =>
       !_sameValues(values, oldDelegate.values) ||
+      scale != oldDelegate.scale ||
       lineColor != oldDelegate.lineColor ||
       gridColor != oldDelegate.gridColor ||
       zeroColor != oldDelegate.zeroColor;
 }
+
+class _BalanceScale {
+  const _BalanceScale({required this.low, required this.high});
+
+  factory _BalanceScale.fromValues(List<int> values) {
+    if (values.isEmpty || values.every((value) => value == 0)) {
+      return const _BalanceScale(low: -1, high: 1);
+    }
+
+    final minimum = values.reduce(math.min);
+    final maximum = values.reduce(math.max);
+    if (minimum < 0 && maximum > 0) {
+      final magnitude = _niceMagnitude(
+        math.max(minimum.abs(), maximum.abs()).toDouble(),
+      );
+      return _BalanceScale(low: -magnitude, high: magnitude);
+    }
+    if (maximum <= 0) {
+      return _BalanceScale(
+        low: -_niceMagnitude(minimum.abs().toDouble()),
+        high: 0,
+      );
+    }
+    return _BalanceScale(low: 0, high: _niceMagnitude(maximum.toDouble()));
+  }
+
+  final double low;
+  final double high;
+
+  bool get isAllZeroScale => low == -1 && high == 1;
+
+  List<double> get gridTicks => [high, (high + low) / 2, low];
+
+  List<double> get axisTicks =>
+      isAllZeroScale ? const [0] : [high, (high + low) / 2, low];
+
+  double yFor(num value, double height) {
+    final plotHeight = math.max(0.0, height - _balanceChartVerticalInset * 2);
+    return _balanceChartVerticalInset +
+        (high - value) / (high - low) * plotHeight;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BalanceScale && low == other.low && high == other.high;
+
+  @override
+  int get hashCode => Object.hash(low, high);
+}
+
+double _expenseBarHeight(int value, int maxValue, double plotHeight) {
+  if (value <= 0 || maxValue <= 0) return 3;
+  return math.max(5.0, value / maxValue * plotHeight);
+}
+
+double _niceMagnitude(double value) {
+  if (value <= 0 || !value.isFinite) return 1;
+  final exponent = (math.log(value) / math.ln10).floor();
+  final base = math.pow(10, exponent).toDouble();
+  final normalized = value / base;
+  const candidates = [1.0, 1.2, 1.5, 2.0, 2.4, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0];
+  for (final candidate in candidates) {
+    if (normalized <= candidate) return candidate * base;
+  }
+  return 10 * base;
+}
+
+String _formatExactNumber(int value) =>
+    NumberFormat.decimalPattern('id_ID').format(value);
+
+String _formatCompactAxisValue(num value) {
+  if (value.abs() < .5) return '0';
+  final sign = value < 0 ? '-' : '';
+  final absolute = value.abs().toDouble();
+  if (absolute >= 1000000000) {
+    return '$sign${_formatCompactDecimal(absolute / 1000000000)} M';
+  }
+  if (absolute >= 1000000) {
+    return '$sign${_formatCompactDecimal(absolute / 1000000)} jt';
+  }
+  if (absolute >= 1000) {
+    return '$sign${_formatCompactDecimal(absolute / 1000)}k';
+  }
+  return '$sign${_formatCompactDecimal(absolute)}';
+}
+
+String _formatCompactDecimal(double value) =>
+    NumberFormat('0.#', 'id_ID').format(value);
 
 bool _sameValues(List<int> left, List<int> right) {
   if (identical(left, right)) return true;

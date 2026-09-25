@@ -30,6 +30,42 @@ void main() {
         findsOneWidget,
       );
     }
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('expense-value-label-0')))
+          .data,
+      '10.000',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('expense-value-label-1')))
+          .data,
+      '0',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('expense-value-label-6')))
+          .data,
+      '60.000',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('balance-axis-label-0')))
+          .data,
+      '2 jt',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('balance-axis-label-1')))
+          .data,
+      '1 jt',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('balance-axis-label-2')))
+          .data,
+      '0',
+    );
 
     final expenseSummary = tester.getSemantics(
       find.byKey(const Key('weekly-expense-chart-card-semantics')),
@@ -137,6 +173,96 @@ void main() {
 
     expect(find.byKey(const Key('primary-balance-line')), findsOneWidget);
     expect(find.text('Kini'), findsOneWidget);
+    expect(find.text('300k'), findsOneWidget);
+    expect(find.text('0'), findsWidgets);
+    expect(find.text('-300k'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('adapts right axis labels for thousands and millions', (
+    tester,
+  ) async {
+    final base = _snapshot();
+    await _pumpCharts(
+      tester,
+      _withBalances(base, const [
+        0,
+        100000,
+        220000,
+        300000,
+        410000,
+        500000,
+        580000,
+      ]),
+    );
+
+    expect(find.text('600k'), findsOneWidget);
+    expect(find.text('300k'), findsOneWidget);
+
+    await _pumpCharts(
+      tester,
+      _withBalances(base, const [
+        0,
+        400000,
+        800000,
+        1200000,
+        1600000,
+        2000000,
+        2300000,
+      ]),
+    );
+
+    expect(find.text('2,4 jt'), findsOneWidget);
+    expect(find.text('1,2 jt'), findsOneWidget);
+
+    await _pumpCharts(
+      tester,
+      _withBalances(base, const [
+        0,
+        400000000,
+        800000000,
+        1200000000,
+        1600000000,
+        2000000000,
+        2300000000,
+      ]),
+    );
+
+    expect(find.text('2,4 M'), findsOneWidget);
+    expect(find.text('1,2 M'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows sensible axis labels for negative and all-zero data', (
+    tester,
+  ) async {
+    final base = _snapshot();
+    await _pumpCharts(
+      tester,
+      _withBalances(base, const [
+        -300000,
+        -260000,
+        -200000,
+        -180000,
+        -100000,
+        -50000,
+        0,
+      ]),
+    );
+
+    expect(find.text('0'), findsWidgets);
+    expect(find.text('-150k'), findsOneWidget);
+    expect(find.text('-300k'), findsOneWidget);
+
+    await _pumpCharts(tester, _withBalances(base, const [0, 0, 0, 0, 0, 0, 0]));
+
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('balance-axis-label-0')))
+          .data,
+      '0',
+    );
+    expect(find.byKey(const ValueKey('balance-axis-label-1')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -170,9 +296,20 @@ void main() {
   testWidgets('does not overflow at 320 pixels and 200 percent text', (
     tester,
   ) async {
+    final base = _snapshot();
     await _pumpCharts(
       tester,
-      _snapshot(),
+      OverviewChartsSnapshot(
+        today: base.today,
+        dailyExpenses: [
+          DailyExpenseTotal(
+            day: base.dailyExpenses.first.day,
+            expense: 987654321,
+          ),
+          ...base.dailyExpenses.skip(1),
+        ],
+        balancePoints: base.balancePoints,
+      ),
       width: 320,
       textScaler: const TextScaler.linear(2),
     );
@@ -185,6 +322,7 @@ void main() {
       tester.getSize(find.byKey(const Key('primary-balance-chart-card'))).width,
       lessThanOrEqualTo(288),
     );
+    expect(find.text('987.654.321'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
@@ -267,5 +405,23 @@ OverviewChartsSnapshot _snapshot() => OverviewChartsSnapshot(
       balance: 1800000,
       isCurrent: true,
     ),
+  ],
+);
+
+OverviewChartsSnapshot _withBalances(
+  OverviewChartsSnapshot base,
+  List<int> balances,
+) => OverviewChartsSnapshot(
+  today: base.today,
+  dailyExpenses: base.dailyExpenses,
+  balancePoints: [
+    for (var index = 0; index < balances.length; index++)
+      PrimaryBalancePoint(
+        day: index == balances.length - 1
+            ? base.today
+            : DateTime(2026, 3 + index, 28),
+        balance: balances[index],
+        isCurrent: index == balances.length - 1,
+      ),
   ],
 );

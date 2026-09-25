@@ -191,6 +191,21 @@ class _CalendarRepository implements FinanceRepository {
   }
 
   @override
+  Stream<YearlySummarySnapshot> watchYearlySummary(int year) => Stream.value(
+    YearlySummarySnapshot(
+      year: year,
+      months: [
+        for (var month = 1; month <= 12; month++)
+          MonthlySummaryItem(
+            month: DateTime(year, month),
+            income: 0,
+            expense: 0,
+          ),
+      ],
+    ),
+  );
+
+  @override
   Stream<List<FinanceEntry>> watchDay(DateTime day) {
     lastDay = day;
     return Stream.value(const []);

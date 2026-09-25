@@ -11,8 +11,10 @@ import 'package:waras_arta/domain/budget.dart';
 import 'package:waras_arta/domain/finance.dart';
 import 'package:waras_arta/domain/finance_repository.dart';
 import 'package:waras_arta/features/calendar/view_models/calendar_view_model.dart';
+import 'package:waras_arta/features/ledger/view_models/ledger_view_model.dart';
 import 'package:waras_arta/features/ledger/views/category_selection_field.dart';
 import 'package:waras_arta/features/ledger/views/compact_transaction_row.dart';
+import 'package:waras_arta/features/summary/views/monthly_summary_screen.dart';
 
 import 'features/budgets/fake_budget_repository.dart';
 
@@ -182,16 +184,12 @@ void main() {
     final repository = _UiRepository(withAccounts: true);
     await pumpApp(tester, repository);
     await tester.scrollUntilVisible(
-      find.text(
-        'Tidak termasuk transfer dan penyesuaian saldo, termasuk saldo awal.',
-      ),
+      find.text('Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.'),
       180,
       scrollable: find.byType(Scrollable).last,
     );
     expect(
-      find.text(
-        'Tidak termasuk transfer dan penyesuaian saldo, termasuk saldo awal.',
-      ),
+      find.text('Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.'),
       findsOneWidget,
     );
     await tester.tap(find.byKey(const Key('accounts-tab')));
@@ -509,6 +507,63 @@ void main() {
       semanticsHandle.dispose();
     },
   );
+
+  testWidgets('cashflow area opens summary for the selected month', (
+    tester,
+  ) async {
+    final semanticsHandle = tester.ensureSemantics();
+    final today = DateTime(2026, 9, 25);
+    await pumpApp(
+      tester,
+      _UiRepository(
+        withAccounts: true,
+        monthIncome: 300000,
+        monthExpense: 100000,
+      ),
+      today: today,
+    );
+
+    final homeContext = tester.element(
+      find.byKey(const Key('balance-summary')),
+    );
+    ProviderScope.containerOf(homeContext)
+        .read(ledgerFilterProvider.notifier)
+        .showMonth(DateTime(2024, 8));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.'),
+      findsOneWidget,
+    );
+    final chart = find.byKey(const Key('monthly-cashflow-chart'));
+    expect(
+      find.byKey(const Key('monthly-cashflow-summary-affordance')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSemantics(chart),
+      isSemantics(
+        label:
+            'Arus kas bulan terpilih, pemasukan Rp 300.000, '
+            'pengeluaran Rp 100.000.',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
+
+    final link = find.byKey(const Key('monthly-cashflow-summary-link'));
+    await tester.ensureVisible(link);
+    await tester.tap(link);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ringkasan'), findsOneWidget);
+    final screen = tester.widget<MonthlySummaryScreen>(
+      find.byType(MonthlySummaryScreen),
+    );
+    expect(screen.initialMonth, DateTime(2024, 8));
+    expect(tester.takeException(), isNull);
+    semanticsHandle.dispose();
+  });
 
   testWidgets(
     'overview monthly totals stay side by side across a realistic phone width',
@@ -3434,6 +3489,26 @@ class _UiRepository implements FinanceRepository {
     if (failRead) throw StateError('Read failure');
     OverviewChartsSnapshot snapshot() =>
         overviewCharts ?? _defaultOverviewCharts(today);
+    yield snapshot();
+    await for (final _ in _changes.stream) {
+      yield snapshot();
+    }
+  }
+
+  @override
+  Stream<YearlySummarySnapshot> watchYearlySummary(int year) async* {
+    if (failRead) throw StateError('Read failure');
+    YearlySummarySnapshot snapshot() => YearlySummarySnapshot(
+      year: year,
+      months: [
+        for (var month = 1; month <= 12; month++)
+          MonthlySummaryItem(
+            month: DateTime(year, month),
+            income: monthIncome,
+            expense: monthExpense,
+          ),
+      ],
+    );
     yield snapshot();
     await for (final _ in _changes.stream) {
       yield snapshot();

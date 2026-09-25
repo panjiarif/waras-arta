@@ -16,6 +16,7 @@ import '../features/ledger/views/account_form_screen.dart';
 import '../features/ledger/views/entry_detail_screen.dart';
 import '../features/ledger/views/entry_form_screen.dart';
 import '../features/ledger/views/home_screen.dart';
+import '../features/summary/views/monthly_summary_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -27,6 +28,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'backup',
             builder: (context, state) => const BackupScreen(),
+          ),
+          GoRoute(
+            path: 'summary',
+            builder: (context, state) => MonthlySummaryScreen(
+              initialMonth: parseSummaryMonthQuery(
+                state.uri.queryParameters['month'],
+              ),
+            ),
           ),
           GoRoute(
             path: 'budgets',
@@ -170,5 +179,20 @@ DateTime? parseTransactionDateQuery(String? value, {DateTime? today}) {
   }
   final lastDay = dateOnly(today ?? DateTime.now());
   if (result.isBefore(DateTime(2000)) || result.isAfter(lastDay)) return null;
+  return result;
+}
+
+DateTime? parseSummaryMonthQuery(String? value, {DateTime? today}) {
+  if (value == null || !RegExp(r'^\d{4}-\d{2}$').hasMatch(value)) {
+    return null;
+  }
+  final parts = value.split('-').map(int.parse).toList(growable: false);
+  final result = DateTime(parts[0], parts[1]);
+  if (result.year != parts[0] || result.month != parts[1]) {
+    return null;
+  }
+  final now = today ?? DateTime.now();
+  final lastMonth = DateTime(now.year, now.month);
+  if (result.isBefore(DateTime(2000)) || result.isAfter(lastMonth)) return null;
   return result;
 }

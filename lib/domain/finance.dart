@@ -321,6 +321,39 @@ class OverviewChartsSnapshot {
       dailyExpenses.fold(0, (total, item) => total + item.expense);
 }
 
+class MonthlySummaryItem {
+  const MonthlySummaryItem({
+    required this.month,
+    required this.income,
+    required this.expense,
+  });
+
+  /// The first day of the represented civil month.
+  final DateTime month;
+  final int income;
+  final int expense;
+
+  int get net => income - expense;
+}
+
+class YearlySummarySnapshot {
+  YearlySummarySnapshot({
+    required this.year,
+    required List<MonthlySummaryItem> months,
+  }) : months = List.unmodifiable(months);
+
+  final int year;
+
+  /// Exactly twelve items in ascending order, from January through December.
+  /// Months without cash-flow entries are represented by zero-valued items.
+  final List<MonthlySummaryItem> months;
+
+  int get totalIncome => months.fold(0, (total, month) => total + month.income);
+  int get totalExpense =>
+      months.fold(0, (total, month) => total + month.expense);
+  int get net => totalIncome - totalExpense;
+}
+
 class CalendarDaySummary {
   const CalendarDaySummary({
     required this.day,

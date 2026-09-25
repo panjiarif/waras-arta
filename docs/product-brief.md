@@ -72,19 +72,29 @@ Dashboard memakai susunan tetap yang ringkas:
 3. Bagian **Tren terkini** yang memuat total pengeluaran per hari selama tujuh hari terakhir serta perubahan Saldo utama.
 4. Transaksi terbaru.
 
-Grafik pengeluaran selalu mencakup hari ini dan enam hari sebelumnya. Grafik saldo menampilkan enam titik akhir bulan yang sudah selesai serta satu titik paling kanan untuk saldo saat ini. Keduanya mengikuti tanggal hari ini dan tidak berubah ketika pemilih bulan ringkasan dipindahkan. Anggaran tetap dibuka melalui tab **Anggaran**, sehingga Ikhtisar tidak menduplikasi kartu Anggaran aktif.
+Seluruh area **Arus bulan dipilih** dapat ditekan untuk membuka Ringkasan Bulanan sebagai layar detail. Bulan yang sedang dipilih diteruskan sebagai konteks awal dan ditandai pada daftar ringkasan; fitur ini bukan tujuan keenam pada navigasi bawah.
+
+Grafik pengeluaran selalu mencakup hari ini dan enam hari sebelumnya. Grafik saldo menampilkan enam titik akhir bulan yang sudah selesai serta satu titik paling kanan untuk saldo saat ini. Keduanya mengikuti tanggal hari ini dan tidak berubah ketika pemilih bulan Ikhtisar dipindahkan. Anggaran tetap dibuka melalui tab **Anggaran**, sehingga Ikhtisar tidak menduplikasi kartu Anggaran aktif.
 
 Diagram lingkaran dan kedua grafik ringan tersebut merupakan mini visualisasi Ikhtisar. Kehadirannya tidak menandai fitur **Diagram** penuh atau analitik per kategori sebagai selesai.
 
 Versi awal menggunakan susunan tetap. Pengaturan kartu dan urutan dashboard direncanakan setelah fondasi utama stabil.
 
-### 2. Ringkasan
+### 2. Ringkasan Bulanan
 
-- Total pemasukan dan pengeluaran per bulan.
-- Selisih bersih pemasukan dan pengeluaran.
-- Perbandingan dengan periode sebelumnya.
-- Rincian berdasarkan kategori.
-- Transfer antar-rekening tidak dihitung sebagai pemasukan atau pengeluaran.
+Ringkasan Bulanan sudah aktif sebagai layar detail dari area **Arus bulan dipilih** pada Ikhtisar. Layar menyediakan pemilih tahun dari 2000 sampai tahun berjalan dan menyusun bulan terbaru ke terlama. Tahun berjalan hanya menampilkan bulan sampai bulan saat ini, sedangkan tahun lampau menampilkan seluruh dua belas bulan.
+
+Setiap bulan menampilkan:
+
+- diagram donat perbandingan pemasukan dan pengeluaran;
+- total pemasukan;
+- total pengeluaran;
+- selisih bersih pemasukan dikurangi pengeluaran; dan
+- keadaan kosong yang eksplisit ketika belum ada arus kas.
+
+Nilainya dihitung dari tanggal kejadian seluruh transaksi pemasukan/pengeluaran pada semua rekening, baik kelompok **Saldo utama** maupun **Simpanan & investasi**. Riwayat rekening yang sudah diarsipkan tetap disertakan. Transfer, penyesuaian saldo, dan saldo awal tidak dihitung sebagai arus kas.
+
+Perbandingan dengan periode sebelumnya serta rincian berdasarkan kategori tetap menjadi pengembangan berikutnya dan belum ditampilkan pada MVP aktif.
 
 ### 3. Transaksi
 
@@ -334,6 +344,7 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Schema v5 menambahkan `balanceGroup` rekening. Migrasi memberi seluruh rekening lama nilai `primary`, dan payload backup v3 membawa nilai `primary` atau `savingsInvestment` secara eksplisit.
 - Schema aktif v6 menambahkan Anggaran v1 dengan periode bulanan/tahunan/kustom, mapping multi-subkategori, progres dari allocation, serta penolakan overlap inklusif; payload backup v4 membawa seluruh data tersebut dan tetap dapat merestore v1–v3 dengan anggaran kosong.
 - Kalender dibatasi Januari 2000 sampai hari ini, menggunakan pekan Senin–Minggu, dan menyertakan seluruh jenis transaksi pada daftar harian.
+- Ringkasan Bulanan dibuka dari area **Arus bulan dipilih**, bukan melalui tujuan baru di navigasi bawah; agregatnya mencakup semua kelompok rekening dan riwayat rekening arsip, tetapi hanya jenis pemasukan/pengeluaran.
 - Backup manual menggunakan file `.warasarta` terenkripsi berbasis kata sandi, sedangkan restore memakai validasi, preview, konfirmasi replace-all, dan transaksi atomik.
 - Enkripsi backup tidak berarti database SQLite aktif sudah terenkripsi; perlindungan database kerja dan PIN/biometrik tetap keputusan terpisah.
 - Backup/restore harus diverifikasi pada Downloads, penyedia dokumen cloud, dan instalasi/perangkat berbeda sebelum aplikasi dipercaya sebagai satu-satunya catatan keuangan.

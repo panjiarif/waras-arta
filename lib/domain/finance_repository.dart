@@ -9,6 +9,7 @@ abstract interface class FinanceRepository {
   Stream<AccountDetails?> watchAccountDetails(int id);
   Stream<FinanceSnapshot> watchMonth(DateTime month, {int limit = 50});
   Stream<OverviewChartsSnapshot> watchOverviewCharts(DateTime today);
+  Stream<YearlySummarySnapshot> watchYearlySummary(int year);
   Stream<CalendarMonthSnapshot> watchCalendarMonth(DateTime month);
   Stream<List<FinanceEntry>> watchDay(DateTime day);
   Stream<FinanceEntry?> watchEntry(int id);

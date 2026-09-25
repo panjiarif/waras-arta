@@ -291,6 +291,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           count: primaryAccounts.length,
           income: data.income,
           expense: data.expense,
+          onCashflowTap: () {
+            final month = ref.read(ledgerFilterProvider).month;
+            final monthQuery =
+                '${month.year.toString().padLeft(4, '0')}-'
+                '${month.month.toString().padLeft(2, '0')}';
+            _open('/summary?month=$monthQuery');
+          },
         ),
         const SizedBox(height: 24),
       ] else ...[
@@ -664,12 +671,14 @@ class _BalanceCard extends StatelessWidget {
     required this.count,
     required this.income,
     required this.expense,
+    required this.onCashflowTap,
   });
 
   final int total;
   final int count;
   final int income;
   final int expense;
+  final VoidCallback onCashflowTap;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -722,6 +731,7 @@ class _BalanceCard extends StatelessWidget {
           income: income,
           expense: expense,
           wide: stacked,
+          onTap: onCashflowTap,
         );
 
         if (stacked) {
@@ -753,6 +763,7 @@ class _MonthlyCashflowChart extends StatelessWidget {
     required this.income,
     required this.expense,
     required this.wide,
+    required this.onTap,
   });
 
   static const _incomeColor = Color(0xFFA5D6A7);
@@ -762,6 +773,7 @@ class _MonthlyCashflowChart extends StatelessWidget {
   final int income;
   final int expense;
   final bool wide;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -777,67 +789,101 @@ class _MonthlyCashflowChart extends StatelessWidget {
     return Semantics(
       key: const Key('monthly-cashflow-chart'),
       container: true,
+      button: true,
+      onTap: onTap,
       label: semanticsLabel,
       child: ExcludeSemantics(
-        child: SizedBox(
-          width: wide ? 200 : 116,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'ARUS BULAN DIPILIH',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Color(0xFFD6E4D9),
-                  fontSize: 10,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              CustomPaint(
-                key: const Key('monthly-cashflow-pie'),
-                painter: _MonthlyCashflowPiePainter(
-                  income: safeIncome,
-                  expense: safeExpense,
-                  incomeColor: _incomeColor,
-                  expenseColor: _expenseColor,
-                  emptyColor: _emptyColor,
-                ),
-                child: SizedBox.square(
-                  dimension: 84,
-                  child: empty
-                      ? const Center(
-                          child: Text(
-                            '—',
-                            style: TextStyle(
-                              color: Color(0xFFD6E4D9),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        )
-                      : null,
-                ),
-              ),
-              const SizedBox(height: 9),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 10,
-                runSpacing: 4,
-                children: const [
-                  _CashflowLegend(
-                    legendKey: Key('monthly-cashflow-income'),
-                    color: _incomeColor,
-                    label: 'Pemasukan',
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            key: const Key('monthly-cashflow-summary-link'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              width: wide ? 200 : 116,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'ARUS BULAN DIPILIH',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFFD6E4D9),
+                      fontSize: 10,
+                      letterSpacing: 1,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  _CashflowLegend(
-                    legendKey: Key('monthly-cashflow-expense'),
-                    color: _expenseColor,
-                    label: 'Pengeluaran',
+                  const SizedBox(height: 8),
+                  CustomPaint(
+                    key: const Key('monthly-cashflow-pie'),
+                    painter: _MonthlyCashflowPiePainter(
+                      income: safeIncome,
+                      expense: safeExpense,
+                      incomeColor: _incomeColor,
+                      expenseColor: _expenseColor,
+                      emptyColor: _emptyColor,
+                    ),
+                    child: SizedBox.square(
+                      dimension: 84,
+                      child: empty
+                          ? const Center(
+                              child: Text(
+                                '—',
+                                style: TextStyle(
+                                  color: Color(0xFFD6E4D9),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 10,
+                    runSpacing: 4,
+                    children: const [
+                      _CashflowLegend(
+                        legendKey: Key('monthly-cashflow-income'),
+                        color: _incomeColor,
+                        label: 'Pemasukan',
+                      ),
+                      _CashflowLegend(
+                        legendKey: Key('monthly-cashflow-expense'),
+                        color: _expenseColor,
+                        label: 'Pengeluaran',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const FittedBox(
+                    key: Key('monthly-cashflow-summary-affordance'),
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Lihat ringkasan',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(width: 2),
+                        Icon(
+                          Icons.chevron_right,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1019,7 +1065,7 @@ class _MonthlyTotals extends StatelessWidget {
       ),
       const SizedBox(height: 4),
       const Text(
-        'Tidak termasuk transfer dan penyesuaian saldo, termasuk saldo awal.',
+        'Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.',
         style: TextStyle(fontSize: 12),
       ),
     ],

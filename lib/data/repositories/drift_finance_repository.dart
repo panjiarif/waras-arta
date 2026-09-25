@@ -144,6 +144,56 @@ class DriftFinanceRepository implements FinanceRepository {
   }
 
   @override
+  Stream<YearlySummarySnapshot> watchYearlySummary(int year) {
+    _validateYearForRead(year);
+    final start = year * 10000 + 101;
+    final end = (year + 1) * 10000 + 101;
+    return _db
+        .customSelect(
+          '''SELECT CAST(occurred_day / 100 AS INTEGER) AS month_key,
+               COALESCE(SUM(CASE WHEN kind = ? THEN amount ELSE 0 END), 0)
+                 AS income,
+               COALESCE(SUM(CASE WHEN kind = ? THEN amount ELSE 0 END), 0)
+                 AS expense
+             FROM ledger_entries
+             WHERE occurred_day >= ? AND occurred_day < ?
+               AND kind IN (?, ?)
+             GROUP BY month_key
+             ORDER BY month_key ASC''',
+          variables: [
+            Variable.withInt(EntryKind.income.index),
+            Variable.withInt(EntryKind.expense.index),
+            Variable.withInt(start),
+            Variable.withInt(end),
+            Variable.withInt(EntryKind.income.index),
+            Variable.withInt(EntryKind.expense.index),
+          ],
+          readsFrom: {_db.ledgerEntries},
+        )
+        .watch()
+        .map((rows) {
+          final totalsByMonth = <int, ({int income, int expense})>{
+            for (final row in rows)
+              row.read<int>('month_key'): (
+                income: row.read<int>('income'),
+                expense: row.read<int>('expense'),
+              ),
+          };
+          return YearlySummarySnapshot(
+            year: year,
+            months: [
+              for (var month = 1; month <= 12; month++)
+                MonthlySummaryItem(
+                  month: DateTime(year, month),
+                  income: totalsByMonth[year * 100 + month]?.income ?? 0,
+                  expense: totalsByMonth[year * 100 + month]?.expense ?? 0,
+                ),
+            ],
+          );
+        });
+  }
+
+  @override
   Stream<CalendarMonthSnapshot> watchCalendarMonth(DateTime month) {
     final normalizedMonth = _normalizeMonthForRead(month);
     final start = _dayKey(normalizedMonth);
@@ -1336,6 +1386,14 @@ class DriftFinanceRepository implements FinanceRepository {
       );
     }
     return normalized;
+  }
+
+  static void _validateYearForRead(int year) {
+    if (year < 2000 || year > DateTime.now().year) {
+      throw const FinanceValidationException(
+        'Tahun harus antara 2000 dan tahun ini.',
+      );
+    }
   }
 
   static void _validateEntryId(int id) {

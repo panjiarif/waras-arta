@@ -38,6 +38,8 @@ flutter test test/data/backup_file_gateway_test.dart
 flutter test test/data/backup_service_test.dart
 flutter test test/features/backup/backup_screen_test.dart
 flutter test test/features/budgets
+flutter test test/data/drift_yearly_summary_test.dart
+flutter test test/features/summary/monthly_summary_screen_test.dart
 git diff --check
 git status --short
 git diff
@@ -75,6 +77,15 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 12. Kembali ke hari ini. Pastikan bagian **Tren terkini** mempunyai tujuh batang dari enam hari sebelumnya sampai hari ini; hanya pengeluaran pada rentang itu yang dijumlahkan dan tanggal tanpa pengeluaran tetap tampil sebagai nol.
 13. Pindahkan pemilih bulan transaksi. Kedua grafik Tren terkini tidak berubah periodenya: diagram batang tetap tujuh hari terakhir, sedangkan diagram garis tetap enam akhir bulan yang sudah selesai ditambah saldo saat ini.
 14. Pastikan titik paling kanan diagram saldo sama dengan angka Saldo utama. Ubah kelompok rekening lalu periksa bahwa histori memakai kelompok rekening saat ini secara retroaktif; rekening Saldo utama yang sudah diarsipkan tetap menyumbang titik historisnya, tetapi tidak menambah saldo aktif saat ini.
+
+### Skenario Ringkasan Bulanan
+
+1. Pilih satu bulan lampau pada Ikhtisar, lalu tekan seluruh area **Arus bulan dipilih**. Pastikan layar **Ringkasan** terbuka sebagai rute detail, bukan tab keenam, dan kartu bulan asal diberi penanda.
+2. Gunakan tombol tahun sebelumnya/berikutnya. Pastikan batasnya Januari 2000 sampai tahun berjalan; tahun berjalan hanya menampilkan bulan sampai bulan saat ini, sedangkan tahun lampau menampilkan dua belas bulan dari Desember ke Januari.
+3. Pada satu bulan uji, catat pemasukan/pengeluaran di rekening Saldo utama dan Simpanan & investasi. Pastikan diagram donat, Pemasukan, Pengeluaran, dan Selisih menjumlahkan kedua kelompok dengan rumus selisih = pemasukan − pengeluaran.
+4. Buat rekening percobaan bersaldo nol, catat pemasukan lalu transfer seluruh saldonya ke rekening lain, kemudian arsipkan rekening tersebut. Ringkasan harus tetap menyertakan pemasukan historis rekening arsip, sedangkan transfer tidak menambah pemasukan atau pengeluaran.
+5. Buat rekening dengan saldo awal, lakukan transfer dan koreksi saldo pada bulan uji. Ketiganya tidak boleh masuk ringkasan karena saldo awal dan koreksi adalah penyesuaian; hanya header pemasukan/pengeluaran yang dihitung.
+6. Edit tanggal/nominal atau hapus satu pemasukan/pengeluaran. Pastikan bulan lama maupun baru bereaksi tanpa membuka ulang aplikasi. Periksa juga bulan kosong, kegagalan muat + coba lagi, tombol Kembali, lebar 320 px, dan text scale 200%.
 
 ### Skenario kelola rekening
 
@@ -140,6 +151,9 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Form rekening membedakan jenis dari kelompok saldo; default rekening baru adalah Saldo utama dan perubahan kelompok tidak membuat transaksi atau mengubah saldo.
 - [ ] Tab Rekening memisahkan Saldo utama, Simpanan & investasi, dan Rekening diarsipkan; Ikhtisar hanya menampilkan subtotal Saldo utama.
 - [ ] Kartu Saldo utama menampilkan diagram lingkaran arus bulan terpilih: hijau untuk total pemasukan dan merah untuk total pengeluaran; keadaan nol terbaca jelas, transfer/penyesuaian tidak masuk, dan tata letak tidak overflow pada lebar 320 px serta text scale 200%.
+- [ ] Seluruh area **Arus bulan dipilih** dapat ditekan dan membuka Ringkasan sebagai rute detail dengan bulan Ikhtisar ditandai; navigasi bawah tetap lima tujuan.
+- [ ] Pemilih tahun Ringkasan tidak melewati 2000/tahun berjalan; daftar terbaru-ke-terlama menampilkan donat, Pemasukan, Pengeluaran, Selisih, dan keadaan kosong tanpa overflow.
+- [ ] Ringkasan mencakup semua kelompok rekening serta riwayat rekening arsip, tetapi mengecualikan transfer, penyesuaian, dan saldo awal.
 - [ ] Setelah ringkasan bulanan, Ikhtisar menampilkan **Tren terkini**: tujuh batang pengeluaran harian dan tujuh titik saldo (enam akhir bulan sebelumnya ditambah saat ini), lalu transaksi terbaru; kartu Anggaran aktif tidak lagi ditampilkan.
 - [ ] Kedua grafik Tren terkini tidak mengikuti pemilih bulan, menangani data nol/negatif tanpa overflow, dan titik saldo saat ini sama dengan subtotal Saldo utama.
 - [ ] Transfer lintas kelompok mengubah kedua subtotal tetapi tetap netral terhadap total seluruh rekening dan arus kas.

@@ -97,11 +97,11 @@ lib/
             └── home_screen.dart
 ```
 
-Fitur rekening dan transaksi dikelompokkan sebagai satu irisan `ledger` untuk tahap awal. Kalender menjadi irisan tersendiri, tetapi memakai model ledger dan rute detail/form transaksi yang sama. Pecah menjadi fitur terpisah ketika tanggung jawabnya bertambah, bukan dengan menambahkan direktori kosong sejak awal. `go_router` menangani rute layar; [Riverpod](https://riverpod.dev/docs/introduction/getting_started) menghubungkan repository dan ViewModel agar dependensi bisa diganti saat pengujian.
+Fitur rekening dan transaksi dikelompokkan sebagai satu irisan `ledger` untuk tahap awal. Kalender menjadi irisan tersendiri, tetapi memakai model ledger dan rute detail/form transaksi yang sama; Ringkasan Bulanan memakai irisan `summary` dengan ViewModel/provider serta View tersendiri. Pecah menjadi fitur terpisah ketika tanggung jawabnya bertambah, bukan dengan menambahkan direktori kosong sejak awal. `go_router` menangani rute layar; [Riverpod](https://riverpod.dev/docs/introduction/getting_started) menghubungkan repository dan ViewModel agar dependensi bisa diganti saat pengujian.
 
 Navigasi utama HP menggunakan lima tujuan `NavigationBar`: Ikhtisar, Riwayat, Kalender, Anggaran, dan Rekening. Istilah **Ikhtisar** dipakai sebagai label produk berbahasa Indonesia; “dashboard” hanya menjelaskan fungsi layarnya, sedangkan “Ringkasan” tetap berarti laporan pemasukan/pengeluaran. Label navigasi menyesuaikan ruang tanpa membatasi text scale: selalu tampil pada ruang normal, hanya tujuan terpilih pada ruang sempit, dan dapat disembunyikan seluruhnya pada 320 px dengan text scale 200% sambil mempertahankan semantics.
 
-Kalender tidak membuka tumpukan rute baru ketika tanggal dipilih; detail transaksi dan form pencatatan tetap memakai rute ledger yang sudah ada. Daftar Anggaran ditanam sebagai isi tab tanpa `Scaffold` atau FAB bersarang dan dibaca dari provider anggarannya sendiri, sehingga error/loading `financeSnapshotProvider` tidak memblokirnya. Anggaran tidak diduplikasi sebagai kartu pada Ikhtisar karena sudah mempunyai tujuan navigasi utama. Rute `/budgets` tetap tersedia sebagai layar mandiri/deep link, sementara tambah/detail/edit didorong di atas layar asal. Backup/restore tetap merupakan alur pemeliharaan data dari menu aplikasi. Tujuan Keuangan tidak otomatis menjadi tujuan keenam; pintu awalnya direncanakan melalui Ikhtisar dan menu.
+Kalender tidak membuka tumpukan rute baru ketika tanggal dipilih; detail transaksi dan form pencatatan tetap memakai rute ledger yang sudah ada. Daftar Anggaran ditanam sebagai isi tab tanpa `Scaffold` atau FAB bersarang dan dibaca dari provider anggarannya sendiri, sehingga error/loading `financeSnapshotProvider` tidak memblokirnya. Anggaran tidak diduplikasi sebagai kartu pada Ikhtisar karena sudah mempunyai tujuan navigasi utama. Rute `/budgets` tetap tersedia sebagai layar mandiri/deep link, sementara tambah/detail/edit didorong di atas layar asal. Ringkasan Bulanan juga bukan tujuan navigasi bawah: area **Arus bulan dipilih** mendorong rute `/summary?month=YYYY-MM`, sehingga bulan Ikhtisar menjadi konteks awal yang ditandai pada layar detail. Backup/restore tetap merupakan alur pemeliharaan data dari menu aplikasi. Tujuan Keuangan tidak otomatis menjadi tujuan keenam; pintu awalnya direncanakan melalui Ikhtisar dan menu.
 
 ## Model saldo dan transaksi
 
@@ -164,6 +164,18 @@ Anggaran v1 mendukung CRUD untuk periode bulanan, tahunan kalender, dan rentang 
 `occurredAt` adalah tanggal kejadian yang dipilih pengguna. Alpha menerima tanggal 1 Januari 2000 sampai hari ini, belum transaksi terjadwal di masa depan. Di database tanggal ini disimpan sebagai bilangan `YYYYMMDD` (`occurredDay`), bukan timestamp yang dikonversi zona waktu. `createdAt` mencatat waktu entri dibuat dan tidak menentukan periode keuangan.
 
 Ringkasan bulanan, riwayat, dan kalender menggunakan tanggal kejadian. Saldo rekening dan saldo total tetap **sepanjang waktu**, tidak berubah menjadi saldo historis ketika pengguna berpindah bulan. Transaksi bertanggal lampau langsung memengaruhi saldo saat ini dan ringkasan bulan lampau.
+
+### Agregasi Ringkasan Bulanan
+
+`MonthlySummaryScreen` mengamati `yearlySummaryProvider(year)`, yang meneruskan tahun terpilih ke `FinanceRepository.watchYearlySummary`. Implementasi Drift menjalankan satu query agregasi reaktif atas `ledger_entries`: baris dikelompokkan berdasarkan bulan `occurredDay`, lalu hanya header berjenis pemasukan dan pengeluaran yang dijumlahkan. Hasil query dipetakan menjadi dua belas item bulan dengan nilai nol untuk bulan tanpa transaksi; View menyembunyikan bulan masa depan pada tahun berjalan dan mengurutkan bulan yang terlihat dari terbaru ke terlama.
+
+Query tidak memfilter rekening, `balanceGroup`, atau status arsip. Karena itu pemasukan/pengeluaran pada **Saldo utama**, **Simpanan & investasi**, dan riwayat rekening yang kemudian diarsipkan tetap termasuk. Transfer, penyesuaian saldo, dan saldo awal tidak masuk karena ketiganya bukan header pemasukan/pengeluaran. Total memakai nominal header tepat sekali, sehingga transaksi split tidak dihitung ganda; rincian kategori belum menjadi bagian Ringkasan Bulanan aktif.
+
+Aliran datanya tetap satu arah:
+
+`MonthlySummaryScreen -> yearlySummaryProvider -> FinanceRepository.watchYearlySummary -> query Drift reaktif -> YearlySummarySnapshot -> kartu bulan`
+
+Seluruh nilai tersebut merupakan data turunan dan tidak disimpan pada tabel baru. Fitur ini tidak mengubah schema database v6 maupun payload backup v4; setelah restore, ringkasan dihitung kembali dari ledger yang sudah dicadangkan.
 
 ### Agregasi Tren terkini
 

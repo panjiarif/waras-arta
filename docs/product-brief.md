@@ -67,13 +67,15 @@ Karakteristik pengguna:
 
 Dashboard yang menampilkan informasi penting secara cepat, seperti:
 
-- saldo utama yang siap digunakan;
-- ringkasan pemasukan dan pengeluaran bulan berjalan;
+- saldo utama yang siap digunakan, disertai diagram lingkaran ringkas pemasukan (hijau) dan pengeluaran (merah) untuk bulan yang dipilih;
+- ringkasan pemasukan dan pengeluaran bulan yang dipilih;
 - rekening;
 - transaksi terbaru;
 - progres anggaran;
 - progres tujuan keuangan;
 - grafik saldo atau arus kas.
+
+Diagram lingkaran pada kartu Saldo utama adalah mini visualisasi agregat bulanan dari `FinanceSnapshot`. Mini visualisasi ini tidak menandai fitur **Diagram** penuh atau analitik per kategori sebagai selesai.
 
 Versi awal menggunakan susunan tetap. Pengaturan kartu dan urutan dashboard direncanakan setelah fondasi utama stabil.
 
@@ -170,6 +172,8 @@ Fitur ini direncanakan setelah pencatatan transaksi dan anggaran stabil.
 
 ### 9. Diagram
 
+Diagram lingkaran pada kartu Saldo utama sudah menampilkan perbandingan agregat total pemasukan (hijau) dan pengeluaran (merah) untuk bulan yang dipilih. Diagram analisis berikut tetap direncanakan:
+
 - Tren pemasukan dan pengeluaran.
 - Komposisi pengeluaran berdasarkan kategori.
 - Perubahan saldo.
@@ -244,7 +248,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 - fondasi alokasi kategori transaksi dan alur split transaction *(sudah tersedia pada alpha saat ini)*;
 - anggaran multi-kategori bulanan/tahunan/kustom *(sudah tersedia pada alpha saat ini)*;
 - tujuan keuangan *(spesifikasi v1 tersedia; implementasi belum dimulai)*;
-- diagram;
+- diagram analisis lanjutan untuk tren, kategori, saldo, anggaran, dan tujuan;
 - kustomisasi dashboard;
 - pencarian dan filter lanjutan;
 - ekspor CSV.

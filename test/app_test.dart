@@ -359,6 +359,157 @@ void main() {
     },
   );
 
+  testWidgets(
+    'overview shows monthly cashflow pie beside the primary balance',
+    (tester) async {
+      final semanticsHandle = tester.ensureSemantics();
+      tester.view.physicalSize = const Size(480, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpApp(
+        tester,
+        _UiRepository(
+          withAccounts: true,
+          monthIncome: 300000,
+          monthExpense: 100000,
+        ),
+      );
+
+      final balance = find.byKey(const Key('balance-summary'));
+      final balanceTotal = find.byKey(const Key('primary-balance-total'));
+      final chart = find.byKey(const Key('monthly-cashflow-chart'));
+      final pie = find.byKey(const Key('monthly-cashflow-pie'));
+      final incomeLegend = find.byKey(const Key('monthly-cashflow-income'));
+      final expenseLegend = find.byKey(const Key('monthly-cashflow-expense'));
+
+      expect(find.descendant(of: balance, matching: chart), findsOneWidget);
+      expect(find.descendant(of: balance, matching: pie), findsOneWidget);
+      expect(
+        find.descendant(of: balance, matching: incomeLegend),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: balance, matching: expenseLegend),
+        findsOneWidget,
+      );
+      expect(tester.widget<CustomPaint>(pie), isA<CustomPaint>());
+      expect(
+        tester.getSemantics(chart).label,
+        'Arus kas bulan terpilih, pemasukan Rp 300.000, '
+        'pengeluaran Rp 100.000.',
+      );
+      expect(
+        tester.getCenter(chart).dx,
+        greaterThan(tester.getCenter(balanceTotal).dx),
+      );
+      expect(tester.takeException(), isNull);
+      semanticsHandle.dispose();
+    },
+  );
+
+  testWidgets('overview cashflow pie handles an empty month', (tester) async {
+    final semanticsHandle = tester.ensureSemantics();
+
+    await pumpApp(tester, _UiRepository(withAccounts: true));
+
+    final balance = find.byKey(const Key('balance-summary'));
+    final chart = find.byKey(const Key('monthly-cashflow-chart'));
+    expect(find.descendant(of: balance, matching: chart), findsOneWidget);
+    expect(find.byKey(const Key('monthly-cashflow-pie')), findsOneWidget);
+    expect(find.byKey(const Key('monthly-cashflow-income')), findsOneWidget);
+    expect(find.byKey(const Key('monthly-cashflow-expense')), findsOneWidget);
+    expect(
+      tester.getSemantics(chart).label,
+      'Arus kas bulan terpilih, belum ada pemasukan atau pengeluaran.',
+    );
+    expect(tester.takeException(), isNull);
+    semanticsHandle.dispose();
+  });
+
+  testWidgets('overview cashflow pie handles one-sided monthly totals', (
+    tester,
+  ) async {
+    final semanticsHandle = tester.ensureSemantics();
+    const cases = [
+      (
+        income: 90000,
+        expense: 0,
+        label:
+            'Arus kas bulan terpilih, pemasukan Rp 90.000, pengeluaran Rp 0.',
+      ),
+      (
+        income: 0,
+        expense: 45000,
+        label:
+            'Arus kas bulan terpilih, pemasukan Rp 0, pengeluaran Rp 45.000.',
+      ),
+    ];
+
+    for (final cashflow in cases) {
+      await pumpApp(
+        tester,
+        _UiRepository(
+          withAccounts: true,
+          monthIncome: cashflow.income,
+          monthExpense: cashflow.expense,
+        ),
+      );
+
+      final chart = find.byKey(const Key('monthly-cashflow-chart'));
+      expect(chart, findsOneWidget);
+      expect(find.byKey(const Key('monthly-cashflow-pie')), findsOneWidget);
+      expect(tester.getSemantics(chart).label, cashflow.label);
+      expect(tester.takeException(), isNull);
+    }
+    semanticsHandle.dispose();
+  });
+
+  testWidgets(
+    'overview cashflow pie fits narrow enlarged text and maximum amounts',
+    (tester) async {
+      final semanticsHandle = tester.ensureSemantics();
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final repository = _UiRepository(
+        withAccounts: true,
+        monthIncome: maxAmount,
+        monthExpense: maxAmount - 1,
+      );
+      repository.accounts[0] = _copyUiAccount(
+        repository.accounts[0],
+        balance: maxAmount,
+      );
+
+      await pumpApp(tester, repository);
+
+      final balance = find.byKey(const Key('balance-summary'));
+      final chart = find.byKey(const Key('monthly-cashflow-chart'));
+      expect(find.descendant(of: balance, matching: chart), findsOneWidget);
+      expect(find.byKey(const Key('monthly-cashflow-pie')), findsOneWidget);
+      expect(find.byKey(const Key('monthly-cashflow-income')), findsOneWidget);
+      expect(find.byKey(const Key('monthly-cashflow-expense')), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('primary-balance-total')))
+            .data,
+        'Rp 999.999.999.999',
+      );
+      expect(
+        tester.getSemantics(chart).label,
+        'Arus kas bulan terpilih, pemasukan Rp 999.999.999.999, '
+        'pengeluaran Rp 999.999.999.998.',
+      );
+      expect(tester.takeException(), isNull);
+      semanticsHandle.dispose();
+    },
+  );
+
   testWidgets('last active account stays active and shows archive error', (
     tester,
   ) async {
@@ -2522,12 +2673,15 @@ void main() {
       budgetRepository: budgets,
     );
 
+    final budgetSummary = find.byKey(const ValueKey('budget-summary-item-7'));
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('budget-summary-item-7')),
+      budgetSummary,
       180,
       scrollable: find.byType(Scrollable).last,
     );
-    await tester.tap(find.byKey(const ValueKey('budget-summary-item-7')));
+    await tester.ensureVisible(budgetSummary);
+    await tester.pumpAndSettle();
+    await tester.tap(budgetSummary);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('edit-budget')));
     await tester.pumpAndSettle();
@@ -2594,6 +2748,8 @@ class _UiRepository implements FinanceRepository {
   _UiRepository({
     bool withAccounts = false,
     this.failRead = false,
+    this.monthIncome = 0,
+    this.monthExpense = 0,
     FinanceEntry? entry,
   }) {
     if (withAccounts) {
@@ -2611,6 +2767,8 @@ class _UiRepository implements FinanceRepository {
   }
 
   final bool failRead;
+  final int monthIncome;
+  final int monthExpense;
   final accounts = <FinanceAccount>[];
   final entries = <FinanceEntry>[];
   final categoryGroups = _defaultCategoryGroups();
@@ -3046,8 +3204,8 @@ class _UiRepository implements FinanceRepository {
       FinanceSnapshot(
         accounts: accounts,
         entries: entries,
-        income: 0,
-        expense: 0,
+        income: monthIncome,
+        expense: monthExpense,
         totalEntries: entries.length,
       );
 

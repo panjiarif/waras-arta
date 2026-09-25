@@ -20,7 +20,7 @@ Yang tersedia:
 - Kalender bulanan Senin–Minggu dengan penanda pemasukan, pengeluaran, serta aktivitas lain per tanggal.
 - Memilih tanggal menampilkan total harian dan seluruh pemasukan, pengeluaran, transfer, serta penyesuaian pada hari tersebut.
 - Pencatatan tanggal lampau melalui kalender atau pemilih tanggal; tombol tambah pada tab kalender otomatis memakai tanggal yang dipilih.
-- Ikhtisar saldo utama yang siap digunakan dan ringkasan bulanan; subtotal Saldo utama serta Simpanan & investasi tersedia terpisah pada tab Rekening.
+- Ikhtisar saldo utama yang siap digunakan, diagram lingkaran arus bulan terpilih (hijau untuk pemasukan dan merah untuk pengeluaran), dan ringkasan bulanan; subtotal Saldo utama serta Simpanan & investasi tersedia terpisah pada tab Rekening.
 - Riwayat bulanan yang dimuat bertahap mulai 50 entri.
 - Detail transaksi beserta nama rekening, tanggal kejadian, catatan, waktu pencatatan, dan seluruh rincian split.
 - Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
@@ -35,7 +35,7 @@ Yang tersedia:
 
 Backup aktif memakai payload v4/schema v6 dan membawa `balanceGroup`, seluruh anggaran, pilihan subkategori, serta sequence terkait. Restore payload v1/schema 3, v2/schema 4, dan v3/schema 5 tetap didukung. Rekening dari v1/v2 dipetakan ke `Saldo utama`, v3 mempertahankan `balanceGroup`, dan seluruh format legacy dipulihkan dengan daftar anggaran kosong karena belum menyimpan data tersebut.
 
-Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, implementasi [Tujuan Keuangan v1](docs/financial-goals.md), diagram, dan utang/piutang. Kontrak Tujuan Keuangan sudah ditulis, tetapi schema/payload aktif belum memuatnya.
+Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, implementasi [Tujuan Keuangan v1](docs/financial-goals.md), diagram analisis lanjutan (tren, komposisi kategori, dan perubahan saldo), serta utang/piutang. Diagram lingkaran arus bulan pada kartu Saldo utama sudah tersedia. Kontrak Tujuan Keuangan sudah ditulis, tetapi schema/payload aktif belum memuatnya.
 
 Backup rutin adalah snapshot manual saat tombol ditekan; aplikasi belum menjadwalkan, mengunggah, merotasi, atau memverifikasi backup secara otomatis. Verifikasi tepat setelah penulisan hanya memastikan ukuran dan SHA-256 file yang baru disimpan cocok pada saat itu, bukan memantau retensi file berikutnya. Pengecualiannya adalah jalur restore: setelah pengguna mengonfirmasi restore, aplikasi wajib menyimpan safety backup terenkripsi dari data aktif dengan kata sandi yang sama sebelum melakukan replace-all. Jika penyimpanan dibatalkan, gagal, atau tidak lolos verifikasi penulisan, restore tidak dijalankan. Simpan beberapa file di luar HP, misalnya pada penyedia dokumen cloud dan komputer, lalu uji restore menggunakan data percobaan sebelum mengandalkannya. **Kata sandi backup tidak disimpan dan tidak dapat dipulihkan. Jika lupa, file tersebut tidak dapat direstore.**
 

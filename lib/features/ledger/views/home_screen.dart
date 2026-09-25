@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -281,7 +282,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
         const SizedBox(height: 16),
-        _BalanceCard(total: data.primaryBalance, count: primaryAccounts.length),
+        _BalanceCard(
+          total: data.primaryBalance,
+          count: primaryAccounts.length,
+          income: data.income,
+          expense: data.expense,
+        ),
         const SizedBox(height: 24),
       ] else ...[
         Text(
@@ -566,9 +572,17 @@ class _AccountSectionEmpty extends StatelessWidget {
 }
 
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({required this.total, required this.count});
+  const _BalanceCard({
+    required this.total,
+    required this.count,
+    required this.income,
+    required this.expense,
+  });
+
   final int total;
   final int count;
+  final int income;
+  final int expense;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -578,41 +592,266 @@ class _BalanceCard extends StatelessWidget {
       color: forest,
       borderRadius: BorderRadius.circular(24),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'SALDO UTAMA',
-          style: TextStyle(
-            color: Color(0xFFD6E4D9),
-            fontSize: 11,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            formatRupiah(total),
-            key: const Key('primary-balance-total'),
-            maxLines: 1,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.w700,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked =
+            constraints.maxWidth < 250 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.5;
+        final balance = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'SALDO UTAMA',
+              style: TextStyle(
+                color: Color(0xFFD6E4D9),
+                fontSize: 11,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w600,
+              ),
             ),
+            const SizedBox(height: 12),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                formatRupiah(total),
+                key: const Key('primary-balance-total'),
+                maxLines: 1,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              '$count rekening',
+              style: const TextStyle(color: Color(0xFFD6E4D9)),
+            ),
+          ],
+        );
+        final chart = _MonthlyCashflowChart(
+          income: income,
+          expense: expense,
+          wide: stacked,
+        );
+
+        if (stacked) {
+          return Column(
+            key: const Key('balance-summary-stacked'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              balance,
+              const SizedBox(height: 22),
+              Align(child: chart),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: balance),
+            const SizedBox(width: 16),
+            chart,
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _MonthlyCashflowChart extends StatelessWidget {
+  const _MonthlyCashflowChart({
+    required this.income,
+    required this.expense,
+    required this.wide,
+  });
+
+  static const _incomeColor = Color(0xFFA5D6A7);
+  static const _expenseColor = Color(0xFFFF8A80);
+  static const _emptyColor = Color(0x4DFFFFFF);
+
+  final int income;
+  final int expense;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeIncome = math.max(0, income);
+    final safeExpense = math.max(0, expense);
+    final empty = safeIncome == 0 && safeExpense == 0;
+    final semanticsLabel = empty
+        ? 'Arus kas bulan terpilih, belum ada pemasukan atau pengeluaran.'
+        : 'Arus kas bulan terpilih, pemasukan '
+              '${formatRupiah(safeIncome)}, pengeluaran '
+              '${formatRupiah(safeExpense)}.';
+
+    return Semantics(
+      key: const Key('monthly-cashflow-chart'),
+      container: true,
+      label: semanticsLabel,
+      child: ExcludeSemantics(
+        child: SizedBox(
+          width: wide ? 200 : 116,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'ARUS BULAN DIPILIH',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFFD6E4D9),
+                  fontSize: 10,
+                  letterSpacing: 1,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              CustomPaint(
+                key: const Key('monthly-cashflow-pie'),
+                painter: _MonthlyCashflowPiePainter(
+                  income: safeIncome,
+                  expense: safeExpense,
+                  incomeColor: _incomeColor,
+                  expenseColor: _expenseColor,
+                  emptyColor: _emptyColor,
+                ),
+                child: SizedBox.square(
+                  dimension: 84,
+                  child: empty
+                      ? const Center(
+                          child: Text(
+                            '—',
+                            style: TextStyle(
+                              color: Color(0xFFD6E4D9),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 9),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 10,
+                runSpacing: 4,
+                children: const [
+                  _CashflowLegend(
+                    legendKey: Key('monthly-cashflow-income'),
+                    color: _incomeColor,
+                    label: 'Pemasukan',
+                  ),
+                  _CashflowLegend(
+                    legendKey: Key('monthly-cashflow-expense'),
+                    color: _expenseColor,
+                    label: 'Pengeluaran',
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 20),
-        Text(
-          '$count rekening',
-          style: const TextStyle(color: Color(0xFFD6E4D9)),
+      ),
+    );
+  }
+}
+
+class _CashflowLegend extends StatelessWidget {
+  const _CashflowLegend({
+    required this.legendKey,
+    required this.color,
+    required this.label,
+  });
+
+  final Key legendKey;
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => FittedBox(
+    key: legendKey,
+    fit: BoxFit.scaleDown,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          child: const SizedBox.square(dimension: 8),
         ),
+        const SizedBox(width: 5),
+        Text(label, style: const TextStyle(color: Colors.white, fontSize: 10)),
       ],
     ),
   );
+}
+
+class _MonthlyCashflowPiePainter extends CustomPainter {
+  const _MonthlyCashflowPiePainter({
+    required this.income,
+    required this.expense,
+    required this.incomeColor,
+    required this.expenseColor,
+    required this.emptyColor,
+  });
+
+  final int income;
+  final int expense;
+  final Color incomeColor;
+  final Color expenseColor;
+  final Color emptyColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = math.min(size.width, size.height) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final total = income + expense;
+
+    if (total == 0) {
+      canvas.drawCircle(center, radius, Paint()..color = emptyColor);
+    } else if (income == 0) {
+      canvas.drawCircle(center, radius, Paint()..color = expenseColor);
+    } else if (expense == 0) {
+      canvas.drawCircle(center, radius, Paint()..color = incomeColor);
+    } else {
+      final incomeSweep = 2 * math.pi * (income / total);
+      const startAngle = -math.pi / 2;
+      canvas
+        ..drawArc(
+          rect,
+          startAngle,
+          incomeSweep,
+          true,
+          Paint()..color = incomeColor,
+        )
+        ..drawArc(
+          rect,
+          startAngle + incomeSweep,
+          2 * math.pi - incomeSweep,
+          true,
+          Paint()..color = expenseColor,
+        );
+    }
+
+    canvas.drawCircle(
+      center,
+      radius - .75,
+      Paint()
+        ..color = Colors.white.withValues(alpha: .35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MonthlyCashflowPiePainter oldDelegate) =>
+      income != oldDelegate.income ||
+      expense != oldDelegate.expense ||
+      incomeColor != oldDelegate.incomeColor ||
+      expenseColor != oldDelegate.expenseColor ||
+      emptyColor != oldDelegate.emptyColor;
 }
 
 class _MonthSelector extends ConsumerWidget {

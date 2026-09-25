@@ -61,12 +61,12 @@ Gunakan data percobaan. Backup/restore sudah tersedia dalam bentuk manual, tetap
 
 Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–4 berada pada bulan tersebut.
 
-1. Buat rekening **Bank Uji**, saldo awal Rp1.000.000, dan **Tunai Uji**, saldo awal Rp200.000; pilih kelompok **Saldo utama** untuk keduanya. Kartu Ikhtisar harus menunjukkan Saldo utama Rp1.200.000; pemasukan/pengeluaran tetap nol.
-2. Catat pemasukan Rp3.000.000 ke Bank Uji. Bank menjadi Rp4.000.000, pemasukan bulan itu Rp3.000.000.
-3. Catat pengeluaran Rp100.000 dari Bank Uji. Bank menjadi Rp3.900.000; pengeluaran Rp100.000 dan selisih bulanan Rp2.900.000.
-4. Transfer Rp150.000 dari Bank Uji ke Tunai Uji. Bank menjadi Rp3.750.000, Tunai Rp350.000, total Rp4.100.000. Ringkasan tetap pemasukan Rp3.000.000 dan pengeluaran Rp100.000. Riwayat hanya menampilkan satu transaksi transfer.
-5. Catat pengeluaran Rp50.000 dari Bank Uji pada bulan sebelumnya. Saldo saat ini menjadi Bank Rp3.700.000 dan total Rp4.050.000. Ringkasan bulan uji tetap sama; pengeluaran Rp50.000 hanya masuk ringkasan bulan sebelumnya.
-6. Berpindah ke bulan sebelumnya. Saldo total tetap Rp4.050.000 karena kartu saldo bukan laporan saldo historis.
+1. Buat rekening **Bank Uji**, saldo awal Rp1.000.000, dan **Tunai Uji**, saldo awal Rp200.000; pilih kelompok **Saldo utama** untuk keduanya. Kartu Ikhtisar harus menunjukkan Saldo utama Rp1.200.000; pemasukan/pengeluaran tetap nol dan diagram lingkaran arus bulan menampilkan keadaan kosong.
+2. Catat pemasukan Rp3.000.000 ke Bank Uji. Bank menjadi Rp4.000.000, pemasukan bulan itu Rp3.000.000; diagram lingkaran hanya berisi segmen hijau.
+3. Catat pengeluaran Rp100.000 dari Bank Uji. Bank menjadi Rp3.900.000; pengeluaran Rp100.000 dan selisih bulanan Rp2.900.000. Diagram lingkaran berisi segmen hijau untuk total Rp3.000.000 dan segmen merah untuk total Rp100.000.
+4. Transfer Rp150.000 dari Bank Uji ke Tunai Uji. Bank menjadi Rp3.750.000, Tunai Rp350.000, total Rp4.100.000. Ringkasan dan diagram lingkaran tetap menunjukkan pemasukan Rp3.000.000 serta pengeluaran Rp100.000 karena transfer tidak masuk arus bulanan. Riwayat hanya menampilkan satu transaksi transfer.
+5. Catat pengeluaran Rp50.000 dari Bank Uji pada bulan sebelumnya. Saldo saat ini menjadi Bank Rp3.700.000 dan total Rp4.050.000. Ringkasan dan diagram lingkaran bulan uji tetap sama; pengeluaran Rp50.000 hanya masuk ringkasan bulan sebelumnya.
+6. Berpindah ke bulan sebelumnya. Saldo total tetap Rp4.050.000 karena kartu saldo bukan laporan saldo historis; diagram lingkaran mengikuti bulan terpilih dan menampilkan pengeluaran Rp50.000 sebagai segmen merah tanpa pemasukan.
 7. Tutup aplikasi sepenuhnya lalu buka lagi. Rekening, transaksi, dan hasil perhitungan harus tetap sama. Jangan uninstall atau hapus data untuk tes buka ulang ini.
 8. Buka detail pengeluaran Rp100.000, ubah menjadi Rp125.000, lalu pastikan Bank, pengeluaran bulanan, dan selisih berubah tepat Rp25.000.
 9. Ubah tanggal pengeluaran tersebut ke bulan sebelumnya. Pastikan transaksi dan pengeluaran berpindah periode, sedangkan saldo saat ini tidak berubah lagi hanya karena perpindahan tanggal.
@@ -136,6 +136,7 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Nama rekening tetap dianggap duplikat tanpa membedakan huruf besar/kecil, termasuk jika nama yang sama dimiliki rekening arsip.
 - [ ] Form rekening membedakan jenis dari kelompok saldo; default rekening baru adalah Saldo utama dan perubahan kelompok tidak membuat transaksi atau mengubah saldo.
 - [ ] Tab Rekening memisahkan Saldo utama, Simpanan & investasi, dan Rekening diarsipkan; Ikhtisar hanya menampilkan subtotal Saldo utama.
+- [ ] Kartu Saldo utama menampilkan diagram lingkaran arus bulan terpilih: hijau untuk total pemasukan dan merah untuk total pengeluaran; keadaan nol terbaca jelas, transfer/penyesuaian tidak masuk, dan tata letak tidak overflow pada lebar 320 px serta text scale 200%.
 - [ ] Transfer lintas kelompok mengubah kedua subtotal tetapi tetap netral terhadap total seluruh rekening dan arus kas.
 - [ ] Transfer ke rekening yang sama tidak dapat disimpan; alur transfer dengan kurang dari dua rekening memberi arahan yang jelas.
 - [ ] Form pemasukan hanya menawarkan kategori pemasukan dan form pengeluaran hanya kategori pengeluaran.

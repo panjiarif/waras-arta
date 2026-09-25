@@ -390,31 +390,28 @@ class _DayTotals extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final incomeCard = _DayMetric(
-              label: 'Pemasukan',
-              value: income,
-              color: forest,
-            );
-            final expenseCard = _DayMetric(
-              label: 'Pengeluaran',
-              value: expense,
-              color: const Color(0xFF9D492B),
-            );
-            if (constraints.maxWidth < 350) {
-              return Column(
-                children: [incomeCard, const SizedBox(height: 10), expenseCard],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(child: incomeCard),
-                const SizedBox(width: 10),
-                Expanded(child: expenseCard),
-              ],
-            );
-          },
+        Row(
+          key: const Key('calendar-day-totals-row'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _DayMetric(
+                metricKey: const Key('calendar-day-metric-income'),
+                label: 'Pemasukan',
+                value: income,
+                color: forest,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _DayMetric(
+                metricKey: const Key('calendar-day-metric-expense'),
+                label: 'Pengeluaran',
+                value: expense,
+                color: const Color(0xFF9D492B),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         Text(
@@ -435,34 +432,60 @@ class _DayTotals extends StatelessWidget {
 
 class _DayMetric extends StatelessWidget {
   const _DayMetric({
+    required this.metricKey,
     required this.label,
     required this.value,
     required this.color,
   });
 
+  final Key metricKey;
   final String label;
   final int value;
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 12)),
-          const SizedBox(height: 4),
-          Text(
-            formatRupiah(value),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+  Widget build(BuildContext context) {
+    final formattedValue = formatRupiah(value);
+    return Semantics(
+      key: metricKey,
+      container: true,
+      label: '$label, $formattedValue',
+      child: ExcludeSemantics(
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    formattedValue,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(color: color, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _DayEntries extends StatelessWidget {

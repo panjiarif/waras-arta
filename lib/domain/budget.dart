@@ -321,6 +321,12 @@ class BudgetListSnapshot {
 
   final List<BudgetProgress> items;
   final List<BudgetRangeGroup> groups;
+
+  int get totalLimit =>
+      items.fold(0, (total, item) => total + item.budget.limitAmount);
+
+  int get totalSpent =>
+      items.fold(0, (total, item) => total + item.spentAmount);
 }
 
 class BudgetDraft {

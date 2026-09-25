@@ -138,7 +138,13 @@ Daftar dikelompokkan berdasarkan rentang tanggal yang sama. Label kelompok ditur
 
 Jenis tetap ditampilkan sebagai badge teks **Bulanan**, **Tahunan**, atau **Kustom** pada setiap kartu. Dengan demikian periode kustom yang persis menyerupai bulan/tahun tidak kehilangan identitasnya.
 
-Total hanya boleh dihitung di dalam kelompok dengan rentang persis sama: `groupLimit = Σ limitAmount`, `groupSpent = Σ spentAmount`, dan `groupNet = groupLimit - groupSpent`. Ringkasan kelompok juga menyebut jumlah kartu hampir habis, habis, dan terlampaui agar nilai net tidak menyamarkan masalah. Jangan menampilkan satu total global yang mencampur periode berdurasi berbeda.
+Total yang menjadi sumber kebenaran tetap dihitung di dalam kelompok dengan rentang persis sama: `groupLimit = Σ limitAmount`, `groupSpent = Σ spentAmount`, dan `groupNet = groupLimit - groupSpent`. Hanya total kelompok ini yang boleh menghasilkan sisa, kelebihan, persentase, progress, atau status periode. Ringkasan kelompok juga menyebut jumlah kartu hampir habis, habis, dan terlampaui agar nilai net tidak menyamarkan masalah.
+
+Daftar boleh menampilkan agregat presentasi dari seluruh hasil filter dengan judul **Total anggaran yang tampil**. Teks utamanya adalah **Terpakai <nominal> dari batas <nominal>**, diikuti **<N> anggaran · <M> rentang**. Nilai tersebut adalah `listSpent = Σ spentAmount` dan `listLimit = Σ limitAmount` atas item yang benar-benar tampil setelah filter status serta jenis diterapkan.
+
+Jika seluruh item mempunyai satu rentang persis sama, agregat wajib menampilkan label periode kelompok tersebut. Karena agregat ini ekuivalen dengan total kelompok, UI boleh menampilkan persentase, progress bar, sisa, kelebihan, serta status yang diturunkan dari total kelompok dengan rentang persis sama.
+
+Jika terdapat lebih dari satu rentang, agregat tidak boleh menampilkan persentase, progress bar, status gabungan, sisa, atau kelebihan karena nilai net lintas rentang dapat menyamarkan anggaran yang terlampaui. Tampilkan catatan dengan teks persis: **Mencakup <M> rentang berbeda. Total ini hanya gabungan hasil filter, bukan sisa satu periode.**
 
 Pada tab Aktif, peringkat kelompok mengikuti status terburuk anggotanya: terlampaui, habis, hampir habis, lalu normal; tie-breaker berikutnya adalah `endDay`, `startDay`, lalu ID terkecil. Kartu dalam kelompok memakai peringkat status yang sama, lalu `normalizedName` dan ID. Kelompok Mendatang diurutkan menurut `startDay`, `endDay`, lalu ID terkecil; Riwayat menurut `endDay` dan `startDay` menurun, lalu ID terkecil. Urutan ini wajib deterministik.
 
@@ -180,7 +186,7 @@ Model minimum:
 - `BudgetProgress`: terpakai serta getter sisa, terlampaui, rasio aktual, dan rasio visual;
 - `BudgetConflict`: ID kategori, ID/nama anggaran penyebab, dan periodenya;
 - `BudgetListFilter`: status tanggal, jenis opsional, dan tanggal referensi;
-- `BudgetListSnapshot`: daftar progres dan kelompok rentang, tanpa total global lintas rentang;
+- `BudgetListSnapshot`: daftar progres dan kelompok rentang, dengan getter `totalSpent` serta `totalLimit` yang menjumlahkan item hasil filter hanya untuk agregat presentasi **Total anggaran yang tampil**; jumlah anggaran memakai `items.length` dan jumlah rentang memakai `groups.length`, sedangkan sisa/kelebihan/status tetap hanya tersedia pada kelompok dengan rentang persis sama;
 - `BudgetDraft`: periode, nama, batas, dan set ID subkategori;
 - `BudgetUpdateDraft`: nama, batas, dan set ID subkategori tanpa periode.
 
@@ -425,7 +431,7 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 - tie-breaker kelompok/kartu dan ranking global dua item Ikhtisar deterministik;
 - satu kategori dapat menjelaskan beberapa `BudgetConflict` tanpa memotong sumber konflik;
 - dashboard memakai hari ini, bukan bulan transaksi yang sedang dipilih;
-- tidak ada total global yang mencampur rentang berbeda;
+- agregat **Total anggaran yang tampil** mengikuti filter status/jenis serta menghitung `totalSpent`, `totalLimit`, jumlah anggaran, dan jumlah rentang dengan tepat; hasil dengan satu rentang persis sama wajib menampilkan label periode serta boleh memakai persentase/progress/sisa/kelebihan/status kelompok yang ekuivalen, sedangkan hasil campuran wajib tanpa persentase/progress/status/sisa/kelebihan dan menampilkan teks persis **Mencakup <M> rentang berbeda. Total ini hanya gabungan hasil filter, bukan sisa satu periode.**;
 - nominal dan status overspending tidak hanya dibedakan lewat warna;
 - lebar 320 px dan text scale 200% tidak overflow;
 - perubahan hari, resume aplikasi, atau perubahan zona waktu menghitung ulang `referenceDay` lokal dan status;

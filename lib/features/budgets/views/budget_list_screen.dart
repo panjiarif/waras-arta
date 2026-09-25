@@ -248,7 +248,10 @@ class _BudgetGroupList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = <Widget>[];
+    final rows = <Widget>[
+      BudgetListSummaryCard(snapshot: snapshot),
+      const SizedBox(height: 16),
+    ];
     for (final group in snapshot.groups) {
       rows.add(BudgetRangeHeader(group: group));
       rows.add(const SizedBox(height: 8));

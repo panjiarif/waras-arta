@@ -264,6 +264,26 @@ void main() {
     expect(() => january.items.clear(), throwsUnsupportedError);
   });
 
+  test('list snapshot totals every visible item across range groups', () {
+    final snapshot = BudgetListSnapshot.fromItems([
+      _progress(id: 1, limit: 100, spent: 25),
+      _progress(
+        id: 2,
+        limit: 300,
+        spent: 175,
+        period: BudgetPeriod.yearly(2024),
+      ),
+    ]);
+
+    expect(snapshot.groups, hasLength(2));
+    expect(snapshot.totalLimit, 400);
+    expect(snapshot.totalSpent, 200);
+
+    final empty = BudgetListSnapshot.fromItems(const []);
+    expect(empty.totalLimit, 0);
+    expect(empty.totalSpent, 0);
+  });
+
   test('filter equality, hash, and copyWith include every field', () {
     const first = BudgetListFilter(
       temporalStatus: BudgetTemporalStatus.active,

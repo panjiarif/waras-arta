@@ -282,10 +282,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ),
         const SizedBox(height: 16),
         _BalanceCard(total: data.primaryBalance, count: primaryAccounts.length),
-        const SizedBox(height: 16),
-        ActiveBudgetSummaryCard(
-          onViewAll: () => setState(() => _tab = _HomeTab.budgets),
-        ),
         const SizedBox(height: 24),
       ] else ...[
         Text(
@@ -308,8 +304,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         if (_tab == _HomeTab.overview) ...[
           _MonthlyTotals(data: data),
           const SizedBox(height: 24),
+          ActiveBudgetSummaryCard(
+            onViewAll: () => setState(() => _tab = _HomeTab.budgets),
+          ),
+          const SizedBox(height: 24),
           const Text(
             'Catatan terbaru',
+            key: Key('recent-transactions-heading'),
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
@@ -571,6 +572,7 @@ class _BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
+    key: const Key('balance-summary'),
     padding: const EdgeInsets.all(24),
     decoration: BoxDecoration(
       color: forest,
@@ -605,7 +607,7 @@ class _BalanceCard extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         Text(
-          '$count rekening • tidak termasuk simpanan & investasi',
+          '$count rekening',
           style: const TextStyle(color: Color(0xFFD6E4D9)),
         ),
       ],
@@ -656,6 +658,7 @@ class _MonthlyTotals extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
+    key: const Key('monthly-totals'),
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       LayoutBuilder(

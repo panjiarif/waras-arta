@@ -55,6 +55,127 @@ String budgetUsageText(BudgetProgress progress) {
   };
 }
 
+class BudgetListSummaryCard extends StatelessWidget {
+  const BudgetListSummaryCard({super.key, required this.snapshot});
+
+  final BudgetListSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalSpent = snapshot.totalSpent;
+    final totalLimit = snapshot.totalLimit;
+    final percentage = totalLimit == 0 ? 0 : totalSpent * 100 ~/ totalLimit;
+    final visualRatio = totalLimit == 0
+        ? 0.0
+        : (totalSpent / totalLimit).clamp(0.0, 1.0).toDouble();
+    final mixedRanges = snapshot.groups.length > 1;
+    final singleRangeLabel = mixedRanges
+        ? null
+        : budgetGroupLabel(
+            snapshot.groups.single.startDay,
+            snapshot.groups.single.endDay,
+          );
+    final contextLabel = mixedRanges
+        ? '${snapshot.items.length} anggaran • '
+              '${snapshot.groups.length} rentang periode'
+        : '${snapshot.items.length} anggaran • $singleRangeLabel';
+    final semanticsLabel = mixedRanges
+        ? 'Total anggaran yang tampil, '
+              '${snapshot.items.length} anggaran, '
+              '${snapshot.groups.length} rentang periode, '
+              'terpakai ${formatRupiah(totalSpent)} dari batas '
+              '${formatRupiah(totalLimit)}. '
+              'Mencakup ${snapshot.groups.length} rentang berbeda. '
+              'Total ini hanya gabungan hasil filter, bukan sisa satu periode.'
+        : 'Total anggaran yang tampil, '
+              '${snapshot.items.length} anggaran, '
+              '1 rentang periode, $singleRangeLabel, '
+              'terpakai ${formatRupiah(totalSpent)} dari batas '
+              '${formatRupiah(totalLimit)}, $percentage persen.';
+
+    return Semantics(
+      key: const Key('budget-list-summary-semantics'),
+      container: true,
+      label: semanticsLabel,
+      child: ExcludeSemantics(
+        child: Card(
+          key: const Key('budget-list-summary'),
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Total anggaran yang tampil',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  contextLabel,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Terpakai / batas',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 4),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatRupiah(totalSpent),
+                        key: const Key('budget-list-summary-spent'),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text('/'),
+                      ),
+                      Text(
+                        formatRupiah(totalLimit),
+                        key: const Key('budget-list-summary-limit'),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!mixedRanges) ...[
+                  const SizedBox(height: 10),
+                  LinearProgressIndicator(
+                    key: const Key('budget-list-summary-progress'),
+                    value: visualRatio,
+                    minHeight: 8,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Mencakup ${snapshot.groups.length} rentang berbeda. '
+                    'Total ini hanya gabungan hasil filter, bukan sisa satu periode.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class BudgetProgressCard extends StatelessWidget {
   const BudgetProgressCard({
     super.key,

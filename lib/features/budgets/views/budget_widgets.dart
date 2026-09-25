@@ -55,127 +55,6 @@ String budgetUsageText(BudgetProgress progress) {
   };
 }
 
-class BudgetListSummaryCard extends StatelessWidget {
-  const BudgetListSummaryCard({super.key, required this.snapshot});
-
-  final BudgetListSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    final totalSpent = snapshot.totalSpent;
-    final totalLimit = snapshot.totalLimit;
-    final percentage = totalLimit == 0 ? 0 : totalSpent * 100 ~/ totalLimit;
-    final visualRatio = totalLimit == 0
-        ? 0.0
-        : (totalSpent / totalLimit).clamp(0.0, 1.0).toDouble();
-    final mixedRanges = snapshot.groups.length > 1;
-    final singleRangeLabel = mixedRanges
-        ? null
-        : budgetGroupLabel(
-            snapshot.groups.single.startDay,
-            snapshot.groups.single.endDay,
-          );
-    final contextLabel = mixedRanges
-        ? '${snapshot.items.length} anggaran • '
-              '${snapshot.groups.length} rentang periode'
-        : '${snapshot.items.length} anggaran • $singleRangeLabel';
-    final semanticsLabel = mixedRanges
-        ? 'Total anggaran yang tampil, '
-              '${snapshot.items.length} anggaran, '
-              '${snapshot.groups.length} rentang periode, '
-              'terpakai ${formatRupiah(totalSpent)} dari batas '
-              '${formatRupiah(totalLimit)}. '
-              'Mencakup ${snapshot.groups.length} rentang berbeda. '
-              'Total ini hanya gabungan hasil filter, bukan sisa satu periode.'
-        : 'Total anggaran yang tampil, '
-              '${snapshot.items.length} anggaran, '
-              '1 rentang periode, $singleRangeLabel, '
-              'terpakai ${formatRupiah(totalSpent)} dari batas '
-              '${formatRupiah(totalLimit)}, $percentage persen.';
-
-    return Semantics(
-      key: const Key('budget-list-summary-semantics'),
-      container: true,
-      label: semanticsLabel,
-      child: ExcludeSemantics(
-        child: Card(
-          key: const Key('budget-list-summary'),
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Total anggaran yang tampil',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  contextLabel,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'Terpakai / batas',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 4),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        formatRupiah(totalSpent),
-                        key: const Key('budget-list-summary-spent'),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('/'),
-                      ),
-                      Text(
-                        formatRupiah(totalLimit),
-                        key: const Key('budget-list-summary-limit'),
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (!mixedRanges) ...[
-                  const SizedBox(height: 10),
-                  LinearProgressIndicator(
-                    key: const Key('budget-list-summary-progress'),
-                    value: visualRatio,
-                    minHeight: 8,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Mencakup ${snapshot.groups.length} rentang berbeda. '
-                    'Total ini hanya gabungan hasil filter, bukan sisa satu periode.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class BudgetProgressCard extends StatelessWidget {
   const BudgetProgressCard({
     super.key,
@@ -362,71 +241,145 @@ class BudgetRangeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final periodLabel = budgetGroupLabel(group.startDay, group.endDay);
+    final kindLabel = group.periodKinds.map((kind) => kind.label).join(' + ');
     final exceeded = group.exceededAmount;
-    final issueCount =
-        group.countForStatus(BudgetUsageStatus.nearLimit) +
-        group.countForStatus(BudgetUsageStatus.exhausted) +
-        group.countForStatus(BudgetUsageStatus.exceeded);
+    final issueCount = group.attentionCount;
     final netLabel = exceeded > 0
         ? 'Melebihi ${formatRupiah(exceeded)}'
         : 'Sisa ${formatRupiah(group.remainingAmount)}';
+    final statusColor = exceeded > 0
+        ? Theme.of(context).colorScheme.error
+        : issueCount > 0
+        ? const Color(0xFF9D5A00)
+        : forest;
+    final semanticsLabel = [
+      periodLabel,
+      kindLabel,
+      '${group.items.length} anggaran',
+      'Terpakai ${formatRupiah(group.totalSpent)} dari batas '
+          '${formatRupiah(group.totalLimit)}',
+      '${group.percentage} persen',
+      netLabel,
+      if (issueCount > 0) '$issueCount perlu perhatian',
+    ].join(', ');
 
-    return Container(
-      key: ValueKey('budget-group-${group.startDay}-${group.endDay}'),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final stacked =
-              constraints.maxWidth < 300 ||
-              MediaQuery.textScalerOf(context).scale(1) > 1.3;
-          final identity = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Semantics(
+      key: ValueKey('budget-group-semantics-${group.startDay}-${group.endDay}'),
+      container: true,
+      label: semanticsLabel,
+      child: ExcludeSemantics(
+        child: Container(
+          key: ValueKey('budget-group-${group.startDay}-${group.endDay}'),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                budgetGroupLabel(group.startDay, group.endDay),
+                periodLabel,
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 3),
               Text(
-                '${group.items.length} anggaran'
-                '${issueCount > 0 ? ' · $issueCount perlu perhatian' : ''}',
+                '$kindLabel • ${group.items.length} anggaran',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-            ],
-          );
-          final totals = Column(
-            crossAxisAlignment: stacked
-                ? CrossAxisAlignment.start
-                : CrossAxisAlignment.end,
-            children: [
+              if (issueCount > 0) ...[
+                const SizedBox(height: 3),
+                Text(
+                  '$issueCount perlu perhatian',
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
               Text(
-                'Terpakai ${formatRupiah(group.totalSpent)} dari '
-                '${formatRupiah(group.totalLimit)}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                'Terpakai / batas',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-              const SizedBox(height: 2),
-              Text(netLabel),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      formatRupiah(group.totalSpent),
+                      key: ValueKey(
+                        'budget-group-spent-${group.startDay}-${group.endDay}',
+                      ),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('/'),
+                    ),
+                    Text(
+                      formatRupiah(group.totalLimit),
+                      key: ValueKey(
+                        'budget-group-limit-${group.startDay}-${group.endDay}',
+                      ),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              LinearProgressIndicator(
+                key: ValueKey(
+                  'budget-group-progress-${group.startDay}-${group.endDay}',
+                ),
+                value: group.visualRatio,
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(8),
+                color: statusColor,
+                backgroundColor: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                runAlignment: WrapAlignment.spaceBetween,
+                spacing: 12,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    '${group.percentage}%',
+                    key: ValueKey(
+                      'budget-group-percentage-${group.startDay}-${group.endDay}',
+                    ),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    netLabel,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ],
-          );
-          if (stacked) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [identity, const SizedBox(height: 10), totals],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: identity),
-              const SizedBox(width: 16),
-              Flexible(child: totals),
-            ],
-          );
-        },
+          ),
+        ),
       ),
     );
   }

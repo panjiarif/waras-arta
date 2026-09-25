@@ -254,6 +254,14 @@ void main() {
     expect(january.items.map((item) => item.budget.id), [1, 2]);
     expect(january.totalLimit, 150);
     expect(january.totalSpent, 160);
+    expect(january.periodKinds, [
+      BudgetPeriodKind.monthly,
+      BudgetPeriodKind.custom,
+    ]);
+    expect(january.percentage, 106);
+    expect(january.actualRatio, closeTo(160 / 150, .000001));
+    expect(january.visualRatio, 1);
+    expect(january.attentionCount, 2);
     expect(january.remainingAmount, 0);
     expect(january.exceededAmount, 10);
     expect(january.countForStatus(BudgetUsageStatus.nearLimit), 1);
@@ -262,26 +270,10 @@ void main() {
     expect(() => snapshot.items.clear(), throwsUnsupportedError);
     expect(() => snapshot.groups.clear(), throwsUnsupportedError);
     expect(() => january.items.clear(), throwsUnsupportedError);
-  });
-
-  test('list snapshot totals every visible item across range groups', () {
-    final snapshot = BudgetListSnapshot.fromItems([
-      _progress(id: 1, limit: 100, spent: 25),
-      _progress(
-        id: 2,
-        limit: 300,
-        spent: 175,
-        period: BudgetPeriod.yearly(2024),
-      ),
-    ]);
-
-    expect(snapshot.groups, hasLength(2));
-    expect(snapshot.totalLimit, 400);
-    expect(snapshot.totalSpent, 200);
-
-    final empty = BudgetListSnapshot.fromItems(const []);
-    expect(empty.totalLimit, 0);
-    expect(empty.totalSpent, 0);
+    expect(
+      () => january.periodKinds.add(BudgetPeriodKind.yearly),
+      throwsUnsupportedError,
+    );
   });
 
   test('filter equality, hash, and copyWith include every field', () {

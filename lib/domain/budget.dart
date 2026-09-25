@@ -279,6 +279,23 @@ class BudgetRangeGroup {
       items.fold(0, (total, item) => total + item.budget.limitAmount);
   int get totalSpent =>
       items.fold(0, (total, item) => total + item.spentAmount);
+
+  int get percentage => totalLimit == 0 ? 0 : totalSpent * 100 ~/ totalLimit;
+
+  double get actualRatio => totalLimit == 0 ? 0 : totalSpent / totalLimit;
+
+  double get visualRatio => actualRatio.clamp(0.0, 1.0).toDouble();
+
+  List<BudgetPeriodKind> get periodKinds => List.unmodifiable(
+    BudgetPeriodKind.values.where(
+      (kind) => items.any((item) => item.budget.period.kind == kind),
+    ),
+  );
+
+  int get attentionCount => items
+      .where((item) => item.usageStatus != BudgetUsageStatus.normal)
+      .length;
+
   int get remainingAmount {
     final value = totalLimit - totalSpent;
     return value > 0 ? value : 0;
@@ -321,12 +338,6 @@ class BudgetListSnapshot {
 
   final List<BudgetProgress> items;
   final List<BudgetRangeGroup> groups;
-
-  int get totalLimit =>
-      items.fold(0, (total, item) => total + item.budget.limitAmount);
-
-  int get totalSpent =>
-      items.fold(0, (total, item) => total + item.spentAmount);
 }
 
 class BudgetDraft {

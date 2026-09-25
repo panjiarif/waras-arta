@@ -3496,7 +3496,10 @@ class _UiRepository implements FinanceRepository {
   }
 
   @override
-  Stream<YearlySummarySnapshot> watchYearlySummary(int year) async* {
+  Stream<YearlySummarySnapshot> watchYearlySummary(
+    int year, {
+    AccountBalanceGroup? balanceGroup,
+  }) async* {
     if (failRead) throw StateError('Read failure');
     YearlySummarySnapshot snapshot() => YearlySummarySnapshot(
       year: year,

@@ -131,7 +131,7 @@ void main() {
         overrides: [
           currentDateProvider.overrideWithValue(DateTime(2026, 9, 25)),
           yearlySummaryProvider.overrideWith(
-            (ref, year) => Stream.value(_snapshot(year)),
+            (ref, query) => Stream.value(_snapshot(query.year)),
           ),
         ],
         child: MaterialApp(
@@ -161,6 +161,100 @@ void main() {
       isNotNull,
     );
   });
+
+  testWidgets(
+    'account filter drives the query, persists across years, and fits narrow text',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final requestedQueries = <YearlySummaryQuery>[];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentDateProvider.overrideWithValue(DateTime(2026, 9, 25)),
+            yearlySummaryProvider.overrideWith((ref, query) {
+              requestedQueries.add(query);
+              final income = switch (query.balanceGroup) {
+                null => 100000,
+                AccountBalanceGroup.primary => 200000,
+                AccountBalanceGroup.savingsInvestment => 300000,
+              };
+              return Stream.value(
+                _snapshot(
+                  query.year,
+                  overrides: {9: _Totals(income: income, expense: 50000)},
+                ),
+              );
+            }),
+          ],
+          child: MaterialApp(
+            theme: buildAppTheme(),
+            home: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(320, 900),
+                textScaler: TextScaler.linear(2),
+              ),
+              child: MonthlySummaryScreen(initialMonth: DateTime(2026, 9)),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<FilterChip>(find.byKey(const Key('summary-filter-all')))
+            .selected,
+        isTrue,
+      );
+      expect(requestedQueries.last.balanceGroup, isNull);
+      expect(find.text('Rp 100.000'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('summary-filter-primary')));
+      await tester.pumpAndSettle();
+
+      expect(requestedQueries.last.balanceGroup, AccountBalanceGroup.primary);
+      expect(find.text('Rp 200.000'), findsOneWidget);
+      expect(
+        find.text(
+          'Saldo utama. Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const Key('summary-filter-savingsInvestment')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        requestedQueries.last.balanceGroup,
+        AccountBalanceGroup.savingsInvestment,
+      );
+      expect(find.text('Rp 300.000'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilterChip>(
+              find.byKey(const Key('summary-filter-savingsInvestment')),
+            )
+            .selected,
+        isTrue,
+      );
+
+      await tester.tap(find.byKey(const Key('summary-previous-year')));
+      await tester.pumpAndSettle();
+
+      expect(requestedQueries.last.year, 2025);
+      expect(
+        requestedQueries.last.balanceGroup,
+        AccountBalanceGroup.savingsInvestment,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('fits 320 pixels at 200 percent text with large values', (
     tester,

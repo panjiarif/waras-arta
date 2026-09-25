@@ -25,6 +25,7 @@ class MonthlySummaryScreen extends ConsumerStatefulWidget {
 
 class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
   late int _year;
+  AccountBalanceGroup? _balanceGroup;
 
   @override
   void initState() {
@@ -44,7 +45,8 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
   @override
   Widget build(BuildContext context) {
     final today = dateOnly(ref.watch(currentDateProvider));
-    final summary = ref.watch(yearlySummaryProvider(_year));
+    final query = (year: _year, balanceGroup: _balanceGroup);
+    final summary = ref.watch(yearlySummaryProvider(query));
     final highlightedMonth = widget.initialMonth == null
         ? null
         : DateTime(widget.initialMonth!.year, widget.initialMonth!.month);
@@ -67,13 +69,18 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
                   onPrevious: () => _moveYear(-1, today.year),
                   onNext: () => _moveYear(1, today.year),
                 ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                _AccountGroupFilter(
+                  value: _balanceGroup,
+                  onChanged: (value) => setState(() => _balanceGroup = value),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                   child: Text(
-                    'Semua rekening. Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.',
-                    key: Key('summary-scope-caption'),
+                    '${_balanceGroup?.label ?? 'Semua rekening'}. '
+                    'Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.',
+                    key: const Key('summary-scope-caption'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
                 Expanded(
@@ -88,7 +95,7 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
                         const Center(child: CircularProgressIndicator()),
                     error: (_, _) => _SummaryLoadError(
                       onRetry: () =>
-                          ref.invalidate(yearlySummaryProvider(_year)),
+                          ref.invalidate(yearlySummaryProvider(query)),
                     ),
                   ),
                 ),
@@ -99,6 +106,39 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
       ),
     );
   }
+}
+
+class _AccountGroupFilter extends StatelessWidget {
+  const _AccountGroupFilter({required this.value, required this.onChanged});
+
+  final AccountBalanceGroup? value;
+  final ValueChanged<AccountBalanceGroup?> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+    child: Wrap(
+      key: const Key('summary-account-filter'),
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilterChip(
+          key: const Key('summary-filter-all'),
+          label: const Text('Semua rekening'),
+          selected: value == null,
+          onSelected: (_) => onChanged(null),
+        ),
+        for (final group in AccountBalanceGroup.values)
+          FilterChip(
+            key: ValueKey('summary-filter-${group.name}'),
+            label: Text(group.label),
+            selected: value == group,
+            onSelected: (_) => onChanged(group),
+          ),
+      ],
+    ),
+  );
 }
 
 class _YearSelector extends StatelessWidget {

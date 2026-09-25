@@ -80,12 +80,13 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 
 ### Skenario Ringkasan Bulanan
 
-1. Pilih satu bulan lampau pada Ikhtisar, lalu tekan seluruh area **Arus bulan dipilih**. Pastikan layar **Ringkasan** terbuka sebagai rute detail, bukan tab keenam, dan kartu bulan asal diberi penanda.
-2. Gunakan tombol tahun sebelumnya/berikutnya. Pastikan batasnya Januari 2000 sampai tahun berjalan; tahun berjalan hanya menampilkan bulan sampai bulan saat ini, sedangkan tahun lampau menampilkan dua belas bulan dari Desember ke Januari.
-3. Pada satu bulan uji, catat pemasukan/pengeluaran di rekening Saldo utama dan Simpanan & investasi. Pastikan diagram donat, Pemasukan, Pengeluaran, dan Selisih menjumlahkan kedua kelompok dengan rumus selisih = pemasukan − pengeluaran.
-4. Buat rekening percobaan bersaldo nol, catat pemasukan lalu transfer seluruh saldonya ke rekening lain, kemudian arsipkan rekening tersebut. Ringkasan harus tetap menyertakan pemasukan historis rekening arsip, sedangkan transfer tidak menambah pemasukan atau pengeluaran.
-5. Buat rekening dengan saldo awal, lakukan transfer dan koreksi saldo pada bulan uji. Ketiganya tidak boleh masuk ringkasan karena saldo awal dan koreksi adalah penyesuaian; hanya header pemasukan/pengeluaran yang dihitung.
-6. Edit tanggal/nominal atau hapus satu pemasukan/pengeluaran. Pastikan bulan lama maupun baru bereaksi tanpa membuka ulang aplikasi. Periksa juga bulan kosong, kegagalan muat + coba lagi, tombol Kembali, lebar 320 px, dan text scale 200%.
+1. Pilih satu bulan lampau pada Ikhtisar, lalu tekan seluruh area **Arus bulan dipilih**. Pastikan layar **Ringkasan** terbuka sebagai rute detail, bukan tab keenam, kartu bulan asal diberi penanda, dan filter awalnya **Semua rekening**.
+2. Pilih **Saldo utama**, lalu ganti tahun. Filter harus tetap aktif; batas tahun tetap 2000–tahun berjalan dan urutan bulan tetap terbaru-ke-terlama. Kembali lalu buka Ringkasan lagi dan pastikan filter kembali ke **Semua rekening**.
+3. Pada satu bulan uji, catat nilai berbeda di rekening Saldo utama dan Simpanan & investasi. Bandingkan donat, Pemasukan, Pengeluaran, dan Selisih pada **Semua rekening**, **Saldo utama**, serta **Simpanan & investasi**; cakupan semua harus merupakan gabungan kedua kelompok.
+4. Buat rekening percobaan pada salah satu kelompok, catat pemasukan lalu transfer seluruh saldo keluar dan arsipkan. Riwayatnya harus tetap muncul hanya pada filter kelompok tersimpan yang sesuai; transfer tidak menambah pemasukan atau pengeluaran.
+5. Pulihkan rekening percobaan dan pindahkan kelompoknya. Tanpa mengubah tanggal/transaksi, pastikan seluruh histori segera berpindah ke hasil filter kelompok baru secara retroaktif, sedangkan nilai **Semua rekening** tetap sama.
+6. Buat rekening dengan saldo awal, lakukan transfer dan koreksi saldo pada bulan uji. Ketiganya tidak boleh masuk pada filter mana pun karena saldo awal dan koreksi adalah penyesuaian; hanya header pemasukan/pengeluaran yang dihitung.
+7. Edit tanggal/nominal atau hapus satu pemasukan/pengeluaran. Pastikan bulan lama maupun baru bereaksi tanpa membuka ulang aplikasi. Periksa juga bulan kosong, kegagalan muat + coba lagi, tombol Kembali, lebar 320 px, dan text scale 200%.
 
 ### Skenario kelola rekening
 
@@ -153,7 +154,8 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Kartu Saldo utama menampilkan diagram lingkaran arus bulan terpilih: hijau untuk total pemasukan dan merah untuk total pengeluaran; keadaan nol terbaca jelas, transfer/penyesuaian tidak masuk, dan tata letak tidak overflow pada lebar 320 px serta text scale 200%.
 - [ ] Seluruh area **Arus bulan dipilih** dapat ditekan dan membuka Ringkasan sebagai rute detail dengan bulan Ikhtisar ditandai; navigasi bawah tetap lima tujuan.
 - [ ] Pemilih tahun Ringkasan tidak melewati 2000/tahun berjalan; daftar terbaru-ke-terlama menampilkan donat, Pemasukan, Pengeluaran, Selisih, dan keadaan kosong tanpa overflow.
-- [ ] Ringkasan mencakup semua kelompok rekening serta riwayat rekening arsip, tetapi mengecualikan transfer, penyesuaian, dan saldo awal.
+- [ ] Pilihan **Semua rekening**, **Saldo utama**, dan **Simpanan & investasi** menghasilkan cakupan yang benar; filter bertahan saat ganti tahun tetapi kembali ke default semua saat layar dibuka ulang.
+- [ ] Riwayat rekening arsip mengikuti kelompok tersimpan, sedangkan perubahan `balanceGroup` rekening aktif mereklasifikasi histori secara retroaktif; transfer, penyesuaian, dan saldo awal tetap dikecualikan.
 - [ ] Setelah ringkasan bulanan, Ikhtisar menampilkan **Tren terkini**: tujuh batang pengeluaran harian dan tujuh titik saldo (enam akhir bulan sebelumnya ditambah saat ini), lalu transaksi terbaru; kartu Anggaran aktif tidak lagi ditampilkan.
 - [ ] Kedua grafik Tren terkini tidak mengikuti pemilih bulan, menangani data nol/negatif tanpa overflow, dan titik saldo saat ini sama dengan subtotal Saldo utama.
 - [ ] Transfer lintas kelompok mengubah kedua subtotal tetapi tetap netral terhadap total seluruh rekening dan arus kas.

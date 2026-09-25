@@ -92,7 +92,9 @@ Setiap bulan menampilkan:
 - selisih bersih pemasukan dikurangi pengeluaran; dan
 - keadaan kosong yang eksplisit ketika belum ada arus kas.
 
-Nilainya dihitung dari tanggal kejadian seluruh transaksi pemasukan/pengeluaran pada semua rekening, baik kelompok **Saldo utama** maupun **Simpanan & investasi**. Riwayat rekening yang sudah diarsipkan tetap disertakan. Transfer, penyesuaian saldo, dan saldo awal tidak dihitung sebagai arus kas.
+Ringkasan menyediakan pilihan **Semua rekening** (default), **Saldo utama**, serta **Simpanan & investasi**. Pilihan tetap aktif ketika pengguna mengganti tahun pada layar yang sama, tetapi kembali ke **Semua rekening** setiap kali layar Ringkasan dibuka ulang.
+
+Nilainya dihitung dari tanggal kejadian transaksi pemasukan/pengeluaran. Filter kelompok memakai `balanceGroup` rekening saat ini; riwayat rekening arsip tetap disertakan sesuai kelompok tersimpannya, dan perubahan kelompok mereklasifikasi seluruh histori secara retroaktif. Transfer, penyesuaian saldo, dan saldo awal tidak dihitung sebagai arus kas.
 
 Perbandingan dengan periode sebelumnya serta rincian berdasarkan kategori tetap menjadi pengembangan berikutnya dan belum ditampilkan pada MVP aktif.
 
@@ -344,7 +346,7 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Schema v5 menambahkan `balanceGroup` rekening. Migrasi memberi seluruh rekening lama nilai `primary`, dan payload backup v3 membawa nilai `primary` atau `savingsInvestment` secara eksplisit.
 - Schema aktif v6 menambahkan Anggaran v1 dengan periode bulanan/tahunan/kustom, mapping multi-subkategori, progres dari allocation, serta penolakan overlap inklusif; payload backup v4 membawa seluruh data tersebut dan tetap dapat merestore v1–v3 dengan anggaran kosong.
 - Kalender dibatasi Januari 2000 sampai hari ini, menggunakan pekan Senin–Minggu, dan menyertakan seluruh jenis transaksi pada daftar harian.
-- Ringkasan Bulanan dibuka dari area **Arus bulan dipilih**, bukan melalui tujuan baru di navigasi bawah; agregatnya mencakup semua kelompok rekening dan riwayat rekening arsip, tetapi hanya jenis pemasukan/pengeluaran.
+- Ringkasan Bulanan dibuka dari area **Arus bulan dipilih**, bukan melalui tujuan baru di navigasi bawah. Cakupan default semua rekening dapat difilter menurut kelompok rekening saat ini; rekening arsip mengikuti kelompok tersimpannya dan perubahan kelompok berlaku retroaktif pada histori.
 - Backup manual menggunakan file `.warasarta` terenkripsi berbasis kata sandi, sedangkan restore memakai validasi, preview, konfirmasi replace-all, dan transaksi atomik.
 - Enkripsi backup tidak berarti database SQLite aktif sudah terenkripsi; perlindungan database kerja dan PIN/biometrik tetap keputusan terpisah.
 - Backup/restore harus diverifikasi pada Downloads, penyedia dokumen cloud, dan instalasi/perangkat berbeda sebelum aplikasi dipercaya sebagai satu-satunya catatan keuangan.

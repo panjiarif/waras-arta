@@ -167,15 +167,17 @@ Ringkasan bulanan, riwayat, dan kalender menggunakan tanggal kejadian. Saldo rek
 
 ### Agregasi Ringkasan Bulanan
 
-`MonthlySummaryScreen` mengamati `yearlySummaryProvider(year)`, yang meneruskan tahun terpilih ke `FinanceRepository.watchYearlySummary`. Implementasi Drift menjalankan satu query agregasi reaktif atas `ledger_entries`: baris dikelompokkan berdasarkan bulan `occurredDay`, lalu hanya header berjenis pemasukan dan pengeluaran yang dijumlahkan. Hasil query dipetakan menjadi dua belas item bulan dengan nilai nol untuk bulan tanpa transaksi; View menyembunyikan bulan masa depan pada tahun berjalan dan mengurutkan bulan yang terlihat dari terbaru ke terlama.
+`MonthlySummaryScreen` menyimpan filter `AccountBalanceGroup?` bersama tahun dalam state layar dan mengamati `yearlySummaryProvider((year, balanceGroup))`. Nilai `null` berarti **Semua rekening**. Mengganti tahun mempertahankan filter pada instance layar yang sama, sedangkan membuka rute Ringkasan baru membuat state awal `null` kembali.
 
-Query tidak memfilter rekening, `balanceGroup`, atau status arsip. Karena itu pemasukan/pengeluaran pada **Saldo utama**, **Simpanan & investasi**, dan riwayat rekening yang kemudian diarsipkan tetap termasuk. Transfer, penyesuaian saldo, dan saldo awal tidak masuk karena ketiganya bukan header pemasukan/pengeluaran. Total memakai nominal header tepat sekali, sehingga transaksi split tidak dihitung ganda; rincian kategori belum menjadi bagian Ringkasan Bulanan aktif.
+`FinanceRepository.watchYearlySummary(year, balanceGroup: ...)` meneruskan filter opsional ke satu query agregasi reaktif. Drift menggabungkan `ledger_entries` dengan `accounts`, mengelompokkan header menurut bulan `occurredDay`, dan membatasi `accounts.balance_group` hanya ketika filter dipilih. Stream mendeklarasikan `accounts` serta `ledger_entries` sebagai sumber baca agar mutasi ledger maupun perubahan kelompok rekening memicu hasil baru. Dua belas item bulan tetap dibentuk dengan nilai nol; View menyembunyikan bulan masa depan pada tahun berjalan dan mengurutkan bulan terbaru ke terlama.
+
+Klasifikasi memakai `balanceGroup` rekening **saat ini**, bukan snapshot kelompok pada waktu transaksi. Rekening arsip tidak dikecualikan dan tetap masuk pada kelompok tersimpannya; memindahkan rekening aktif ke kelompok lain mereklasifikasi seluruh histori secara retroaktif. Transfer, penyesuaian saldo, dan saldo awal tetap tidak masuk karena query hanya menjumlahkan header pemasukan/pengeluaran. Nominal header dihitung sekali sehingga transaksi split tidak digandakan; rincian kategori belum tersedia.
 
 Aliran datanya tetap satu arah:
 
-`MonthlySummaryScreen -> yearlySummaryProvider -> FinanceRepository.watchYearlySummary -> query Drift reaktif -> YearlySummarySnapshot -> kartu bulan`
+`MonthlySummaryScreen(year, balanceGroup?) -> yearlySummaryProvider -> FinanceRepository.watchYearlySummary -> query Drift reaktif(accounts + ledger) -> YearlySummarySnapshot -> kartu bulan`
 
-Seluruh nilai tersebut merupakan data turunan dan tidak disimpan pada tabel baru. Fitur ini tidak mengubah schema database v6 maupun payload backup v4; setelah restore, ringkasan dihitung kembali dari ledger yang sudah dicadangkan.
+Filter hanya merupakan state layar dan seluruh nilai ringkasan tetap berupa data turunan; tidak ada tabel filter atau histori kelompok tambahan. Fitur ini tidak mengubah schema database v6 maupun payload backup v4. Setelah restore, ringkasan dihitung kembali dari ledger dan `balanceGroup` rekening yang sudah dicadangkan.
 
 ### Agregasi Tren terkini
 

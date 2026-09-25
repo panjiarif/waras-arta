@@ -144,20 +144,26 @@ class DriftFinanceRepository implements FinanceRepository {
   }
 
   @override
-  Stream<YearlySummarySnapshot> watchYearlySummary(int year) {
+  Stream<YearlySummarySnapshot> watchYearlySummary(
+    int year, {
+    AccountBalanceGroup? balanceGroup,
+  }) {
     _validateYearForRead(year);
     final start = year * 10000 + 101;
     final end = (year + 1) * 10000 + 101;
+    final selectedBalanceGroup = balanceGroup?.index ?? -1;
     return _db
         .customSelect(
-          '''SELECT CAST(occurred_day / 100 AS INTEGER) AS month_key,
-               COALESCE(SUM(CASE WHEN kind = ? THEN amount ELSE 0 END), 0)
+          '''SELECT CAST(le.occurred_day / 100 AS INTEGER) AS month_key,
+               COALESCE(SUM(CASE WHEN le.kind = ? THEN le.amount ELSE 0 END), 0)
                  AS income,
-               COALESCE(SUM(CASE WHEN kind = ? THEN amount ELSE 0 END), 0)
+               COALESCE(SUM(CASE WHEN le.kind = ? THEN le.amount ELSE 0 END), 0)
                  AS expense
-             FROM ledger_entries
-             WHERE occurred_day >= ? AND occurred_day < ?
-               AND kind IN (?, ?)
+             FROM ledger_entries AS le
+             INNER JOIN accounts AS a ON a.id = le.account_id
+             WHERE le.occurred_day >= ? AND le.occurred_day < ?
+               AND le.kind IN (?, ?)
+               AND (? = -1 OR a.balance_group = ?)
              GROUP BY month_key
              ORDER BY month_key ASC''',
           variables: [
@@ -167,8 +173,10 @@ class DriftFinanceRepository implements FinanceRepository {
             Variable.withInt(end),
             Variable.withInt(EntryKind.income.index),
             Variable.withInt(EntryKind.expense.index),
+            Variable.withInt(selectedBalanceGroup),
+            Variable.withInt(selectedBalanceGroup),
           ],
-          readsFrom: {_db.ledgerEntries},
+          readsFrom: {_db.accounts, _db.ledgerEntries},
         )
         .watch()
         .map((rows) {

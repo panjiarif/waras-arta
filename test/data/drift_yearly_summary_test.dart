@@ -178,6 +178,28 @@ void main() {
       expect(snapshot.totalIncome, 400);
       expect(snapshot.totalExpense, 17065);
       expect(snapshot.net, -16665);
+
+      final primarySnapshot = await repository
+          .watchYearlySummary(2024, balanceGroup: AccountBalanceGroup.primary)
+          .first;
+      expect(primarySnapshot.months[0].income, 100);
+      expect(primarySnapshot.months[1].income, 0);
+      expect(primarySnapshot.months[1].expense, 65);
+      expect(primarySnapshot.months[11].expense, 17000);
+      expect(primarySnapshot.totalIncome, 100);
+      expect(primarySnapshot.totalExpense, 17065);
+
+      final savingsSnapshot = await repository
+          .watchYearlySummary(
+            2024,
+            balanceGroup: AccountBalanceGroup.savingsInvestment,
+          )
+          .first;
+      expect(savingsSnapshot.months[0].income, 0);
+      expect(savingsSnapshot.months[1].income, 300);
+      expect(savingsSnapshot.months[1].expense, 0);
+      expect(savingsSnapshot.totalIncome, 300);
+      expect(savingsSnapshot.totalExpense, 0);
     },
   );
 
@@ -200,6 +222,63 @@ void main() {
     expect(iterator.current.totalIncome, 125);
     await iterator.cancel();
   });
+
+  test(
+    'filtered watchers refresh when current account classification changes',
+    () async {
+      final primary = await createAccount('Utama reaktif');
+      final changing = await createAccount(
+        'Investasi reaktif',
+        balanceGroup: AccountBalanceGroup.savingsInvestment,
+      );
+      await addCashflow(
+        primary,
+        kind: EntryKind.income,
+        amount: 100,
+        day: DateTime(2024, 4, 1),
+      );
+      await addCashflow(
+        changing,
+        kind: EntryKind.income,
+        amount: 300,
+        day: DateTime(2024, 4, 2),
+      );
+
+      final primaryIterator = StreamIterator(
+        repository.watchYearlySummary(
+          2024,
+          balanceGroup: AccountBalanceGroup.primary,
+        ),
+      );
+      final savingsIterator = StreamIterator(
+        repository.watchYearlySummary(
+          2024,
+          balanceGroup: AccountBalanceGroup.savingsInvestment,
+        ),
+      );
+
+      expect(await primaryIterator.moveNext(), isTrue);
+      expect(primaryIterator.current.months[3].income, 100);
+      expect(await savingsIterator.moveNext(), isTrue);
+      expect(savingsIterator.current.months[3].income, 300);
+
+      await repository.updateAccount(
+        changing,
+        const AccountUpdateDraft(
+          name: 'Investasi reaktif',
+          type: AccountType.bank,
+          balanceGroup: AccountBalanceGroup.primary,
+        ),
+      );
+
+      expect(await primaryIterator.moveNext(), isTrue);
+      expect(primaryIterator.current.months[3].income, 400);
+      expect(await savingsIterator.moveNext(), isTrue);
+      expect(savingsIterator.current.months[3].income, 0);
+      await primaryIterator.cancel();
+      await savingsIterator.cancel();
+    },
+  );
 
   test('rejects a year outside the supported civil range', () {
     expect(

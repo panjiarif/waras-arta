@@ -191,7 +191,10 @@ class _CalendarRepository implements FinanceRepository {
   }
 
   @override
-  Stream<YearlySummarySnapshot> watchYearlySummary(int year) => Stream.value(
+  Stream<YearlySummarySnapshot> watchYearlySummary(
+    int year, {
+    AccountBalanceGroup? balanceGroup,
+  }) => Stream.value(
     YearlySummarySnapshot(
       year: year,
       months: [

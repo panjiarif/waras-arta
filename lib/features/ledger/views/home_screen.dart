@@ -8,14 +8,15 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
-import '../../budgets/views/active_budget_summary_card.dart';
 import '../../budgets/views/budget_list_screen.dart';
 import '../../calendar/view_models/calendar_view_model.dart';
 import '../../calendar/views/calendar_view.dart';
 import '../view_models/ledger_view_model.dart';
+import '../view_models/overview_charts_view_model.dart';
 import 'account_widgets.dart';
 import 'compact_transaction_row.dart';
 import 'form_widgets.dart';
+import 'overview_charts_section.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -241,6 +242,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Widget _content(FinanceSnapshot data) {
+    final overviewCharts = _tab == _HomeTab.overview
+        ? ref.watch(overviewChartsProvider)
+        : null;
     final names = {
       for (final account in data.accounts) account.id: account.name,
     };
@@ -310,8 +314,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         if (_tab == _HomeTab.overview) ...[
           _MonthlyTotals(data: data),
           const SizedBox(height: 24),
-          ActiveBudgetSummaryCard(
-            onViewAll: () => setState(() => _tab = _HomeTab.budgets),
+          overviewCharts!.when(
+            skipLoadingOnReload: true,
+            data: (charts) => OverviewChartsSection(snapshot: charts),
+            loading: () => const _OverviewChartsLoading(),
+            error: (_, _) => _OverviewChartsError(
+              onRetry: () => ref.invalidate(overviewChartsProvider),
+            ),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -470,6 +479,84 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 enum _HomeMenuAction { backup }
 
 enum _HomeTab { overview, history, calendar, budgets, accounts }
+
+class _OverviewChartsLoading extends StatelessWidget {
+  const _OverviewChartsLoading();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    key: const Key('overview-charts-loading'),
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Text(
+        'Tren terkini',
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 12),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              const SizedBox.square(
+                dimension: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Menyiapkan diagram dari catatan lokal…',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class _OverviewChartsError extends StatelessWidget {
+  const _OverviewChartsError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    key: const Key('overview-charts-error'),
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Text(
+        'Tren terkini',
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 12),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Diagram belum dapat dimuat. Catatan keuanganmu tetap aman.',
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                key: const Key('retry-overview-charts'),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Coba lagi'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
 
 class _AccountSectionHeader extends StatelessWidget {
   const _AccountSectionHeader({

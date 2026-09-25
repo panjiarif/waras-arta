@@ -119,8 +119,9 @@ Navigasi utama memakai lima tujuan `NavigationBar`: **Ikhtisar**, **Riwayat**, *
 Pintu masuk:
 
 - tab **Anggaran** sebagai pintu utama;
-- kartu **Anggaran aktif** pada Ikhtisar; aksi **Lihat semua** memilih tab Anggaran tanpa menambah layar daftar kedua pada back stack;
 - rute `/budgets` tetap tersedia untuk akses mandiri/deep link, sedangkan form dan detail memakai rute khusus yang didorong di atas layar asal.
+
+Ikhtisar tidak lagi menampilkan kartu **Anggaran aktif** karena tab Anggaran sudah memberi akses satu ketukan dan ruang tersebut dipakai untuk tren keuangan terkini.
 
 Item **Kelola anggaran** di menu aplikasi dihapus setelah tab tersedia agar tidak ada dua pola navigasi yang tampak setara. Tab menanam isi daftar di dalam shell Home yang sama sehingga hanya ada satu AppBar, satu bottom navigation, dan satu FAB. FAB berubah menjadi **Tambah anggaran** ketika tab ini aktif. Filter dan posisi gulir dipertahankan saat pengguna berpindah tab atau kembali dari detail; kunjungan baru melalui rute mandiri kembali ke filter default.
 
@@ -145,8 +146,6 @@ Total yang menjadi sumber kebenaran dihitung hanya di dalam kelompok dengan rent
 Pada tab Aktif, peringkat kelompok mengikuti status terburuk anggotanya: terlampaui, habis, hampir habis, lalu normal; tie-breaker berikutnya adalah `endDay`, `startDay`, lalu ID terkecil. Kartu dalam kelompok memakai peringkat status yang sama, lalu `normalizedName` dan ID. Kelompok Mendatang diurutkan menurut `startDay`, `endDay`, lalu ID terkecil; Riwayat menurut `endDay` dan `startDay` menurun, lalu ID terkecil. Urutan ini wajib deterministik.
 
 Setiap kartu menampilkan nama, badge jenis, label periode, batas, terpakai, sisa/kelebihan, persentase, dan progress bar. Ringkasan kategori menampilkan maksimal dua nama lalu **+N lainnya**. Semantic label juga ringkas—jumlah kategori, maksimal dua contoh, dan jumlah sisanya—sedangkan daftar lengkap tersedia setelah membuka detail. Layar juga mempunyai tombol tambah, empty state yang sesuai status/filter, serta state loading, error, dan retry tanpa angka nol palsu.
-
-Kartu Ikhtisar ditempatkan sebelum pemilih bulan transaksi dan diberi konteks eksplisit **Aktif hari ini · <tanggal lokal>** karena acuannya tidak mengikuti bulan transaksi. **Perlu perhatian** berarti hampir habis, habis, atau terlampaui. Kartu menampilkan jumlah aktif, jumlah perlu perhatian, maksimal dua item, serta **Lihat semua**. Dua item dipilih dengan ranking global per anggaran tanpa mengikuti kelompok: status terlampaui, habis, hampir habis, normal; lalu `endDay`, `startDay`, `normalizedName`, dan ID. Jika tidak ada yang aktif, tampilkan keadaan kosong dan anggaran mendatang terdekat bila ada.
 
 ### Form tambah/edit
 
@@ -424,9 +423,9 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 - pemilih bulanan/tahunan/kustom, custom tanpa silent default, dan periode read-only saat edit;
 - kategori terpilih yang menjadi konflik setelah periode berubah dapat dilepas, sedangkan kategori konflik baru tidak dapat ditambahkan;
 - kelompok campuran under/over menghasilkan `groupLimit`, `groupSpent`, `groupNet`, dan jumlah status yang tepat;
-- tie-breaker kelompok/kartu dan ranking global dua item Ikhtisar deterministik;
+- tie-breaker kelompok dan kartu deterministik;
 - satu kategori dapat menjelaskan beberapa `BudgetConflict` tanpa memotong sumber konflik;
-- dashboard memakai hari ini, bukan bulan transaksi yang sedang dipilih;
+- status tab Aktif memakai hari ini, bukan bulan transaksi yang sedang dipilih;
 - daftar tidak menampilkan ringkasan global yang menggabungkan beberapa kelompok rentang;
 - setiap rentang persis sama menampilkan ringkasan `BudgetRangeGroup.totalSpent`, `BudgetRangeGroup.totalLimit`, nilai net, persentase, progress, dan statusnya sendiri; September dan Oktober, Tahun 2026 dan Tahun 2027, serta dua rentang kustom berbeda tidak pernah digabung;
 - bulanan dan kustom dengan rentang identik berbagi satu ringkasan total; label jenis kelompok memakai urutan deterministik **Bulanan**, **Tahunan**, lalu **Kustom**, sementara badge jenis setiap kartu tetap dipertahankan;
@@ -455,7 +454,7 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 - Domain dan kontrak repository: `lib/domain/budget.dart` serta `lib/domain/budget_repository.dart`.
 - Schema, migrasi, constraint, trigger, dan integritas: `lib/data/database/app_database.dart`, `lib/data/database/app_database.steps.dart`, serta snapshot `drift_schemas/app_database/drift_schema_v6.json`.
 - Repository Drift: `lib/data/repositories/drift_budget_repository.dart`.
-- State dan antarmuka CRUD/progres: `lib/features/budgets/`, dengan dependency wiring di `lib/app/providers.dart`, rute di `lib/app/router.dart`, dan ringkasan aktif pada Ikhtisar.
+- State dan antarmuka CRUD/progres: `lib/features/budgets/`, dengan dependency wiring di `lib/app/providers.dart` serta rute di `lib/app/router.dart`.
 - Backup v4 dan restore legacy: `lib/domain/backup.dart` serta `lib/data/backup/`.
 - Pengujian utama: `test/domain/budget_test.dart`, `test/data/drift_budget_repository_test.dart`, `test/drift/app_database/migration_test.dart`, `test/data/drift_backup_data_store_test.dart`, `test/data/encrypted_backup_codec_test.dart`, `test/features/budgets/`, dan `test/app_test.dart`.
 

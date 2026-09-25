@@ -72,6 +72,9 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 9. Ubah tanggal pengeluaran tersebut ke bulan sebelumnya. Pastikan transaksi dan pengeluaran berpindah periode, sedangkan saldo saat ini tidak berubah lagi hanya karena perpindahan tanggal.
 10. Hapus transfer Rp150.000 setelah membaca dialog konfirmasi. Bank harus bertambah Rp150.000, Tunai berkurang Rp150.000, total saldo tetap, dan hanya satu baris transfer yang hilang.
 11. Buat **Dana Uji** pada kelompok **Simpanan & investasi** dengan saldo nol, lalu transfer Rp100.000 dari Bank Uji. Saldo utama berkurang Rp100.000, subtotal simpanan bertambah Rp100.000, total seluruh rekening tetap Rp4.025.000, dan ringkasan pemasukan/pengeluaran tidak berubah.
+12. Kembali ke hari ini. Pastikan bagian **Tren terkini** mempunyai tujuh batang dari enam hari sebelumnya sampai hari ini; hanya pengeluaran pada rentang itu yang dijumlahkan dan tanggal tanpa pengeluaran tetap tampil sebagai nol.
+13. Pindahkan pemilih bulan transaksi. Kedua grafik Tren terkini tidak berubah periodenya: diagram batang tetap tujuh hari terakhir, sedangkan diagram garis tetap enam akhir bulan yang sudah selesai ditambah saldo saat ini.
+14. Pastikan titik paling kanan diagram saldo sama dengan angka Saldo utama. Ubah kelompok rekening lalu periksa bahwa histori memakai kelompok rekening saat ini secara retroaktif; rekening Saldo utama yang sudah diarsipkan tetap menyumbang titik historisnya, tetapi tidak menambah saldo aktif saat ini.
 
 ### Skenario kelola rekening
 
@@ -97,7 +100,7 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 
 ### Skenario anggaran
 
-1. Buka tab **Anggaran**, buat anggaran bulanan dengan dua subkategori pengeluaran, lalu pastikan kartu Ikhtisar, daftar, dan detail menampilkan nama, periode, batas, kategori, serta progres yang sama.
+1. Buka tab **Anggaran**, buat anggaran bulanan dengan dua subkategori pengeluaran, lalu pastikan daftar dan detail menampilkan nama, periode, batas, kategori, serta progres yang sama. Ikhtisar tidak perlu menampilkan kartu Anggaran aktif.
 2. Catat satu pengeluaran split yang hanya sebagian alokasinya memakai kategori anggaran. Pastikan progres bertambah sebesar allocation yang cocok, bukan total header transaksi.
 3. Edit nominal/kategori/tanggal transaksi tersebut dan kemudian hapusnya. Progres anggaran harus bereaksi tanpa membuka ulang aplikasi.
 4. Buat anggaran tahunan dan rentang kustom, termasuk periode satu hari. Pastikan filter aktif/mendatang/riwayat dan label periode mengikuti tanggal lokal perangkat.
@@ -137,6 +140,8 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Form rekening membedakan jenis dari kelompok saldo; default rekening baru adalah Saldo utama dan perubahan kelompok tidak membuat transaksi atau mengubah saldo.
 - [ ] Tab Rekening memisahkan Saldo utama, Simpanan & investasi, dan Rekening diarsipkan; Ikhtisar hanya menampilkan subtotal Saldo utama.
 - [ ] Kartu Saldo utama menampilkan diagram lingkaran arus bulan terpilih: hijau untuk total pemasukan dan merah untuk total pengeluaran; keadaan nol terbaca jelas, transfer/penyesuaian tidak masuk, dan tata letak tidak overflow pada lebar 320 px serta text scale 200%.
+- [ ] Setelah ringkasan bulanan, Ikhtisar menampilkan **Tren terkini**: tujuh batang pengeluaran harian dan tujuh titik saldo (enam akhir bulan sebelumnya ditambah saat ini), lalu transaksi terbaru; kartu Anggaran aktif tidak lagi ditampilkan.
+- [ ] Kedua grafik Tren terkini tidak mengikuti pemilih bulan, menangani data nol/negatif tanpa overflow, dan titik saldo saat ini sama dengan subtotal Saldo utama.
 - [ ] Transfer lintas kelompok mengubah kedua subtotal tetapi tetap netral terhadap total seluruh rekening dan arus kas.
 - [ ] Transfer ke rekening yang sama tidak dapat disimpan; alur transfer dengan kurang dari dua rekening memberi arahan yang jelas.
 - [ ] Form pemasukan hanya menawarkan kategori pemasukan dan form pengeluaran hanya kategori pengeluaran.
@@ -147,7 +152,7 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Riwayat dan kalender menampilkan satu kartu **2 rincian**; detail menampilkan kedua nominal, sedangkan saldo berkurang tepat Rp17.000 sekali.
 - [ ] Edit transaksi split memuat urutan lama; ubah nominal/kategori atau kembali menjadi satu rincian lalu pastikan total, saldo, backup, dan restore ikut konsisten.
 - [ ] Form anggaran membuat periode bulanan, tahunan, dan kustom dengan satu atau beberapa subkategori; edit mempertahankan periode serta memungkinkan perubahan nama, batas, dan kategori.
-- [ ] Tab Anggaran dapat dibuka langsung, kartu Ikhtisar memilih tab yang sama, filter/posisi daftar bertahan ketika berpindah tab atau kembali dari detail, dan menu aplikasi tidak lagi menduplikasi **Kelola anggaran**.
+- [ ] Tab Anggaran dapat dibuka langsung, filter/posisi daftar bertahan ketika berpindah tab atau kembali dari detail, dan menu aplikasi tidak lagi menduplikasi **Kelola anggaran**.
 - [ ] Progres anggaran menjumlahkan nominal allocation pengeluaran yang cocok dan bereaksi terhadap create/edit/delete transaksi tanpa menghitung transfer atau penyesuaian.
 - [ ] Konflik kategori pada rentang inklusif yang beririsan ditolak, sedangkan kategori berbeda atau rentang yang hanya bersebelahan tetap dapat disimpan.
 - [ ] Hapus anggaran tidak menghapus transaksi/kategori; kategori arsip yang sudah terhubung tetap terbaca pada histori.

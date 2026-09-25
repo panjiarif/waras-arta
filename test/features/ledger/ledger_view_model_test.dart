@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:waras_arta/app/providers.dart';
 import 'package:waras_arta/domain/finance.dart';
 import 'package:waras_arta/domain/finance_repository.dart';
+import 'package:waras_arta/features/calendar/view_models/calendar_view_model.dart';
 import 'package:waras_arta/features/ledger/view_models/ledger_view_model.dart';
+import 'package:waras_arta/features/ledger/view_models/overview_charts_view_model.dart';
 
 void main() {
   late FakeFinanceRepository repository;
@@ -92,6 +94,35 @@ void main() {
         expect(repository.lastLimit, 100);
       },
     );
+  });
+
+  group('OverviewChartsProvider', () {
+    test('reanchors the stream when the current civil day changes', () async {
+      var today = DateTime(2026, 9, 25, 23, 59);
+      final rollingContainer = ProviderContainer(
+        overrides: [
+          financeRepositoryProvider.overrideWithValue(repository),
+          currentDateProvider.overrideWith((ref) => today),
+        ],
+      );
+      addTearDown(rollingContainer.dispose);
+      final subscription = rollingContainer.listen(
+        overviewChartsProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      final first = await rollingContainer.read(overviewChartsProvider.future);
+      expect(first.today, DateTime(2026, 9, 25));
+      expect(repository.overviewDates.last, DateTime(2026, 9, 25));
+
+      today = DateTime(2026, 9, 26, 0, 1);
+      rollingContainer.invalidate(currentDateProvider);
+      final second = await rollingContainer.read(overviewChartsProvider.future);
+
+      expect(second.today, DateTime(2026, 9, 26));
+      expect(repository.overviewDates.last, DateTime(2026, 9, 26));
+    });
   });
 
   group('FinanceActions', () {
@@ -253,6 +284,7 @@ class FakeFinanceRepository implements FinanceRepository {
   Future<int> Function(EntryDraft)? onAddEntry;
   DateTime? lastMonth;
   int? lastLimit;
+  final overviewDates = <DateTime>[];
 
   @override
   Stream<List<CategoryGroup>> watchCategoryTree(
@@ -335,6 +367,19 @@ class FakeFinanceRepository implements FinanceRepository {
     lastMonth = month;
     lastLimit = limit;
     return Stream.value(snapshot);
+  }
+
+  @override
+  Stream<OverviewChartsSnapshot> watchOverviewCharts(DateTime today) {
+    final day = DateTime(today.year, today.month, today.day);
+    overviewDates.add(day);
+    return Stream.value(
+      OverviewChartsSnapshot(
+        today: day,
+        dailyExpenses: const [],
+        balancePoints: const [],
+      ),
+    );
   }
 
   @override

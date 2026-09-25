@@ -1513,7 +1513,7 @@ void main() {
   testWidgets('overview keeps summaries in their intended reading order', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(480, 1400);
+    tester.view.physicalSize = const Size(480, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -1527,24 +1527,84 @@ void main() {
 
     final balance = find.byKey(const Key('balance-summary'));
     final monthlyTotals = find.byKey(const Key('monthly-totals'));
-    final activeBudget = find.byKey(const Key('active-budget-summary'));
+    final charts = find.byKey(const Key('overview-charts-section'));
+    final weeklyExpense = find.byKey(const Key('weekly-expense-chart-card'));
+    final balanceTrend = find.byKey(const Key('primary-balance-chart-card'));
     final recentTransactions = find.byKey(
       const Key('recent-transactions-heading'),
     );
     expect(balance, findsOneWidget);
     expect(monthlyTotals, findsOneWidget);
-    expect(activeBudget, findsOneWidget);
+    expect(charts, findsOneWidget);
+    expect(weeklyExpense, findsOneWidget);
+    expect(balanceTrend, findsOneWidget);
+    expect(find.byKey(const Key('active-budget-summary')), findsNothing);
     expect(recentTransactions, findsOneWidget);
 
     final balanceTop = tester.getTopLeft(balance).dy;
     final monthlyTotalsTop = tester.getTopLeft(monthlyTotals).dy;
-    final activeBudgetTop = tester.getTopLeft(activeBudget).dy;
+    final chartsTop = tester.getTopLeft(charts).dy;
+    final weeklyExpenseTop = tester.getTopLeft(weeklyExpense).dy;
+    final balanceTrendTop = tester.getTopLeft(balanceTrend).dy;
     final recentTransactionsTop = tester.getTopLeft(recentTransactions).dy;
     expect(balanceTop, lessThan(monthlyTotalsTop));
-    expect(monthlyTotalsTop, lessThan(activeBudgetTop));
-    expect(activeBudgetTop, lessThan(recentTransactionsTop));
+    expect(monthlyTotalsTop, lessThan(chartsTop));
+    expect(weeklyExpenseTop, lessThan(balanceTrendTop));
+    expect(chartsTop, lessThan(recentTransactionsTop));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'overview trends stay anchored to today when the selected month changes',
+    (tester) async {
+      tester.view.physicalSize = const Size(480, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final today = DateTime(2026, 9, 25);
+      final charts = OverviewChartsSnapshot(
+        today: today,
+        dailyExpenses: [
+          for (var offset = 6; offset >= 0; offset--)
+            DailyExpenseTotal(
+              day: today.subtract(Duration(days: offset)),
+              expense: (7 - offset) * 10000,
+            ),
+        ],
+        balancePoints: [
+          for (var offset = 6; offset >= 1; offset--)
+            PrimaryBalancePoint(
+              day: DateTime(today.year, today.month - offset + 1, 0),
+              balance: 40000 + (7 - offset) * 10000,
+              isCurrent: false,
+            ),
+          PrimaryBalancePoint(day: today, balance: 100000, isCurrent: true),
+        ],
+      );
+      await pumpApp(
+        tester,
+        _UiRepository(withAccounts: true, overviewCharts: charts),
+        today: today,
+      );
+
+      expect(find.text('Rp 280.000'), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('primary-balance-current')))
+            .data,
+        tester
+            .widget<Text>(find.byKey(const Key('primary-balance-total')))
+            .data,
+      );
+
+      await tester.tap(find.byTooltip('Bulan sebelumnya'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rp 280.000'), findsOneWidget);
+      expect(find.byKey(const Key('overview-charts-section')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('budget tab remains available when the finance snapshot fails', (
     tester,
@@ -2405,7 +2465,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('overview budget CTA selects the embedded budget tab', (
+  testWidgets('budget tab is the only overview entry point for budgets', (
     tester,
   ) async {
     final budgets = FakeBudgetRepository(items: [fakeBudgetProgress(id: 1)]);
@@ -2416,19 +2476,10 @@ void main() {
       budgetRepository: budgets,
     );
 
-    final overviewScrollable = find.descendant(
-      of: find.byKey(const PageStorageKey('ledger-tab-overview')),
-      matching: find.byType(Scrollable),
-    );
-    final viewAllBudgets = find.byKey(const Key('view-all-budgets'));
-    await tester.scrollUntilVisible(
-      viewAllBudgets,
-      140,
-      scrollable: overviewScrollable,
-    );
-    await tester.ensureVisible(viewAllBudgets);
-    await tester.pumpAndSettle();
-    await tester.tap(viewAllBudgets);
+    expect(find.byKey(const Key('active-budget-summary')), findsNothing);
+    expect(find.byKey(const Key('view-all-budgets')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('budget-tab')));
     await tester.pumpAndSettle();
 
     expect(
@@ -2476,15 +2527,7 @@ void main() {
         budgetRepository: budgets,
       );
 
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('active-budget-summary')),
-        160,
-        scrollable: find.byType(Scrollable).last,
-      );
-      expect(
-        find.byKey(const ValueKey('budget-summary-item-1')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('active-budget-summary')), findsNothing);
       expect(tester.takeException(), isNull);
 
       expect(find.byType(NavigationDestination), findsNWidgets(5));
@@ -2833,15 +2876,21 @@ void main() {
       budgetRepository: budgets,
     );
 
-    final budgetSummary = find.byKey(const ValueKey('budget-summary-item-7'));
-    await tester.scrollUntilVisible(
-      budgetSummary,
-      180,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.ensureVisible(budgetSummary);
+    await tester.tap(find.byKey(const Key('budget-tab')));
     await tester.pumpAndSettle();
-    await tester.tap(budgetSummary);
+    final budgetListScrollable = find.descendant(
+      of: find.byKey(const PageStorageKey('budget-list')),
+      matching: find.byType(Scrollable),
+    );
+    final budgetCard = find.byKey(const ValueKey('budget-card-7'));
+    await tester.scrollUntilVisible(
+      budgetCard,
+      180,
+      scrollable: budgetListScrollable,
+    );
+    await tester.ensureVisible(budgetCard);
+    await tester.pumpAndSettle();
+    await tester.tap(budgetCard);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('edit-budget')));
     await tester.pumpAndSettle();
@@ -2910,6 +2959,7 @@ class _UiRepository implements FinanceRepository {
     this.failRead = false,
     this.monthIncome = 0,
     this.monthExpense = 0,
+    this.overviewCharts,
     FinanceEntry? entry,
   }) {
     if (withAccounts) {
@@ -2929,6 +2979,7 @@ class _UiRepository implements FinanceRepository {
   final bool failRead;
   final int monthIncome;
   final int monthExpense;
+  final OverviewChartsSnapshot? overviewCharts;
   final accounts = <FinanceAccount>[];
   final entries = <FinanceEntry>[];
   final categoryGroups = _defaultCategoryGroups();
@@ -3376,6 +3427,51 @@ class _UiRepository implements FinanceRepository {
     await for (final _ in _changes.stream) {
       yield await loadMonth(month, limit: limit);
     }
+  }
+
+  @override
+  Stream<OverviewChartsSnapshot> watchOverviewCharts(DateTime today) async* {
+    if (failRead) throw StateError('Read failure');
+    OverviewChartsSnapshot snapshot() =>
+        overviewCharts ?? _defaultOverviewCharts(today);
+    yield snapshot();
+    await for (final _ in _changes.stream) {
+      yield snapshot();
+    }
+  }
+
+  OverviewChartsSnapshot _defaultOverviewCharts(DateTime value) {
+    final today = DateTime(value.year, value.month, value.day);
+    final primaryBalance = accounts
+        .where(
+          (account) =>
+              !account.isArchived &&
+              account.balanceGroup == AccountBalanceGroup.primary,
+        )
+        .fold(0, (total, account) => total + account.balance);
+    return OverviewChartsSnapshot(
+      today: today,
+      dailyExpenses: [
+        for (var offset = 6; offset >= 0; offset--)
+          DailyExpenseTotal(
+            day: today.subtract(Duration(days: offset)),
+            expense: 0,
+          ),
+      ],
+      balancePoints: [
+        for (var offset = 6; offset >= 1; offset--)
+          PrimaryBalancePoint(
+            day: DateTime(today.year, today.month - offset + 1, 0),
+            balance: primaryBalance,
+            isCurrent: false,
+          ),
+        PrimaryBalancePoint(
+          day: today,
+          balance: primaryBalance,
+          isCurrent: true,
+        ),
+      ],
+    );
   }
 
   @override

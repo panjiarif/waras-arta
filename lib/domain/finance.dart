@@ -279,6 +279,48 @@ class FinanceSnapshot {
   bool get hasMore => entries.length < totalEntries;
 }
 
+class DailyExpenseTotal {
+  const DailyExpenseTotal({required this.day, required this.expense});
+
+  /// A normalized local civil date (year/month/day).
+  final DateTime day;
+  final int expense;
+}
+
+class PrimaryBalancePoint {
+  const PrimaryBalancePoint({
+    required this.day,
+    required this.balance,
+    required this.isCurrent,
+  });
+
+  /// A completed month end, except for the rightmost current-day point.
+  final DateTime day;
+  final int balance;
+  final bool isCurrent;
+}
+
+class OverviewChartsSnapshot {
+  OverviewChartsSnapshot({
+    required this.today,
+    required List<DailyExpenseTotal> dailyExpenses,
+    required List<PrimaryBalancePoint> balancePoints,
+  }) : dailyExpenses = List.unmodifiable(dailyExpenses),
+       balancePoints = List.unmodifiable(balancePoints);
+
+  /// The normalized local civil date used as the rolling-window anchor.
+  final DateTime today;
+
+  /// Exactly seven ascending points, from today - 6 days through today.
+  final List<DailyExpenseTotal> dailyExpenses;
+
+  /// Six completed month ends in ascending order, followed by today.
+  final List<PrimaryBalancePoint> balancePoints;
+
+  int get totalExpense =>
+      dailyExpenses.fold(0, (total, item) => total + item.expense);
+}
+
 class CalendarDaySummary {
   const CalendarDaySummary({
     required this.day,

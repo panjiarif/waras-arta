@@ -6,7 +6,7 @@
 
 - **Status:** Draft
 - **Versi produk awal:** `0.1.0`
-- **Terakhir diperbarui:** 9 September 2026
+- **Terakhir diperbarui:** 25 September 2026
 - **Platform pertama:** Android
 - **Repository:** `waras-arta`
 - **Package Dart:** `waras_arta`
@@ -65,17 +65,16 @@ Karakteristik pengguna:
 
 ### 1. Ikhtisar
 
-Dashboard yang menampilkan informasi penting secara cepat, seperti:
+Dashboard memakai susunan tetap yang ringkas:
 
-- saldo utama yang siap digunakan, disertai diagram lingkaran ringkas pemasukan (hijau) dan pengeluaran (merah) untuk bulan yang dipilih;
-- ringkasan pemasukan dan pengeluaran bulan yang dipilih;
-- rekening;
-- transaksi terbaru;
-- progres anggaran;
-- progres tujuan keuangan;
-- grafik saldo atau arus kas.
+1. Saldo utama yang siap digunakan, disertai diagram lingkaran pemasukan (hijau) dan pengeluaran (merah) untuk bulan yang dipilih.
+2. Ringkasan pemasukan dan pengeluaran bulan yang dipilih.
+3. Bagian **Tren terkini** yang memuat total pengeluaran per hari selama tujuh hari terakhir serta perubahan Saldo utama.
+4. Transaksi terbaru.
 
-Diagram lingkaran pada kartu Saldo utama adalah mini visualisasi agregat bulanan dari `FinanceSnapshot`. Mini visualisasi ini tidak menandai fitur **Diagram** penuh atau analitik per kategori sebagai selesai.
+Grafik pengeluaran selalu mencakup hari ini dan enam hari sebelumnya. Grafik saldo menampilkan enam titik akhir bulan yang sudah selesai serta satu titik paling kanan untuk saldo saat ini. Keduanya mengikuti tanggal hari ini dan tidak berubah ketika pemilih bulan ringkasan dipindahkan. Anggaran tetap dibuka melalui tab **Anggaran**, sehingga Ikhtisar tidak menduplikasi kartu Anggaran aktif.
+
+Diagram lingkaran dan kedua grafik ringan tersebut merupakan mini visualisasi Ikhtisar. Kehadirannya tidak menandai fitur **Diagram** penuh atau analitik per kategori sebagai selesai.
 
 Versi awal menggunakan susunan tetap. Pengaturan kartu dan urutan dashboard direncanakan setelah fondasi utama stabil.
 
@@ -172,11 +171,16 @@ Fitur ini direncanakan setelah pencatatan transaksi dan anggaran stabil.
 
 ### 9. Diagram
 
-Diagram lingkaran pada kartu Saldo utama sudah menampilkan perbandingan agregat total pemasukan (hijau) dan pengeluaran (merah) untuk bulan yang dipilih. Diagram analisis berikut tetap direncanakan:
+Visualisasi ringan yang sudah tersedia pada Ikhtisar:
 
-- Tren pemasukan dan pengeluaran.
+- diagram lingkaran total pemasukan dan pengeluaran untuk bulan yang dipilih;
+- diagram batang total pengeluaran per hari untuk hari ini dan enam hari sebelumnya;
+- diagram garis Saldo utama pada enam akhir bulan sebelumnya dan saldo saat ini.
+
+Fitur **Diagram** penuh tetap direncanakan untuk analisis yang lebih luas, termasuk:
+
 - Komposisi pengeluaran berdasarkan kategori.
-- Perubahan saldo.
+- Perbandingan tren pemasukan dan pengeluaran lintas periode.
 - Progres anggaran dan tujuan keuangan.
 
 Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertambah.
@@ -248,7 +252,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 - fondasi alokasi kategori transaksi dan alur split transaction *(sudah tersedia pada alpha saat ini)*;
 - anggaran multi-kategori bulanan/tahunan/kustom *(sudah tersedia pada alpha saat ini)*;
 - tujuan keuangan *(spesifikasi v1 tersedia; implementasi belum dimulai)*;
-- diagram analisis lanjutan untuk tren, kategori, saldo, anggaran, dan tujuan;
+- diagram analisis lanjutan untuk kategori, perbandingan arus kas, anggaran, dan tujuan; dua grafik tren ringan sudah tersedia pada Ikhtisar;
 - kustomisasi dashboard;
 - pencarian dan filter lanjutan;
 - ekspor CSV.

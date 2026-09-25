@@ -132,6 +132,18 @@ class DriftFinanceRepository implements FinanceRepository {
   }
 
   @override
+  Stream<OverviewChartsSnapshot> watchOverviewCharts(DateTime today) {
+    final normalizedToday = _normalizeDayForRead(today);
+    return _db
+        .customSelect(
+          'SELECT COUNT(*) AS change_marker FROM ledger_entries',
+          readsFrom: {_db.accounts, _db.ledgerEntries},
+        )
+        .watchSingle()
+        .asyncMap((_) => _loadOverviewCharts(normalizedToday));
+  }
+
+  @override
   Stream<CalendarMonthSnapshot> watchCalendarMonth(DateTime month) {
     final normalizedMonth = _normalizeMonthForRead(month);
     final start = _dayKey(normalizedMonth);
@@ -253,6 +265,125 @@ class DriftFinanceRepository implements FinanceRepository {
         income: totals.read<int>('income'),
         expense: totals.read<int>('expense'),
         totalEntries: totals.read<int>('total_entries'),
+      );
+    });
+  }
+
+  Future<OverviewChartsSnapshot> _loadOverviewCharts(DateTime today) {
+    final expenseStart = DateTime(today.year, today.month, today.day - 6);
+    final expenseStartKey = _dayKey(expenseStart);
+    final todayKey = _dayKey(today);
+    final balanceDays = <DateTime>[
+      for (var offset = 6; offset >= 1; offset--)
+        DateTime(today.year, today.month - offset + 1, 0),
+      today,
+    ];
+    final cutoffValues = List.generate(
+      balanceDays.length,
+      (_) => '(?, ?)',
+    ).join(', ');
+    final cutoffVariables = <Variable<int>>[
+      for (var index = 0; index < balanceDays.length; index++) ...[
+        Variable.withInt(index),
+        Variable.withInt(_dayKey(balanceDays[index])),
+      ],
+    ];
+
+    return _db.transaction(() async {
+      final expenseRows = await _db
+          .customSelect(
+            '''SELECT occurred_day, SUM(amount) AS expense
+               FROM ledger_entries
+               WHERE kind = ? AND occurred_day >= ? AND occurred_day <= ?
+               GROUP BY occurred_day
+               ORDER BY occurred_day ASC''',
+            variables: [
+              Variable.withInt(EntryKind.expense.index),
+              Variable.withInt(expenseStartKey),
+              Variable.withInt(todayKey),
+            ],
+          )
+          .get();
+      final expensesByDay = <int, int>{
+        for (final row in expenseRows)
+          row.read<int>('occurred_day'): row.read<int>('expense'),
+      };
+
+      // Account membership deliberately uses the current balance group. This
+      // keeps the first version schema-free: moving an account reclassifies
+      // its entire history. Archived primary accounts remain in the query so
+      // their pre-archive month-end balances are not lost.
+      final balanceRows = await _db
+          .customSelect(
+            '''WITH cutoffs(point_index, cutoff_day) AS (
+                 VALUES $cutoffValues
+               ), primary_deltas(occurred_day, delta) AS (
+                 SELECT entry.occurred_day,
+                   CASE WHEN entry.kind IN (?, ?)
+                     THEN entry.amount ELSE -entry.amount END
+                 FROM ledger_entries AS entry
+                 INNER JOIN accounts AS account
+                   ON account.id = entry.account_id
+                 WHERE account.balance_group = ?
+                   AND entry.occurred_day <= ?
+                 UNION ALL
+                 SELECT entry.occurred_day, entry.amount
+                 FROM ledger_entries AS entry
+                 INNER JOIN accounts AS account
+                   ON account.id = entry.destination_account_id
+                 WHERE entry.kind = ?
+                   AND account.balance_group = ?
+                   AND entry.occurred_day <= ?
+               )
+               SELECT cutoffs.point_index, cutoffs.cutoff_day,
+                 COALESCE(SUM(primary_deltas.delta), 0) AS balance
+               FROM cutoffs
+               LEFT JOIN primary_deltas
+                 ON primary_deltas.occurred_day <= cutoffs.cutoff_day
+               GROUP BY cutoffs.point_index, cutoffs.cutoff_day
+               ORDER BY cutoffs.point_index ASC''',
+            variables: [
+              ...cutoffVariables,
+              Variable.withInt(EntryKind.income.index),
+              Variable.withInt(EntryKind.adjustment.index),
+              Variable.withInt(AccountBalanceGroup.primary.index),
+              Variable.withInt(todayKey),
+              Variable.withInt(EntryKind.transfer.index),
+              Variable.withInt(AccountBalanceGroup.primary.index),
+              Variable.withInt(todayKey),
+            ],
+          )
+          .get();
+
+      return OverviewChartsSnapshot(
+        today: today,
+        dailyExpenses: [
+          for (var offset = 0; offset < 7; offset++)
+            DailyExpenseTotal(
+              day: DateTime(
+                expenseStart.year,
+                expenseStart.month,
+                expenseStart.day + offset,
+              ),
+              expense:
+                  expensesByDay[_dayKey(
+                    DateTime(
+                      expenseStart.year,
+                      expenseStart.month,
+                      expenseStart.day + offset,
+                    ),
+                  )] ??
+                  0,
+            ),
+        ],
+        balancePoints: [
+          for (var index = 0; index < balanceRows.length; index++)
+            PrimaryBalancePoint(
+              day: balanceDays[index],
+              balance: balanceRows[index].read<int>('balance'),
+              isCurrent: index == balanceRows.length - 1,
+            ),
+        ],
       );
     });
   }

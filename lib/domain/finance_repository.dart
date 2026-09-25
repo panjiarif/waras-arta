@@ -8,6 +8,7 @@ abstract interface class FinanceRepository {
   Stream<List<FinanceAccount>> watchAccounts({bool includeArchived = false});
   Stream<AccountDetails?> watchAccountDetails(int id);
   Stream<FinanceSnapshot> watchMonth(DateTime month, {int limit = 50});
+  Stream<OverviewChartsSnapshot> watchOverviewCharts(DateTime today);
   Stream<CalendarMonthSnapshot> watchCalendarMonth(DateTime month);
   Stream<List<FinanceEntry>> watchDay(DateTime day);
   Stream<FinanceEntry?> watchEntry(int id);

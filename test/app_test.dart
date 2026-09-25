@@ -510,6 +510,166 @@ void main() {
     },
   );
 
+  testWidgets(
+    'overview monthly totals stay side by side across a realistic phone width',
+    (tester) async {
+      final semanticsHandle = tester.ensureSemantics();
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpApp(
+        tester,
+        _UiRepository(
+          withAccounts: true,
+          monthIncome: 12500000,
+          monthExpense: 2750000,
+        ),
+      );
+
+      final overviewScrollable = find.descendant(
+        of: find.byKey(const PageStorageKey('ledger-tab-overview')),
+        matching: find.byType(Scrollable),
+      );
+      final totalsRow = find.byKey(const Key('monthly-totals-row'));
+      final income = find.byKey(const Key('monthly-metric-income'));
+      final expense = find.byKey(const Key('monthly-metric-expense'));
+      await tester.scrollUntilVisible(
+        totalsRow,
+        160,
+        scrollable: overviewScrollable,
+      );
+      await tester.pumpAndSettle();
+
+      expect(totalsRow, findsOneWidget);
+      expect(income, findsOneWidget);
+      expect(expense, findsOneWidget);
+      expect(
+        find.descendant(of: income, matching: find.text('Pemasukan')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: expense, matching: find.text('Pengeluaran')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: income, matching: find.text('Rp 12.500.000')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: expense, matching: find.text('Rp 2.750.000')),
+        findsOneWidget,
+      );
+      expect(tester.getSemantics(income).label, 'Pemasukan, Rp 12.500.000');
+      expect(tester.getSemantics(expense).label, 'Pengeluaran, Rp 2.750.000');
+
+      final rowRect = tester.getRect(totalsRow);
+      final incomeRect = tester.getRect(income);
+      final expenseRect = tester.getRect(expense);
+      expect(incomeRect.top, closeTo(expenseRect.top, 1));
+      expect(incomeRect.left, closeTo(rowRect.left, 1));
+      expect(incomeRect.right, lessThan(expenseRect.left));
+      expect(expenseRect.right, closeTo(rowRect.right, 1));
+      expect(incomeRect.width, closeTo(expenseRect.width, 1));
+      expect(tester.takeException(), isNull);
+      semanticsHandle.dispose();
+    },
+  );
+
+  testWidgets(
+    'overview monthly totals fit 320 pixels at enlarged text scales',
+    (tester) async {
+      final semanticsHandle = tester.ensureSemantics();
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await pumpApp(
+        tester,
+        _UiRepository(
+          withAccounts: true,
+          monthIncome: maxAmount,
+          monthExpense: maxAmount - 1,
+        ),
+      );
+
+      final overviewScrollable = find.descendant(
+        of: find.byKey(const PageStorageKey('ledger-tab-overview')),
+        matching: find.byType(Scrollable),
+      );
+      final totalsRow = find.byKey(const Key('monthly-totals-row'));
+      final income = find.byKey(const Key('monthly-metric-income'));
+      final expense = find.byKey(const Key('monthly-metric-expense'));
+
+      Future<void> expectEnlargedLayout() async {
+        await tester.scrollUntilVisible(
+          totalsRow,
+          160,
+          scrollable: overviewScrollable,
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(of: income, matching: find.text('Pemasukan')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: expense, matching: find.text('Pengeluaran')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: income,
+            matching: find.text('Rp 999.999.999.999'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: expense,
+            matching: find.text('Rp 999.999.999.998'),
+          ),
+          findsOneWidget,
+        );
+        final rowRect = tester.getRect(totalsRow);
+        final incomeRect = tester.getRect(income);
+        final expenseRect = tester.getRect(expense);
+        expect(incomeRect.top, closeTo(expenseRect.top, 1));
+        expect(incomeRect.left, closeTo(rowRect.left, 1));
+        expect(incomeRect.right, lessThan(expenseRect.left));
+        expect(expenseRect.right, closeTo(rowRect.right, 1));
+        expect(incomeRect.width, closeTo(expenseRect.width, 1));
+        expect(
+          find.descendant(of: income, matching: find.byType(FittedBox)),
+          findsNWidgets(2),
+        );
+        expect(
+          find.descendant(of: expense, matching: find.byType(FittedBox)),
+          findsNWidgets(2),
+        );
+        expect(
+          tester.getSemantics(income).label,
+          'Pemasukan, Rp 999.999.999.999',
+        );
+        expect(
+          tester.getSemantics(expense).label,
+          'Pengeluaran, Rp 999.999.999.998',
+        );
+        expect(tester.takeException(), isNull);
+      }
+
+      await expectEnlargedLayout();
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      await tester.pumpAndSettle();
+      await expectEnlargedLayout();
+      semanticsHandle.dispose();
+    },
+  );
+
   testWidgets('last active account stays active and shows archive error', (
     tester,
   ) async {

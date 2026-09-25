@@ -900,36 +900,30 @@ class _MonthlyTotals extends StatelessWidget {
     key: const Key('monthly-totals'),
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final stack =
-              constraints.maxWidth < 340 ||
-              MediaQuery.textScalerOf(context).scale(14) > 20;
-          final income = _Metric(
-            label: 'Pemasukan',
-            amount: data.income,
-            icon: Icons.south_west,
-            color: forest,
-          );
-          final expense = _Metric(
-            label: 'Pengeluaran',
-            amount: data.expense,
-            icon: Icons.north_east,
-            color: const Color(0xFF9D492B),
-          );
-          return stack
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [income, const SizedBox(height: 12), expense],
-                )
-              : Row(
-                  children: [
-                    Expanded(child: income),
-                    const SizedBox(width: 12),
-                    Expanded(child: expense),
-                  ],
-                );
-        },
+      Row(
+        key: const Key('monthly-totals-row'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _Metric(
+              metricKey: const Key('monthly-metric-income'),
+              label: 'Pemasukan',
+              amount: data.income,
+              icon: Icons.south_west,
+              color: forest,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _Metric(
+              metricKey: const Key('monthly-metric-expense'),
+              label: 'Pengeluaran',
+              amount: data.expense,
+              icon: Icons.north_east,
+              color: const Color(0xFF9D492B),
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: 12),
       Text(
@@ -947,39 +941,71 @@ class _MonthlyTotals extends StatelessWidget {
 
 class _Metric extends StatelessWidget {
   const _Metric({
+    required this.metricKey,
     required this.label,
     required this.amount,
     required this.icon,
     required this.color,
   });
+
+  final Key metricKey;
   final String label;
   final int amount;
   final IconData icon;
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 12),
-          Text(label, style: const TextStyle(fontSize: 13)),
-          const SizedBox(height: 4),
-          Text(
-            formatRupiah(amount),
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: color,
+  Widget build(BuildContext context) {
+    final formattedAmount = formatRupiah(amount);
+    return Semantics(
+      key: metricKey,
+      container: true,
+      label: '$label, $formattedAmount',
+      child: ExcludeSemantics(
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                const SizedBox(height: 8),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    formattedAmount,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _AccountCard extends StatelessWidget {

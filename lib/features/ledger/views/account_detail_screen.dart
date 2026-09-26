@@ -167,15 +167,8 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                 const SizedBox(height: 16),
                 FormMessage(action.error!, isError: true),
               ],
-              const SizedBox(height: 24),
-              FilledButton.tonalIcon(
-                key: const Key('open-account-edit'),
-                onPressed: busy ? null : () => _openEditor(account.id),
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Edit rekening'),
-              ),
               if (!account.isArchived) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 24),
                 FilledButton.tonalIcon(
                   key: const Key('open-balance-adjustment'),
                   onPressed: busy ? null : () => _openAdjustment(account.id),

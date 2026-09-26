@@ -154,6 +154,8 @@ void main() {
 
     expect(find.text('Detail rekening'), findsOneWidget);
     expect(find.text('Rp 100.000'), findsOneWidget);
+    expect(find.byKey(const Key('edit-account')), findsOneWidget);
+    expect(find.byKey(const Key('open-account-edit')), findsNothing);
     await tester.tap(find.byKey(const Key('edit-account')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -1494,6 +1496,10 @@ void main() {
         240,
         scrollable: find.byType(Scrollable).last,
       );
+      await tester.ensureVisible(
+        find.byKey(const Key('show-archived-accounts')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('show-archived-accounts')));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(

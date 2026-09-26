@@ -302,19 +302,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           },
         ),
         const SizedBox(height: 24),
-      ] else ...[
-        Text(
-          _tab == _HomeTab.history
-              ? 'Jejak keuanganmu'
-              : 'Tempat uangmu tersimpan',
-          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+      ] else if (_tab == _HomeTab.history) ...[
+        const Text(
+          'Jejak keuanganmu',
+          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
-        Text(
-          _tab == _HomeTab.history
-              ? 'Setiap catatan, satu langkah lebih teratur.'
-              : 'Pisahkan uang rutin dari simpanan dan investasi.',
-        ),
+        const Text('Setiap catatan, satu langkah lebih teratur.'),
         const SizedBox(height: 24),
       ],
       if (_tab != _HomeTab.accounts) ...[
@@ -422,13 +416,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }) {
     if (data.accounts.isEmpty) return const [];
 
-    Widget accountCard(FinanceAccount account) => Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: _AccountCard(
-        account: account,
-        onTap: () => _open('/accounts/${account.id}'),
-      ),
-    );
+    List<Widget> rowsFor(List<FinanceAccount> accounts) => [
+      for (var index = 0; index < accounts.length; index++)
+        _AccountRow(
+          account: accounts[index],
+          first: index == 0,
+          last: index == accounts.length - 1,
+          onTap: () => _open('/accounts/${accounts[index].id}'),
+        ),
+    ];
 
     return [
       _AccountSectionHeader(
@@ -443,8 +439,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           message: 'Belum ada rekening untuk saldo utama.',
         )
       else
-        for (final account in primaryAccounts) accountCard(account),
-      const SizedBox(height: 14),
+        ...rowsFor(primaryAccounts),
+      const SizedBox(height: 24),
       _AccountSectionHeader(
         title: AccountBalanceGroup.savingsInvestment.label,
         total: data.savingsInvestmentBalance,
@@ -457,7 +453,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           message: 'Belum ada rekening simpanan atau investasi. Pilih kelompok ini saat menambah rekening.',
         )
       else
-        for (final account in savingsInvestmentAccounts) accountCard(account),
+        ...rowsFor(savingsInvestmentAccounts),
       if (archivedAccounts.isNotEmpty) ...[
         const SizedBox(height: 12),
         const Divider(),
@@ -468,17 +464,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             'Rekening diarsipkan (${archivedAccounts.length})',
             key: const Key('archived-account-count'),
           ),
-          subtitle: const Text(
-            'Tidak dapat dipakai untuk transaksi baru; riwayat tetap tersimpan.',
-          ),
           value: _showArchivedAccounts,
           onChanged: (value) {
             setState(() => _showArchivedAccounts = value);
           },
         ),
         if (_showArchivedAccounts) ...[
-          const SizedBox(height: 4),
-          for (final account in archivedAccounts) accountCard(account),
+          const SizedBox(height: 8),
+          ...rowsFor(archivedAccounts),
         ],
       ],
     ];
@@ -581,60 +574,57 @@ class _AccountSectionHeader extends StatelessWidget {
   final Key totalKey;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final stacked =
-              constraints.maxWidth < 260 ||
-              MediaQuery.textScalerOf(context).scale(1) > 1.3;
-          final heading = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 2),
-              Text(
-                '$count rekening',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.outline,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          );
-          final amount = FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: Text(
-              formatRupiah(total),
-              key: totalKey,
-              maxLines: 1,
-              softWrap: false,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked =
+            constraints.maxWidth < 260 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.3;
+        final heading = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
-          );
+            const SizedBox(height: 2),
+            Text(
+              '$count rekening',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.outline,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        );
+        final amount = FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(
+            formatRupiah(total),
+            key: totalKey,
+            maxLines: 1,
+            softWrap: false,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          ),
+        );
 
-          if (stacked) {
-            return Column(
-              key: ValueKey('account-section-stacked-$title'),
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [heading, const SizedBox(height: 8), amount],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: heading),
-              const SizedBox(width: 12),
-              Flexible(child: amount),
-            ],
+        if (stacked) {
+          return Column(
+            key: ValueKey('account-section-stacked-$title'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [heading, const SizedBox(height: 8), amount],
           );
-        },
-      ),
+        }
+        return Row(
+          children: [
+            Expanded(child: heading),
+            const SizedBox(width: 12),
+            Flexible(child: amount),
+          ],
+        );
+      },
     ),
   );
 }
@@ -1151,89 +1141,167 @@ class _Metric extends StatelessWidget {
   }
 }
 
-class _AccountCard extends StatelessWidget {
-  const _AccountCard({required this.account, required this.onTap});
+class _AccountRow extends StatelessWidget {
+  const _AccountRow({
+    required this.account,
+    required this.first,
+    required this.last,
+    required this.onTap,
+  });
+
   final FinanceAccount account;
+  final bool first;
+  final bool last;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Opacity(
-    opacity: account.isArchived ? .65 : 1,
-    child: Card(
-      child: InkWell(
-        key: ValueKey('account-${account.id}'),
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final negative = account.balance < 0;
+    final amountColor = negative
+        ? const Color(0xFF9D492B)
+        : Theme.of(context).colorScheme.onSurface;
+    final radius = BorderRadius.vertical(
+      top: first ? const Radius.circular(16) : Radius.zero,
+      bottom: last ? const Radius.circular(16) : Radius.zero,
+    );
+    final semantics = [
+      account.name,
+      account.type.label,
+      formatRupiah(account.balance),
+      if (account.isArchived) 'Diarsipkan',
+      if (negative) 'Saldo negatif',
+    ].join(', ');
+
+    final icon = Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: forest.withValues(alpha: .1),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(accountIconFor(account.type), color: forest, size: 21),
+    );
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          account.name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 3),
+        Wrap(
+          spacing: 7,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              account.type.label,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (account.isArchived) const AccountStatusBadge(archived: true),
+          ],
+        ),
+      ],
+    );
+    final amount = FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerRight,
+      child: Text(
+        formatRupiah(account.balance),
+        key: ValueKey('account-balance-${account.id}'),
+        maxLines: 1,
+        softWrap: false,
+        style: TextStyle(
+          color: amountColor,
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+
+    return Semantics(
+      button: true,
+      label: semantics,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: Opacity(
+          opacity: account.isArchived ? .65 : 1,
+          child: Material(
+            key: ValueKey('account-row-surface-${account.id}'),
+            color: Colors.white,
+            borderRadius: radius,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: ValueKey('account-${account.id}'),
+              onTap: onTap,
+              child: Column(
                 children: [
-                  Icon(accountIconFor(account.type), color: forest),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          account.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 17,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 11,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final stacked =
+                            constraints.maxWidth < 290 ||
+                            MediaQuery.textScalerOf(context).scale(1) > 1.3;
+                        if (stacked) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  icon,
+                                  const SizedBox(width: 12),
+                                  Expanded(child: identity),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.chevron_right, size: 20),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              amount,
+                              if (negative) ...[
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Periksa kelengkapan transaksi.',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                    color: Color(0xFF9D492B),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        }
+                        return Row(
                           children: [
-                            Text(account.type.label),
-                            if (account.isArchived)
-                              const AccountStatusBadge(archived: true),
+                            icon,
+                            const SizedBox(width: 12),
+                            Expanded(child: identity),
+                            const SizedBox(width: 12),
+                            Flexible(child: amount),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.chevron_right, size: 20),
                           ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.chevron_right),
+                  if (!last)
+                    const Divider(height: 1, indent: 64, endIndent: 12),
                 ],
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    formatRupiah(account.balance),
-                    maxLines: 1,
-                    softWrap: false,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 22,
-                    ),
-                  ),
-                ),
-              ),
-              if (account.balance < 0) ...[
-                const SizedBox(height: 4),
-                const Text(
-                  'Saldo tercatat negatif. Periksa kelengkapan catatan.',
-                  style: TextStyle(color: Color(0xFF9D492B)),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _EmptyCard extends StatelessWidget {

@@ -24,6 +24,8 @@ class FakeBudgetRepository implements BudgetRepository {
   int? updatedId;
   BudgetUpdateDraft? updatedDraft;
   int? deletedId;
+  BudgetPeriod? copiedSource;
+  BudgetPeriod? copiedTarget;
 
   Future<void> dispose() => _changes.close();
 
@@ -40,6 +42,37 @@ class FakeBudgetRepository implements BudgetRepository {
   Future<BudgetListSnapshot> loadBudgets(BudgetListFilter filter) async {
     if (failRead) throw StateError('Read failure');
     return _snapshot(filter);
+  }
+
+  @override
+  Stream<BudgetListSnapshot> watchBudgetsForPeriod(
+    BudgetBrowseFilter filter,
+  ) async* {
+    if (failRead) throw StateError('Read failure');
+    yield _periodSnapshot(filter);
+    await for (final _ in _changes.stream) {
+      yield _periodSnapshot(filter);
+    }
+  }
+
+  @override
+  Future<BudgetListSnapshot> loadBudgetsForPeriod(
+    BudgetBrowseFilter filter,
+  ) async {
+    if (failRead) throw StateError('Read failure');
+    return _periodSnapshot(filter);
+  }
+
+  BudgetListSnapshot _periodSnapshot(BudgetBrowseFilter filter) {
+    final matching = items
+        .where((item) {
+          final period = item.budget.period;
+          return period.startDay <= filter.windowEndDay &&
+              filter.windowStartDay <= period.endDay &&
+              (filter.periodKind == null || period.kind == filter.periodKind);
+        })
+        .toList(growable: false);
+    return BudgetListSnapshot.fromItems(matching);
   }
 
   BudgetListSnapshot _snapshot(BudgetListFilter filter) {
@@ -168,6 +201,68 @@ class FakeBudgetRepository implements BudgetRepository {
       throw const BudgetValidationException('Anggaran tidak ditemukan.');
     }
     _changes.add(null);
+  }
+
+  @override
+  Future<int> copyMonthlyBudgets({
+    required BudgetPeriod source,
+    required BudgetPeriod target,
+  }) async {
+    if (source.kind != BudgetPeriodKind.monthly ||
+        target.kind != BudgetPeriodKind.monthly) {
+      throw const BudgetValidationException(
+        'Hanya anggaran bulanan yang dapat disalin.',
+      );
+    }
+    final expectedTarget = DateTime(
+      civilDayToDateTime(source.startDay).year,
+      civilDayToDateTime(source.startDay).month + 1,
+    );
+    if (target.startDay != dateTimeToCivilDay(expectedTarget)) {
+      throw const BudgetValidationException(
+        'Tujuan harus bulan setelah sumber.',
+      );
+    }
+    final sourceItems = items
+        .where((item) => item.budget.period == source)
+        .toList(growable: false);
+    if (sourceItems.isEmpty) {
+      throw const BudgetValidationException(
+        'Bulan sebelumnya belum memiliki anggaran.',
+      );
+    }
+    if (items.any((item) => item.budget.period == target)) {
+      throw const BudgetValidationException(
+        'Bulan tujuan sudah memiliki anggaran.',
+      );
+    }
+    copiedSource = source;
+    copiedTarget = target;
+    var nextId = items.fold<int>(
+      0,
+      (largest, item) => item.budget.id > largest ? item.budget.id : largest,
+    );
+    final now = DateTime.utc(2026, 2, 10);
+    for (final item in sourceItems) {
+      nextId++;
+      items.add(
+        BudgetProgress(
+          budget: Budget(
+            id: nextId,
+            period: target,
+            name: item.budget.name,
+            normalizedName: item.budget.normalizedName,
+            limitAmount: item.budget.limitAmount,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          categories: item.categories,
+          spentAmount: 0,
+        ),
+      );
+    }
+    _changes.add(null);
+    return sourceItems.length;
   }
 }
 

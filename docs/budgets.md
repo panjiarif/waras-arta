@@ -2,9 +2,9 @@
 
 ## Status implementasi dan tujuan
 
-Dokumen ini adalah kontrak **Anggaran v1** untuk versi produk 0.2. Status implementasi: **selesai pada 8 September 2026** dengan schema database v6 dan payload backup v4 aktif. Domain, persistence, CRUD bulanan/tahunan/kustom, pilihan multi-subkategori, progres dari allocation, penolakan overlap, backup/restore, dan pengujian otomatis sudah tersedia. Smoke test Anggaran serta backup–restore v4 pada perangkat fisik berhasil pada 9 September 2026; evaluasi kenyamanan dan performa jangka panjang tetap berlanjut selama pemakaian nyata.
+Dokumen ini adalah kontrak **Anggaran v1** untuk versi produk 0.2. Domain, persistence, CRUD bulanan/tahunan/kustom, pilihan multi-subkategori, progres dari allocation, penolakan overlap, backup/restore, dan pengujian otomatis sudah tersedia. Kontrak penelusuran periode, tampilan ringkas, serta salin bulanan manual diperbarui pada 26 September 2026 tanpa mengubah schema database v6 maupun payload backup v4. Smoke test Anggaran serta backup–restore v4 pada perangkat fisik berhasil pada 9 September 2026; evaluasi kenyamanan dan performa jangka panjang tetap berlanjut selama pemakaian nyata.
 
-Perubahan aturan di dokumen ini harus disertai penyesuaian model, migrasi database, format backup, dan pengujian agar kontrak implementasi tetap sinkron.
+Perubahan aturan di dokumen ini harus disertai penyesuaian model, repository, UI, dan pengujian yang relevan agar kontrak implementasi tetap sinkron. Migrasi database atau kenaikan versi backup hanya diperlukan bila bentuk data persisten berubah.
 
 Anggaran membantu pengguna membatasi pengeluaran untuk suatu rentang tanggal. Anggaran bukan rekening, pemindahan uang, atau [tujuan keuangan](financial-goals.md). Membuat atau mengubah anggaran tidak mengubah saldo serta tidak membuat transaksi.
 
@@ -21,6 +21,8 @@ Tujuan versi pertama:
 - memperbarui progres ketika transaksi berubah;
 - mencegah satu kategori dihitung ganda pada periode yang saling beririsan;
 - mempertahankan histori ketika kategori kemudian diarsipkan;
+- menelusuri anggaran lampau melalui navigator bulan atau tahun tanpa mencampurkan total antarjenis/rentang;
+- menyalin anggaran bulanan sebelumnya secara manual sebagai snapshot independen;
 - memasukkan seluruh data anggaran ke backup terenkripsi berikutnya.
 
 ## Istilah
@@ -32,6 +34,8 @@ Tujuan versi pertama:
 - **Sisa** adalah `limitAmount - spentAmount` ketika hasilnya positif.
 - **Terlampaui** adalah `spentAmount - limitAmount` ketika hasilnya positif.
 - **Kategori terpilih** selalu berarti ID subkategori pengeluaran, bukan kelompok induk atau salinan nama.
+- **Periode tampilan** adalah bulan yang dipilih pada filter Semua/Bulanan/Kustom atau tahun yang dipilih pada filter Tahunan.
+- **Batas pemakaian tampilan** (`usageThroughDay`) adalah tanggal terakhir transaksi yang boleh ikut dalam progres pada daftar historis: akhir bulan/tahun lampau atau hari ini untuk periode berjalan.
 
 ## Aturan produk
 
@@ -42,16 +46,16 @@ Tujuan versi pertama:
 3. Periode tahunan wajib tepat dari 1 Januari sampai 31 Desember tahun yang sama.
 4. Periode kustom menerima setiap rentang tanggal Gregorian valid dengan `startDay <= endDay`. Rentang satu hari diperbolehkan.
 5. Batas berlaku untuk keseluruhan periode. Anggaran tahunan atau kustom tidak otomatis dibagi, dirata-ratakan, atau di-rollover per bulan.
-6. Periode lampau, sedang berjalan, dan mendatang boleh dibuat. Anggaran tahunan yang dibuat di tengah tahun langsung memperhitungkan pengeluaran sejak 1 Januari.
+6. Periode baru boleh lampau atau sedang berjalan, tetapi tanggal mulainya tidak boleh setelah hari ini karena navigator berhenti pada periode berjalan. Periode bulanan/tahunan yang sedang berjalan tetap berakhir pada akhir bulan/tahun, dan periode kustom yang dimulai hari ini atau sebelumnya boleh berakhir di masa depan. Anggaran tahunan yang dibuat di tengah tahun langsung memperhitungkan pengeluaran sejak 1 Januari.
 7. Jenis dan kedua batas tanggal tidak dapat diubah setelah anggaran dibuat pada v1. Kesalahan periode diperbaiki dengan menghapus dan membuat ulang. Nama, batas, serta kategori tetap dapat diedit.
 8. Nama wajib 1–80 karakter setelah di-trim dan setiap rangkaian whitespace diringkas menjadi satu spasi. `normalizedName` wajib sama persis dengan nama canonical tersebut dalam lowercase, mengikuti aturan nama rekening/kategori saat ini.
 9. Nama wajib unik tanpa membedakan huruf besar/kecil pada rentang tanggal yang sama. Jenis tidak menjadi bagian identitas unik: periode kustom yang kebetulan sama dengan satu bulan tetap berbagi ruang nama dengan periode bulanan itu.
 10. Batas wajib berupa bilangan bulat rupiah dari `1` sampai `maxAmount`.
-11. Tidak diperlukan flag aktif atau arsip. Status diturunkan dari `referenceDay`: aktif jika `startDay <= referenceDay <= endDay`, mendatang jika `startDay > referenceDay`, dan riwayat jika `endDay < referenceDay`.
+11. Tidak diperlukan flag aktif atau arsip. Status dapat tetap diturunkan dari `referenceDay` untuk kebutuhan domain/detail, tetapi daftar utama tidak lagi memakai tab status; pengguna menelusuri bulan atau tahun secara langsung.
 
 Jenis periode mengatur input dan label di UI. Perhitungan progres serta konflik selalu memakai `startDay` dan `endDay`.
 
-`referenceDay` adalah integer tanggal sipil `YYYYMMDD` dari kalender lokal perangkat, bukan tanggal UTC. Nilainya dihitung ulang ketika layar dibuka, aplikasi resume, hari lokal berganti, atau zona waktu perangkat berubah.
+`referenceDay` adalah integer tanggal sipil `YYYYMMDD` dari kalender lokal perangkat, bukan tanggal UTC. Nilainya dihitung ulang ketika layar dibuka, aplikasi resume, hari lokal berganti, atau zona waktu perangkat berubah. Bulan/tahun berjalan dari nilai ini juga menjadi batas kanan navigator.
 
 ### Pilihan kategori dan konflik
 
@@ -80,11 +84,14 @@ Validasi edit memakai selisih set. Status aktif hanya diwajibkan untuk `newCateg
 Pemakaian dihitung saat query dan tidak disimpan sebagai kolom:
 
 ```text
+effectiveEndDay = min(endDay, usageThroughDay)
 spentAmount = SUM(allocation.amount)
   ketika transaction.kind = expense
   dan allocation.categoryId termasuk kategori anggaran
-  dan startDay <= transaction.occurredDay <= endDay
+  dan startDay <= transaction.occurredDay <= effectiveEndDay
 ```
+
+Di luar daftar historis, `usageThroughDay` sama dengan `endDay` sehingga progres mencakup seluruh rentang anggaran. Pada daftar per bulan, anggaran tahunan/kustom untuk bulan lampau hanya dihitung sampai akhir bulan terpilih; periode berjalan dihitung sampai hari ini. Pada filter Tahunan, tahun lampau dihitung sampai 31 Desember dan tahun berjalan sampai hari ini. Dengan demikian transaksi bulan setelah konteks yang sedang dilihat tidak mengubah angka historis pada layar tersebut.
 
 `createdAt`, rekening, saldo, catatan, total header transaksi, dan batas pagination riwayat tidak memengaruhi progres. Satu transaksi split dapat menyumbang nominal berbeda ke beberapa anggaran melalui alokasinya, tetapi total header tidak pernah dijumlahkan sekali untuk setiap kategori.
 
@@ -112,6 +119,18 @@ Keadaan tampilan:
 - Hapus memerlukan konfirmasi.
 - Menghapus anggaran hanya menghapus definisi dan relasi pilihannya. Kategori, rekening, serta transaksi tidak pernah ikut dihapus.
 
+### Salin anggaran bulan sebelumnya
+
+1. Aksi **Salin anggaran bulan sebelumnya** hanya tersedia setelah bulan sumber memiliki minimal satu anggaran bulanan dan bulan tujuan belum memiliki anggaran bulanan.
+2. Sumber wajib bulan kalender tepat sebelum tujuan. Penyalinan lintas Desember–Januari dan menuju Februari tahun kabisat mengikuti kalender sipil yang sama.
+3. Dialog konfirmasi menyebut bulan sumber, bulan tujuan, serta jumlah anggaran yang akan dibuat.
+4. Nama, batas, dan seluruh pilihan subkategori setiap anggaran bulanan disalin. ID, `createdAt`, dan `updatedAt` dibuat baru; transaksi serta `spentAmount` tidak pernah disalin karena progres tetap merupakan nilai turunan.
+5. Hasil salin adalah snapshot independen. Mengedit atau menghapus anggaran pada salah satu bulan tidak mengubah bulan lainnya.
+6. Kategori aktif, keunikan nama, dan konflik rentang diperiksa ulang terhadap keadaan target saat operasi berjalan. Kategori sumber yang sudah diarsipkan atau konflik dengan anggaran tahunan/kustom membuat seluruh operasi ditolak.
+7. Pemeriksaan target kosong, validasi seluruh sumber, pembuatan setiap anggaran, dan seluruh mapping kategorinya berlangsung dalam satu transaksi database. Kegagalan mana pun me-roll back semuanya; ketukan ganda tidak boleh menghasilkan duplikasi.
+8. Salin manual bukan sinkronisasi, recurrence, template, atau rollover. Bulan baru tetap kosong sampai pengguna membuat anggaran atau mengonfirmasi aksi salin.
+9. Operasi ini hanya menambah row `budgets` dan `budget_categories` yang sudah didukung schema v6/payload v4, sehingga tidak memerlukan migrasi schema atau versi backup baru.
+
 ## Pengalaman pengguna v1
 
 Navigasi utama memakai lima tujuan `NavigationBar`: **Ikhtisar**, **Riwayat**, **Kalender**, **Anggaran**, dan **Rekening**. Anggaran berada sebelum Rekening karena lebih sering dipantau daripada pengelolaan tempat uang. Pada ruang sempit label hanya ditampilkan untuk tujuan terpilih; pada 320 px dengan text scale 200% seluruh label visual dapat disembunyikan, tetapi label semantics tetap lengkap dan isi tab mempunyai heading **Anggaran**.
@@ -127,25 +146,31 @@ Item **Kelola anggaran** di menu aplikasi dihapus setelah tab tersedia agar tida
 
 ### Daftar anggaran
 
-Daftar membuka tab **Aktif** dan filter jenis **Semua** secara default. Pilihan statusnya **Aktif**, **Mendatang**, dan **Riwayat**; filter jenisnya **Semua**, **Bulanan**, **Tahunan**, dan **Kustom**. Filter dipertahankan ketika kembali dari form, tetapi kunjungan baru kembali ke default.
+Daftar membuka bulan berjalan dan filter jenis **Semua** secara default. Filter jenis tetap **Semua**, **Bulanan**, **Tahunan**, dan **Kustom**, tetapi pilihan **Aktif**, **Mendatang**, serta **Riwayat** dihapus. Riwayat diakses langsung melalui navigator periode dengan panah sebelumnya/berikutnya.
 
-Pada layar sempit atau text scale besar, kontrol status boleh tersusun vertikal dan filter jenis dibuka lewat tombol/bottom sheet. Filter aktif selalu terlihat. Empty state hasil filter menyediakan aksi **Reset filter** atau **Lihat semua** agar tidak tampak seperti kehilangan data.
+Filter **Semua**, **Bulanan**, dan **Kustom** memakai navigator bulan. Batas kirinya Januari 2000 dan batas kanannya bulan berjalan; panah berikutnya nonaktif ketika sudah berada pada bulan berjalan. Filter **Tahunan** memakai navigator tahun dengan batas 2000 sampai tahun berjalan. Saat berganti antara navigator bulan dan tahun, tahun konteks dipertahankan. Filter/periode serta posisi gulir dipertahankan ketika berpindah tab atau kembali dari detail, sedangkan kunjungan baru melalui rute mandiri kembali ke periode berjalan dan jenis Semua.
 
-Daftar dikelompokkan berdasarkan rentang tanggal yang persis sama. Setiap kelompok mempunyai ringkasan totalnya sendiri; daftar tidak menampilkan total global yang menggabungkan beberapa rentang. Dengan demikian total anggaran bulanan dihitung per bulan, total anggaran tahunan dihitung per tahun, dan setiap rentang kustom dihitung terpisah. September dan Oktober tidak pernah digabung, sebagaimana Tahun 2026 dan Tahun 2027 tidak pernah digabung.
+Untuk suatu bulan pada filter **Semua**, dataset terdiri dari:
 
-Label tanggal kelompok diturunkan dari bentuk rentang: satu bulan kalender penuh memakai label bulan, satu tahun kalender penuh memakai label tahun, selain itu memakai rentang umum. Contoh:
+- anggaran bulanan yang rentangnya persis bulan terpilih;
+- anggaran tahunan pada tahun yang sama;
+- anggaran kustom yang rentangnya beririsan dengan bulan terpilih.
 
-- **September 2026**;
-- **Tahun 2026**;
-- **7 Sep–31 Des 2026**.
+Filter jenis hanya menyisakan jenis terkait dari dataset tersebut. Pada filter Tahunan, dataset adalah anggaran tahunan yang beririsan dengan tahun terpilih. Form baru menolak periode yang mulai setelah hari ini. Data masa depan dari backup/versi lama tidak membuat navigator melewati bulan/tahun berjalan dan tidak dihapus atau diubah diam-diam.
 
-Jenis tetap ditampilkan sebagai badge teks **Bulanan**, **Tahunan**, atau **Kustom** pada setiap kartu. Ringkasan kelompok juga menampilkan label jenis yang terkandung di dalamnya. Jika hanya ada satu jenis, gunakan nama jenis tersebut. Jika rentang persis sama berisi lebih dari satu jenis, gabungkan nama unik dalam urutan tetap **Bulanan**, **Tahunan**, lalu **Kustom**, dipisahkan dengan ` + `. Contohnya adalah **Bulanan + Kustom**. Dengan demikian periode kustom yang persis menyerupai bulan/tahun boleh berbagi kelompok dan total tanpa kehilangan identitasnya.
+Daftar disusun sebagai section periode dalam urutan **Bulanan**, **Tahunan**, lalu **Kustom**. Kunci kelompok adalah kombinasi jenis, `startDay`, dan `endDay`; karena itu anggaran bulanan dan kustom dengan tanggal identik tetap mempunyai ringkasan terpisah. Total bulanan tidak digabung dengan tahunan, sedangkan setiap rentang kustom yang berbeda juga berdiri sendiri.
 
-Total yang menjadi sumber kebenaran dihitung hanya di dalam kelompok dengan rentang persis sama: `groupLimit = Σ limitAmount`, `groupSpent = Σ spentAmount`, dan `groupNet = groupLimit - groupSpent`. Setiap ringkasan kelompok menampilkan **Terpakai <nominal> dari batas <nominal>** beserta sisa atau kelebihan, persentase, progress, dan status periodenya. Ringkasan juga menyebut jumlah kartu hampir habis, habis, dan terlampaui agar nilai net tidak menyamarkan masalah. Tidak ada ringkasan atau nilai turunan lintas kelompok.
+Total sumber kebenaran dihitung di dalam satu kelompok: `groupLimit = Σ limitAmount`, `groupSpent = Σ spentAmount`, dan `groupNet = groupLimit - groupSpent`. Header section menampilkan **Terpakai <nominal> dari <nominal>**, persentase, progress, serta sisa/kelebihan. Tidak ada total global yang mencampurkan beberapa jenis atau rentang.
 
-Pada tab Aktif, peringkat kelompok mengikuti status terburuk anggotanya: terlampaui, habis, hampir habis, lalu normal; tie-breaker berikutnya adalah `endDay`, `startDay`, lalu ID terkecil. Kartu dalam kelompok memakai peringkat status yang sama, lalu `normalizedName` dan ID. Kelompok Mendatang diurutkan menurut `startDay`, `endDay`, lalu ID terkecil; Riwayat menurut `endDay` dan `startDay` menurun, lalu ID terkecil. Urutan ini wajib deterministik.
+Pada konteks historis, `groupSpent` tahunan/kustom bersifat kumulatif hanya sampai batas periode tampilan. Contohnya, anggaran Tahunan 2026 yang dibuka dari September 2026 tidak memasukkan transaksi Oktober–Desember. Label section atau semantics harus menjelaskan konteks waktu tersebut agar tidak disalahartikan sebagai nilai akhir seluruh periode.
 
-Setiap kartu menampilkan nama, badge jenis, label periode, batas, terpakai, sisa/kelebihan, persentase, dan progress bar. Ringkasan kategori menampilkan maksimal dua nama lalu **+N lainnya**. Semantic label juga ringkas—jumlah kategori, maksimal dua contoh, dan jumlah sisanya—sedangkan daftar lengkap tersedia setelah membuka detail. Layar juga mempunyai tombol tambah, empty state yang sesuai status/filter, serta state loading, error, dan retry tanpa angka nol palsu.
+Setiap anggaran ditampilkan sebagai baris ringkas, bukan kartu besar: ikon kategori, nama, persentase, **Terpakai <nominal> dari <batas>**, progress bar, dan sisa/kelebihan. Ikon satu kategori mengikuti kategori tersebut; multi-kategori memakai ikon generik. Tanggal serta jenis yang sudah jelas dari header section tidak diulang pada setiap baris. Seluruh baris dapat diketuk untuk membuka detail lengkap dan mempunyai target minimal 48 dp.
+
+Nama di dalam satu kelompok diurutkan berdasarkan `normalizedName`, lalu ID. Kelompok kustom diurutkan menurut tanggal mulai, tanggal selesai, lalu ID terkecil. Urutan harus deterministik, nominal/status tidak hanya dibedakan melalui warna, dan semantic label menyebut nama, jenis/rentang, terpakai, batas, persentase, serta keadaan sisa/terlampaui.
+
+Ketika bulan tujuan belum mempunyai anggaran bulanan dan bulan sebelumnya mempunyai sumber, layar menampilkan aksi **Salin anggaran bulan sebelumnya** pada filter Semua/Bulanan. Aksi membuka konfirmasi sebelum memanggil operasi repository atomik. Setelah berhasil, daftar tetap berada pada bulan tujuan dan menampilkan jumlah anggaran yang disalin.
+
+Empty state membedakan bulan tanpa anggaran, hasil filter jenis yang kosong, dan sumber salin yang tidak tersedia. Layar tetap menyediakan tombol tambah, reset/lihat semua jenis jika relevan, serta state loading, error, dan retry tanpa angka nol palsu. Pada lebar sempit atau text scale besar, navigator, filter, header section, dan baris boleh tersusun ulang tanpa kehilangan semantics.
 
 ### Form tambah/edit
 
@@ -180,9 +205,10 @@ Model minimum:
 - `BudgetDetails`: anggaran beserta kategori terpilih;
 - `BudgetProgress`: terpakai serta getter sisa, terlampaui, rasio aktual, dan rasio visual;
 - `BudgetConflict`: ID kategori, ID/nama anggaran penyebab, dan periodenya;
-- `BudgetListFilter`: status tanggal, jenis opsional, dan tanggal referensi;
-- `BudgetRangeGroup`: kumpulan progres dengan `startDay` dan `endDay` yang persis sama, beserta getter `totalSpent`, `totalLimit`, sisa, dan kelebihan untuk rentang tersebut;
-- `BudgetListSnapshot`: daftar progres dan `BudgetRangeGroup` hasil filter. Snapshot tidak menyediakan getter total lintas kelompok;
+- `BudgetListFilter`: query status lama yang tetap dipakai kebutuhan internal/detail;
+- `BudgetBrowseFilter`: jendela bulan/tahun, `usageThroughDay`, serta jenis opsional untuk daftar utama;
+- `BudgetRangeGroup`: kumpulan progres dengan jenis, `startDay`, dan `endDay` yang sama, beserta getter `totalSpent`, `totalLimit`, sisa, dan kelebihan untuk rentang tersebut;
+- `BudgetListSnapshot`: daftar progres dan `BudgetRangeGroup` hasil filter. Snapshot tidak menyediakan getter total lintas kelompok atau lintas jenis;
 - `BudgetDraft`: periode, nama, batas, dan set ID subkategori;
 - `BudgetUpdateDraft`: nama, batas, dan set ID subkategori tanpa periode.
 
@@ -192,6 +218,8 @@ Kontrak `BudgetRepository` minimum:
 abstract interface class BudgetRepository {
   Stream<BudgetListSnapshot> watchBudgets(BudgetListFilter filter);
   Future<BudgetListSnapshot> loadBudgets(BudgetListFilter filter);
+  Stream<BudgetListSnapshot> watchBudgetsForPeriod(BudgetBrowseFilter filter);
+  Future<BudgetListSnapshot> loadBudgetsForPeriod(BudgetBrowseFilter filter);
   Stream<BudgetDetails?> watchBudget(int id);
   Future<BudgetDetails?> getBudget(int id);
   Stream<Map<int, List<BudgetConflict>>> watchCategoryConflicts(
@@ -201,12 +229,18 @@ abstract interface class BudgetRepository {
   Future<int> createBudget(BudgetDraft draft);
   Future<void> updateBudget(int id, BudgetUpdateDraft draft);
   Future<void> deleteBudget(int id);
+  Future<int> copyMonthlyBudgets({
+    required BudgetPeriod source,
+    required BudgetPeriod target,
+  });
 }
 ```
 
 `BudgetUpdateDraft` sengaja tidak membawa periode. Repository memberi pesan validasi yang ramah, sedangkan constraint dan trigger SQLite menjadi pertahanan kedua.
 
-Filter tanggal hanya menentukan anggaran mana yang tampil. `spentAmount` selalu dihitung untuk seluruh rentang milik anggaran, tidak dipotong oleh tab, tanggal referensi, atau window tampilan.
+`BudgetBrowseFilter` memilih setiap anggaran yang beririsan dengan jendela tampilan, lalu `periodKind` menyaring jenis bila diperlukan. `usageThroughDay` hanya memotong agregasi progres pada akhir konteks historis; ia tidak mengubah periode, batas, konflik, atau data tersimpan anggaran.
+
+`copyMonthlyBudgets` memvalidasi dua periode bulanan yang berurutan dan menjalankan pemeriksaan target, sumber, kategori, nama, konflik, insert, serta mapping dalam satu transaksi. Nilai kembali adalah jumlah anggaran baru yang berhasil dibuat.
 
 Invariant minimal satu mapping tidak dapat dinyatakan sebagai constraint row langsung atau trigger commit-tertunda di SQLite karena row `budgets` harus ada sebelum mapping pertama. Create/update dijalankan dalam satu transaksi, jumlah mapping diperiksa setelah penulisan dan sebelum commit, dan pemeriksaan integritas restore mengulang aturan yang sama. Trigger tidak boleh memblokir keadaan kosong sementara yang diperlukan untuk mengganti seluruh pilihan atau menjalankan cascade saat anggaran dihapus.
 
@@ -287,11 +321,11 @@ Migrasi v5 ke v6 hanya membuat tabel, constraint, trigger, dan indeks anggaran. 
 
 ## Query dan performa
 
-Daftar tidak boleh memakai satu query per kartu. Bentuk query aman memakai CTE `selected_budgets`, lalu CTE `spent_by_budget` yang menggabungkan mapping anggaran ke `ledger_allocations` dan header `ledger_entries`, kemudian menjumlahkan `allocation.amount` tepat sekali per ID budget. Hasil agregat itu baru di-`LEFT JOIN` ke metadata kategori. Saat fold, `spentAmount` di-assign sekali per budget dan `categoryId` dideduplikasi; jangan menjumlahkan ulang agregat untuk setiap row kategori.
+Daftar tidak boleh memakai satu query per kartu. Query awal memilih budget yang beririsan dengan jendela bulan/tahun dan jenis aktif. Agregasi progres kemudian menggabungkan mapping anggaran ke `ledger_allocations` serta header `ledger_entries`, menjumlahkan `allocation.amount` tepat sekali per ID budget, dan menerapkan `entry.occurred_day <= usageThroughDay` selain batas periode budget. Saat fold, `spentAmount` di-assign sekali per budget dan `categoryId` dideduplikasi; jangan menjumlahkan ulang agregat untuk setiap row kategori.
 
 Alternatif dua query diperbolehkan bila keduanya dijalankan dalam snapshot/transaksi baca yang konsisten: satu query agregat progres dan satu query detail mapping/kategori. Jumlah query tetap dan tidak bergantung pada jumlah kartu.
 
-Stream snapshot wajib mengamati `budgets`, `budget_categories`, `categories`, `ledger_allocations`, dan `ledger_entries`. Perubahan header transaksi, alokasi, kategori, atau anggaran lalu memuat ulang data relevan otomatis.
+Stream snapshot wajib mengamati `budgets`, `budget_categories`, `categories`, `ledger_allocations`, dan `ledger_entries`. Perubahan header transaksi, alokasi, kategori, anggaran, maupun hasil copy lalu memuat ulang data relevan otomatis. Pemeriksaan ketersediaan salin membaca target dan bulan sumber melalui filter bulanan yang sama tanpa membuat query per kartu.
 
 Target performa menggunakan data representatif sampai batas ledger yang didukung backup pada HP Snapdragon 460/RAM 4 GB. Nominal uang dan agregasi tetap integer; `double` hanya boleh dipakai untuk rasio tampilan setelah klasifikasi integer selesai.
 
@@ -376,7 +410,12 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 - create/update memeriksa minimal satu mapping sebelum commit;
 - edit tetap berhasil dengan timestamp monotonik ketika jam perangkat mundur;
 - delete hanya menghapus budget dan mapping;
-- periode tidak dapat diedit.
+- periode tidak dapat diedit;
+- browse bulanan memasukkan bulanan persis bulan, tahunan pada tahun sama, dan kustom yang overlap; filter jenis menyisakan jenis yang tepat;
+- browse tahunan memasukkan tahun yang dipilih dan menolak window/cutoff sipil yang tidak valid;
+- copy bulanan berurutan menyalin seluruh nama, batas, dan mapping dengan ID/timestamp baru, termasuk Desember–Januari serta Februari tahun kabisat;
+- copy ditolak atomik bila sumber kosong, target sudah mempunyai anggaran bulanan, kategori sumber telah diarsipkan, atau target berkonflik nama/kategori; tidak ada row parsial;
+- stream periode bereaksi setelah copy berhasil dan pemanggilan ganda tidak membuat duplikasi.
 
 ### Progres
 
@@ -389,7 +428,8 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 - pemasukan, transfer, serta penyesuaian tidak dihitung;
 - add/edit/delete transaksi maupun perubahan nominal/kategori allocation memperbarui progres;
 - perpindahan tanggal, kategori, atau jenis transaksi memindahkan kontribusi ke anggaran yang benar;
-- filter tampilan tidak memotong rentang agregasi anggaran;
+- daftar historis memotong progres tahunan/kustom pada `usageThroughDay`, sedangkan query detail tanpa cutoff tetap dapat menghitung seluruh rentang;
+- transaksi setelah akhir bulan tampilan tidak mengubah progres historis bulan tersebut;
 - rename kategori tidak memutus relasi.
 
 ### Database dan migrasi
@@ -417,27 +457,31 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 
 ### UI dan perangkat
 
-- tab Aktif/Mendatang/Riwayat dan seluruh filter jenis;
-- empty/loading/error/retry;
+- navigator bulan untuk Semua/Bulanan/Kustom serta navigator tahun untuk Tahunan, termasuk batas Januari/tahun 2000 dan bulan/tahun berjalan;
+- perpindahan filter mempertahankan konteks tahun, sedangkan kunjungan mandiri baru kembali ke periode berjalan dan Semua;
+- tampilan Semua memuat bulanan persis bulan, tahunan pada tahun sama, dan kustom overlap dalam urutan section Bulanan–Tahunan–Kustom;
+- total tiap kombinasi jenis/rentang tetap terpisah; bulanan dan kustom bertanggal identik tidak digabung;
+- progres tahunan/kustom historis berhenti pada akhir bulan yang dilihat; Tahunan tahun berjalan berhenti pada hari ini;
+- baris ringkas menampilkan ikon, nama, nominal, persentase, progress, dan sisa/kelebihan lalu membuka detail saat diketuk;
+- satu kategori memakai ikon kategori dan multi-kategori memakai ikon generik;
+- nama/group order serta tie-breaker ID deterministik;
+- empty/loading/error/retry dan reset filter jenis;
+- CTA salin hanya muncul pada Semua/Bulanan ketika target bulanan kosong dan sumber ada;
+- dialog konfirmasi salin menyebut sumber, tujuan, dan jumlah; sukses menetap di target, kegagalan menampilkan pesan, dan double tap tidak menggandakan data;
 - create/edit/delete serta pesan konflik lengkap;
 - pemilih bulanan/tahunan/kustom, custom tanpa silent default, dan periode read-only saat edit;
 - kategori terpilih yang menjadi konflik setelah periode berubah dapat dilepas, sedangkan kategori konflik baru tidak dapat ditambahkan;
-- kelompok campuran under/over menghasilkan `groupLimit`, `groupSpent`, `groupNet`, dan jumlah status yang tepat;
-- tie-breaker kelompok dan kartu deterministik;
 - satu kategori dapat menjelaskan beberapa `BudgetConflict` tanpa memotong sumber konflik;
-- status tab Aktif memakai hari ini, bukan bulan transaksi yang sedang dipilih;
-- daftar tidak menampilkan ringkasan global yang menggabungkan beberapa kelompok rentang;
-- setiap rentang persis sama menampilkan ringkasan `BudgetRangeGroup.totalSpent`, `BudgetRangeGroup.totalLimit`, nilai net, persentase, progress, dan statusnya sendiri; September dan Oktober, Tahun 2026 dan Tahun 2027, serta dua rentang kustom berbeda tidak pernah digabung;
-- bulanan dan kustom dengan rentang identik berbagi satu ringkasan total; label jenis kelompok memakai urutan deterministik **Bulanan**, **Tahunan**, lalu **Kustom**, sementara badge jenis setiap kartu tetap dipertahankan;
 - nominal dan status overspending tidak hanya dibedakan lewat warna;
+- tombol panah, baris, dan aksi minimal 48 dp serta mempunyai tooltip/semantic label yang lengkap;
 - lebar 320 px dan text scale 200% tidak overflow;
-- perubahan hari, resume aplikasi, atau perubahan zona waktu menghitung ulang `referenceDay` lokal dan status;
+- perubahan hari, resume aplikasi, atau perubahan zona waktu menghitung ulang batas navigator/cutoff lokal;
 - query data representatif terasa responsif pada HP referensi.
 
 ## Di luar ruang lingkup v1
 
 - rollover atau membawa sisa ke periode berikutnya;
-- anggaran berulang dan copy otomatis;
+- pembuatan otomatis dari template, recurrence, atau sinkronisasi perubahan antarbulan;
 - pemecahan otomatis anggaran tahunan/kustom menjadi target per bulan;
 - hierarki anggaran tahunan dengan child bulanan pada kategori yang sama;
 - mengedit jenis atau tanggal periode setelah dibuat;
@@ -460,4 +504,4 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 
 ## Kriteria selesai
 
-Kriteria implementasi dan integritas data Anggaran v1 telah dipenuhi: pengguna dapat membuat, melihat, mengubah, dan menghapus anggaran bulanan, tahunan, maupun kustom dengan banyak subkategori; progres mengikuti nominal allocation pada seluruh rentang; overlap lintas jenis ditolak; histori kategori arsip tetap akurat; backup v1, v2, v3, dan v4 dipulihkan sesuai kontrak; serta migrasi lama aman. Smoke test dasar pada HP referensi, termasuk backup–restore v4, telah berhasil; evaluasi aksesibilitas, performa jangka panjang, dan penyempurnaan berdasarkan pemakaian nyata tetap berlanjut.
+Kriteria implementasi dan integritas data Anggaran v1 mencakup CRUD bulanan/tahunan/kustom, navigator periode dengan total terpisah, progres historis yang berhenti pada konteks tampilan, salin bulanan manual yang atomik dan independen, penolakan overlap lintas jenis, histori kategori arsip, serta restore backup v1–v4 sesuai kontrak. Perubahan navigator/copy tidak mengubah schema v6 atau payload v4. Smoke test dasar Anggaran dan backup–restore v4 pada HP referensi telah berhasil sebelum redesign; alur navigator, tampilan ringkas, konfirmasi copy, aksesibilitas, dan performanya tetap harus diverifikasi kembali pada perangkat.

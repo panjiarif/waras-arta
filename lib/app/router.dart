@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/formatters.dart';
+import '../domain/budget.dart';
 import '../domain/finance.dart';
 import '../features/backup/views/backup_screen.dart';
 import '../features/budgets/views/budget_detail_screen.dart';
@@ -17,6 +18,27 @@ import '../features/ledger/views/entry_detail_screen.dart';
 import '../features/ledger/views/entry_form_screen.dart';
 import '../features/ledger/views/home_screen.dart';
 import '../features/summary/views/monthly_summary_screen.dart';
+
+BudgetPeriodKind? _parseBudgetKind(String? value) => switch (value) {
+  'monthly' => BudgetPeriodKind.monthly,
+  'yearly' => BudgetPeriodKind.yearly,
+  'custom' => BudgetPeriodKind.custom,
+  _ => null,
+};
+
+DateTime? _parseBudgetMonth(Map<String, String> query) {
+  final year = int.tryParse(query['year'] ?? '');
+  final month = int.tryParse(query['month'] ?? '');
+  if (year == null ||
+      month == null ||
+      year < 2000 ||
+      year > 9999 ||
+      month < 1 ||
+      month > 12) {
+    return null;
+  }
+  return DateTime(year, month);
+}
 
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -43,7 +65,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'new',
-                builder: (context, state) => const BudgetFormScreen(),
+                builder: (context, state) => BudgetFormScreen(
+                  initialKind: _parseBudgetKind(
+                    state.uri.queryParameters['kind'],
+                  ),
+                  initialMonth: _parseBudgetMonth(state.uri.queryParameters),
+                ),
               ),
               GoRoute(
                 path: ':budgetId',

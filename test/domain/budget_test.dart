@@ -248,30 +248,47 @@ void main() {
     source.clear();
 
     expect(snapshot.items, hasLength(3));
-    expect(snapshot.groups, hasLength(2));
-    final january = snapshot.groups.first;
-    expect((january.startDay, january.endDay), (20240101, 20240131));
-    expect(january.items.map((item) => item.budget.id), [1, 2]);
-    expect(january.totalLimit, 150);
-    expect(january.totalSpent, 160);
-    expect(january.periodKinds, [
+    expect(snapshot.groups, hasLength(3));
+    expect(snapshot.groups.map((group) => group.periodKind), [
+      BudgetPeriodKind.monthly,
       BudgetPeriodKind.monthly,
       BudgetPeriodKind.custom,
     ]);
-    expect(january.percentage, 106);
-    expect(january.actualRatio, closeTo(160 / 150, .000001));
-    expect(january.visualRatio, 1);
-    expect(january.attentionCount, 2);
-    expect(january.remainingAmount, 0);
-    expect(january.exceededAmount, 10);
-    expect(january.countForStatus(BudgetUsageStatus.nearLimit), 1);
-    expect(january.countForStatus(BudgetUsageStatus.exceeded), 1);
-    expect(snapshot.groups.last.remainingAmount, 180);
+
+    final januaryMonthly = snapshot.groups[0];
+    expect(
+      (januaryMonthly.startDay, januaryMonthly.endDay),
+      (20240101, 20240131),
+    );
+    expect(januaryMonthly.items.map((item) => item.budget.id), [1]);
+    expect(januaryMonthly.totalLimit, 100);
+    expect(januaryMonthly.totalSpent, 80);
+    expect(januaryMonthly.periodKinds, [BudgetPeriodKind.monthly]);
+    expect(januaryMonthly.percentage, 80);
+    expect(januaryMonthly.actualRatio, closeTo(.8, .000001));
+    expect(januaryMonthly.visualRatio, .8);
+    expect(januaryMonthly.attentionCount, 1);
+    expect(januaryMonthly.remainingAmount, 20);
+    expect(januaryMonthly.exceededAmount, 0);
+    expect(januaryMonthly.countForStatus(BudgetUsageStatus.nearLimit), 1);
+
+    final januaryCustom = snapshot.groups.last;
+    expect(
+      (januaryCustom.startDay, januaryCustom.endDay),
+      (20240101, 20240131),
+    );
+    expect(januaryCustom.items.map((item) => item.budget.id), [2]);
+    expect(januaryCustom.totalLimit, 50);
+    expect(januaryCustom.totalSpent, 80);
+    expect(januaryCustom.periodKinds, [BudgetPeriodKind.custom]);
+    expect(januaryCustom.exceededAmount, 30);
+    expect(januaryCustom.countForStatus(BudgetUsageStatus.exceeded), 1);
+    expect(snapshot.groups[1].remainingAmount, 180);
     expect(() => snapshot.items.clear(), throwsUnsupportedError);
     expect(() => snapshot.groups.clear(), throwsUnsupportedError);
-    expect(() => january.items.clear(), throwsUnsupportedError);
+    expect(() => januaryMonthly.items.clear(), throwsUnsupportedError);
     expect(
-      () => january.periodKinds.add(BudgetPeriodKind.yearly),
+      () => januaryMonthly.periodKinds.add(BudgetPeriodKind.yearly),
       throwsUnsupportedError,
     );
   });
@@ -301,6 +318,29 @@ void main() {
     expect(first.copyWith(periodKind: BudgetPeriodKind.yearly), isNot(same));
     expect(first.copyWith(referenceDay: 20240116), isNot(same));
     expect(first.copyWith(clearPeriodKind: true).periodKind, isNull);
+  });
+
+  test('browse filter factories, equality, and copy include every field', () {
+    final month = BudgetBrowseFilter.month(
+      year: 2024,
+      month: 2,
+      usageThroughDay: 20240215,
+      periodKind: BudgetPeriodKind.monthly,
+    );
+    const same = BudgetBrowseFilter(
+      windowStartDay: 20240201,
+      windowEndDay: 20240229,
+      usageThroughDay: 20240215,
+      periodKind: BudgetPeriodKind.monthly,
+    );
+    final year = BudgetBrowseFilter.year(year: 2024, usageThroughDay: 20240930);
+
+    expect(month, same);
+    expect(month.hashCode, same.hashCode);
+    expect((year.windowStartDay, year.windowEndDay), (20240101, 20241231));
+    expect(month.copyWith(), same);
+    expect(month.copyWith(usageThroughDay: 20240220), isNot(same));
+    expect(month.copyWith(clearPeriodKind: true).periodKind, isNull);
   });
 
   test('budget names are canonicalized and normalized consistently', () {

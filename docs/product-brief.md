@@ -157,6 +157,14 @@ Kelompok **Simpanan & investasi** bukan fitur tujuan keuangan atau pelacakan har
 - Progres tidak disimpan, tetapi dihitung ulang dari alokasi kategori beserta tanggal transaksi induknya agar edit/hapus transaksi tetap konsisten.
 - Pengeluaran tetap boleh dicatat setelah batas terlampaui.
 - Daftar dan progres dapat dibuka langsung melalui tab **Anggaran** pada navigasi utama.
+- Daftar mengganti filter status Aktif/Mendatang/Riwayat dengan navigator periode. Filter **Semua**, **Bulanan**, dan **Kustom** berpindah per bulan, sedangkan filter **Tahunan** berpindah per tahun; navigasi tidak melewati bulan atau tahun berjalan.
+- Form baru tidak menerima periode yang dimulai setelah hari ini; periode bulan/tahun berjalan tetap mencakup satu periode kalender penuh, dan rentang kustom aktif boleh berakhir di masa depan.
+- Pada tampilan **Semua** untuk suatu bulan, aplikasi menampilkan anggaran bulanan pada bulan tersebut, anggaran tahunan pada tahun yang sama, serta anggaran kustom yang beririsan dengan bulan tersebut.
+- Total dan progres tidak mencampurkan jenis/rentang: bulanan, tahunan, dan setiap rentang kustom mempunyai ringkasan sendiri. Item ditampilkan sebagai baris ringkas dan detail lengkap dibuka dengan mengetuk baris.
+- Untuk bulan lampau, progres anggaran tahunan/kustom bersifat kumulatif hanya sampai akhir bulan yang sedang dilihat. Tahun berjalan pada filter Tahunan dihitung sampai hari ini; tahun lampau dihitung sampai akhir tahun.
+- Jika bulan tujuan belum mempunyai anggaran bulanan dan bulan sebelumnya mempunyai sumber, pengguna dapat memilih **Salin anggaran bulan sebelumnya** lalu mengonfirmasi. Operasi menyalin nama, batas, dan kategori secara atomik, bukan transaksi atau nilai progres.
+- Hasil salin adalah snapshot independen. Perubahan pada bulan asal atau tujuan tidak merambat ke bulan lain, tidak ada sinkronisasi antarbulan, dan sisa anggaran tidak di-rollover.
+- Navigasi serta salin manual memakai schema v6 dan payload backup v4 yang sudah ada; tidak ada perubahan format database atau backup.
 
 Aturan lengkap, schema v6 yang aktif, kompatibilitas backup v4, dan matriks pengujian tersedia pada [spesifikasi Anggaran v1](budgets.md).
 
@@ -344,7 +352,7 @@ MVP dianggap berhasil ketika pengguna dapat:
 - Migrasi schema v2 ke v3 menambahkan siklus arsip rekening dan dukungan penyesuaian saldo bertanda tanpa mengubah arus kas lama.
 - Kalender diperkenalkan dengan memakai `occurredDay` dan indeks ledger yang sudah ada tanpa menaikkan schema 3; schema aktif kemudian naik ke v4 untuk allocation transaksi.
 - Schema v5 menambahkan `balanceGroup` rekening. Migrasi memberi seluruh rekening lama nilai `primary`, dan payload backup v3 membawa nilai `primary` atau `savingsInvestment` secara eksplisit.
-- Schema aktif v6 menambahkan Anggaran v1 dengan periode bulanan/tahunan/kustom, mapping multi-subkategori, progres dari allocation, serta penolakan overlap inklusif; payload backup v4 membawa seluruh data tersebut dan tetap dapat merestore v1–v3 dengan anggaran kosong.
+- Schema aktif v6 menambahkan Anggaran v1 dengan periode bulanan/tahunan/kustom, mapping multi-subkategori, progres dari allocation, penolakan overlap inklusif, penelusuran per bulan/tahun, serta salin bulanan manual yang independen; payload backup v4 membawa seluruh data tersebut dan tetap dapat merestore v1–v3 dengan anggaran kosong.
 - Kalender dibatasi Januari 2000 sampai hari ini, menggunakan pekan Senin–Minggu, dan menyertakan seluruh jenis transaksi pada daftar harian.
 - Ringkasan Bulanan dibuka dari area **Arus bulan dipilih**, bukan melalui tujuan baru di navigasi bawah. Cakupan default semua rekening dapat difilter menurut kelompok rekening saat ini; rekening arsip mengikuti kelompok tersimpannya dan perubahan kelompok berlaku retroaktif pada histori.
 - Backup manual menggunakan file `.warasarta` terenkripsi berbasis kata sandi, sedangkan restore memakai validasi, preview, konfirmasi replace-all, dan transaksi atomik.

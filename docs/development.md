@@ -112,14 +112,19 @@ Pilih satu bulan uji (misalnya September 2026); tanggal entri dalam langkah 1–
 
 ### Skenario anggaran
 
-1. Buka tab **Anggaran**, buat anggaran bulanan dengan dua subkategori pengeluaran, lalu pastikan daftar dan detail menampilkan nama, periode, batas, kategori, serta progres yang sama. Ikhtisar tidak perlu menampilkan kartu Anggaran aktif.
-2. Catat satu pengeluaran split yang hanya sebagian alokasinya memakai kategori anggaran. Pastikan progres bertambah sebesar allocation yang cocok, bukan total header transaksi.
-3. Edit nominal/kategori/tanggal transaksi tersebut dan kemudian hapusnya. Progres anggaran harus bereaksi tanpa membuka ulang aplikasi.
-4. Buat anggaran tahunan dan rentang kustom, termasuk periode satu hari. Pastikan filter aktif/mendatang/riwayat dan label periode mengikuti tanggal lokal perangkat.
-5. Coba memakai subkategori yang sama pada rentang inklusif yang beririsan, termasuk lintas jenis periode. Penyimpanan harus ditolak; rentang yang hanya bersebelahan tanpa tanggal sama tetap boleh.
-6. Edit nama, batas, serta pilihan kategori. Jenis dan tanggal periode harus tetap read-only pada edit; hapus anggaran hanya menghapus definisi/mapping, bukan kategori atau transaksi.
-7. Arsipkan kategori yang sudah dipakai anggaran. Histori dan progres tetap terbaca; kategori tersebut tidak dapat ditambahkan kembali ke anggaran lain sampai dipulihkan.
-8. Uji lima destination pada layar sempit dan text scale besar: label boleh menyesuaikan, tetapi tab tetap dapat dikenali pembaca layar, hanya ada satu AppBar/FAB, dan tidak terjadi overflow. Uji juga keyboard, double submit, Back dengan form kotor, serta performa daftar/progres pada HP referensi.
+1. Buka tab **Anggaran** dan pastikan periode awal adalah bulan berjalan dengan jenis **Semua**. Panah kanan harus nonaktif; bergerak mundur beberapa bulan lalu maju lagi tanpa melewati bulan berjalan.
+2. Pada satu bulan uji, buat anggaran bulanan, tahunan pada tahun yang sama, dan kustom yang beririsan dengan bulan tersebut memakai kategori berbeda. Tampilan Semua harus menyusun section Bulanan, Tahunan, lalu Kustom dengan total masing-masing terpisah.
+3. Buat periode kustom dengan tanggal persis sama seperti satu bulan. Pastikan total kustom tidak digabung dengan total bulanan. Ganti filter Bulanan/Tahunan/Kustom dan pastikan hanya jenis yang dipilih yang terlihat.
+4. Pada filter Tahunan, pastikan header berubah menjadi navigator tahun, panah berhenti pada tahun berjalan, dan kembali ke Semua mempertahankan tahun/bulan konteks yang wajar.
+5. Catat pengeluaran untuk anggaran tahunan/kustom pada beberapa bulan. Ketika melihat bulan lampau, progres hanya boleh menjumlahkan transaksi sampai akhir bulan tersebut; pada bulan/tahun berjalan hanya sampai hari ini.
+6. Catat satu pengeluaran split yang hanya sebagian alokasinya memakai kategori anggaran. Pastikan progres bertambah sebesar allocation yang cocok, bukan total header transaksi. Edit nominal/kategori/tanggal lalu hapus transaksi dan pastikan progres bereaksi tanpa membuka ulang aplikasi.
+7. Siapkan beberapa anggaran bulanan pada bulan sumber dan kosongkan bulan berikutnya. Tekan **Salin anggaran bulan sebelumnya**, periksa bulan/jumlah pada dialog, konfirmasi, lalu pastikan nama, batas, dan kategori tersalin tanpa transaksi atau progres lama.
+8. Edit satu hasil salin dan satu anggaran sumber secara terpisah. Pastikan perubahan tidak merambat antarbulan. Ketukan berulang selama proses tidak boleh membuat duplikat.
+9. Pastikan aksi salin tidak tersedia ketika sumber kosong atau target sudah mempunyai anggaran bulanan. Arsipkan satu kategori sumber lalu coba salin ke target kosong; operasi harus gagal tanpa meninggalkan sebagian anggaran.
+10. Coba memakai subkategori yang sama pada rentang inklusif yang beririsan, termasuk lintas jenis periode. Penyimpanan/copy harus ditolak; rentang yang hanya bersebelahan tanpa tanggal sama tetap boleh.
+11. Edit nama, batas, serta pilihan kategori. Jenis dan tanggal periode tetap read-only pada edit; hapus anggaran hanya menghapus definisi/mapping, bukan kategori atau transaksi. Kategori yang diarsipkan setelah dipakai tetap terbaca pada histori tetapi tidak dapat baru ditambahkan.
+12. Uji navigator, filter, header section, baris ringkas, dialog copy, dan detail pada lebar 320 px serta text scale 200%. Semua aksi minimal 48 dp, pembaca layar menyebut periode/nominal/status, hanya ada satu AppBar/FAB, dan tidak terjadi overflow. Uji juga keyboard, Back dengan form kotor, perpindahan tab, posisi gulir, serta performa pada HP referensi.
+13. Pada form baru, pastikan pilihan bulanan/tahunan tidak melewati periode berjalan, rentang kustom yang seluruhnya mulai di masa depan ditolak, dan rentang kustom yang mulai hari ini atau sebelumnya tetap boleh berakhir di masa depan.
 
 ### Skenario backup dan restore
 
@@ -168,10 +173,13 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 - [ ] Riwayat dan kalender menampilkan satu kartu **2 rincian**; detail menampilkan kedua nominal, sedangkan saldo berkurang tepat Rp17.000 sekali.
 - [ ] Edit transaksi split memuat urutan lama; ubah nominal/kategori atau kembali menjadi satu rincian lalu pastikan total, saldo, backup, dan restore ikut konsisten.
 - [ ] Form anggaran membuat periode bulanan, tahunan, dan kustom dengan satu atau beberapa subkategori; edit mempertahankan periode serta memungkinkan perubahan nama, batas, dan kategori.
-- [ ] Tab Anggaran dapat dibuka langsung, filter/posisi daftar bertahan ketika berpindah tab atau kembali dari detail, dan menu aplikasi tidak lagi menduplikasi **Kelola anggaran**.
-- [ ] Progres anggaran menjumlahkan nominal allocation pengeluaran yang cocok dan bereaksi terhadap create/edit/delete transaksi tanpa menghitung transfer atau penyesuaian.
-- [ ] Konflik kategori pada rentang inklusif yang beririsan ditolak, sedangkan kategori berbeda atau rentang yang hanya bersebelahan tetap dapat disimpan.
-- [ ] Hapus anggaran tidak menghapus transaksi/kategori; kategori arsip yang sudah terhubung tetap terbaca pada histori.
+- [ ] Tab Anggaran membuka bulan berjalan/jenis Semua; navigator bulan atau tahun tidak melewati periode berjalan dan state/posisi daftar bertahan saat berpindah tab atau kembali dari detail.
+- [ ] Tampilan Semua menyertakan bulanan persis bulan, tahunan pada tahun sama, serta kustom overlap; total setiap jenis/rentang berdiri sendiri dan memakai baris ringkas.
+- [ ] Progres anggaran menjumlahkan allocation pengeluaran yang cocok, bereaksi terhadap create/edit/delete transaksi, mengecualikan transfer/penyesuaian, dan berhenti pada cutoff konteks historis.
+- [ ] Salin bulan sebelumnya hanya tersedia untuk sumber berisi/target bulanan kosong, meminta konfirmasi, berjalan atomik, tidak menggandakan ketukan, serta menghasilkan salinan independen.
+- [ ] Konflik kategori pada rentang inklusif yang beririsan ditolak saat create/edit/copy, sedangkan kategori berbeda atau rentang yang hanya bersebelahan tetap dapat disimpan.
+- [ ] Hapus anggaran tidak menghapus transaksi/kategori; kategori arsip yang sudah terhubung tetap terbaca pada histori tetapi menggagalkan copy baru secara utuh.
+- [ ] Navigator, filter, section, baris, progress, dan dialog salin tetap terbaca pembaca layar serta tidak overflow pada 320 px/text scale 200%.
 - [ ] Tambah kelompok selalu meminta satu subkategori pertama; nama dan ikon keduanya dapat diedit.
 - [ ] Rename/ubah ikon kategori langsung terlihat di riwayat dan detail transaksi lama.
 - [ ] Kategori arsip hilang dari pilihan transaksi baru, tetap terbaca pada riwayat, dan dapat dipulihkan.
@@ -225,6 +233,6 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 2. Uji file Downloads dan penyedia dokumen cloud pada perangkat/instalasi terpisah menggunakan data percobaan; ukur juga Argon2id pada HP referensi.
 3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini memakai schema v6 dan payload backup v4 dengan `balanceGroup`, allocation, serta anggaran.
 4. Jalankan checklist perangkat untuk [Alokasi Kategori Transaksi](transaction-allocations.md): satu rincian, split, edit, perubahan jenis, kategori arsip, backup v4, serta restore file legacy v1/v2/v3 dan file aktif v4. Fixture v1/v2 harus menghasilkan rekening Saldo utama; seluruh fixture legacy harus menghasilkan anggaran kosong.
-5. Jalankan checklist perangkat untuk [Anggaran v1](budgets.md), termasuk CRUD bulanan/tahunan/kustom, multi-subkategori, progres allocation, overlap, kategori arsip, dan round-trip backup v4. Setelah alur ini stabil, lanjutkan fitur produk berikutnya tanpa mengubah kontrak data Anggaran secara diam-diam.
+5. Jalankan checklist perangkat untuk [Anggaran v1](budgets.md), termasuk CRUD bulanan/tahunan/kustom, navigator periode, section/baris ringkas, cutoff progres historis, salin bulanan manual atomik, multi-subkategori, overlap, kategori arsip, dan round-trip backup v4. Setelah alur ini stabil, lanjutkan fitur produk berikutnya tanpa mengubah kontrak data Anggaran secara diam-diam.
 
 Jangan menjadikan alpha satu-satunya catatan keuangan sebelum restore lintas instalasi berhasil diuji. Setelah itu pun, buat backup rutin secara berkala dan pertahankan beberapa salinan di luar HP; aplikasi belum membuat backup terjadwal. Safety backup yang wajib saat restore hanya melindungi keadaan tepat sebelum replace-all dan bukan pengganti kebiasaan backup rutin.

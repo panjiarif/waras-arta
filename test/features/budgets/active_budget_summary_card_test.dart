@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:waras_arta/app/providers.dart';
 import 'package:waras_arta/domain/budget.dart';
+import 'package:waras_arta/features/budgets/view_models/budget_view_model.dart';
 import 'package:waras_arta/features/budgets/views/active_budget_summary_card.dart';
 import 'package:waras_arta/features/calendar/view_models/calendar_view_model.dart';
 
@@ -31,6 +32,47 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('shows the nearest upcoming budget across period kinds', (
+    tester,
+  ) async {
+    final nearest = fakeBudgetProgress(
+      id: 1,
+      name: 'Kustom terdekat',
+      period: BudgetPeriod.custom(20260301, 20260310),
+    );
+    final later = fakeBudgetProgress(
+      id: 2,
+      name: 'Bulanan lebih jauh',
+      period: BudgetPeriod.monthly(2026, 4),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          currentDateProvider.overrideWithValue(DateTime(2026, 2, 10)),
+          activeBudgetSummaryProvider.overrideWith(
+            (ref) => Stream.value(
+              BudgetListSnapshot(items: const [], groups: const []),
+            ),
+          ),
+          upcomingBudgetSummaryProvider.overrideWith(
+            (ref) => Stream.value(
+              BudgetListSnapshot(items: [nearest, later], groups: const []),
+            ),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: ActiveBudgetSummaryCard()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Berikutnya: Kustom terdekat'), findsOneWidget);
+    expect(find.textContaining('Bulanan lebih jauh'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'globally ranks exhausted ahead of normal budgets in another range',

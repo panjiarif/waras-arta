@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/category_icons.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/budget.dart';
 
@@ -264,120 +265,276 @@ class BudgetRangeHeader extends StatelessWidget {
       if (issueCount > 0) '$issueCount perlu perhatian',
     ].join(', ');
 
+    final keySuffix =
+        '${group.periodKind.name}-${group.startDay}-${group.endDay}';
     return Semantics(
-      key: ValueKey('budget-group-semantics-${group.startDay}-${group.endDay}'),
+      key: ValueKey('budget-group-semantics-$keySuffix'),
       container: true,
+      header: true,
       label: semanticsLabel,
       child: ExcludeSemantics(
         child: Container(
-          key: ValueKey('budget-group-${group.startDay}-${group.endDay}'),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-          ),
+          key: ValueKey('budget-group-$keySuffix'),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                periodLabel,
+                '$kindLabel · $periodLabel'.toUpperCase(),
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 3),
-              Text(
-                '$kindLabel • ${group.items.length} anggaran',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              if (issueCount > 0) ...[
-                const SizedBox(height: 3),
-                Text(
-                  '$issueCount perlu perhatian',
-                  style: TextStyle(
-                    color: statusColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              Text(
-                'Terpakai / batas',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 4),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      formatRupiah(group.totalSpent),
-                      key: ValueKey(
-                        'budget-group-spent-${group.startDay}-${group.endDay}',
-                      ),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('/'),
-                    ),
-                    Text(
-                      formatRupiah(group.totalLimit),
-                      key: ValueKey(
-                        'budget-group-limit-${group.startDay}-${group.endDay}',
-                      ),
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              LinearProgressIndicator(
-                key: ValueKey(
-                  'budget-group-progress-${group.startDay}-${group.endDay}',
-                ),
-                value: group.visualRatio,
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(8),
-                color: statusColor,
-                backgroundColor: Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest,
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 5),
               Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                runAlignment: WrapAlignment.spaceBetween,
-                spacing: 12,
-                runSpacing: 4,
+                spacing: 4,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
-                    '${group.percentage}%',
-                    key: ValueKey(
-                      'budget-group-percentage-${group.startDay}-${group.endDay}',
+                    formatRupiah(group.totalSpent),
+                    key: ValueKey('budget-group-spent-$keySuffix'),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const Text('dari'),
+                  Text(
+                    formatRupiah(group.totalLimit),
+                    key: ValueKey('budget-group-limit-$keySuffix'),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: LinearProgressIndicator(
+                      key: ValueKey('budget-group-progress-$keySuffix'),
+                      value: group.visualRatio,
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(6),
+                      color: statusColor,
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
                     ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${group.percentage}%',
+                    key: ValueKey('budget-group-percentage-$keySuffix'),
                     style: TextStyle(
                       color: statusColor,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  Text(
-                    netLabel,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
                 ],
               ),
+              const SizedBox(height: 6),
+              Text(
+                issueCount > 0
+                    ? '$netLabel · $issueCount perlu perhatian'
+                    : netLabel,
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class BudgetPeriodSection extends StatelessWidget {
+  const BudgetPeriodSection({
+    super.key,
+    required this.group,
+    required this.onOpenBudget,
+    this.usageThroughLabel,
+  });
+
+  final BudgetRangeGroup group;
+  final ValueChanged<int> onOpenBudget;
+  final String? usageThroughLabel;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    key: ValueKey(
+      'budget-section-${group.periodKinds.first.name}-'
+      '${group.startDay}-${group.endDay}',
+    ),
+    margin: EdgeInsets.zero,
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        BudgetRangeHeader(group: group),
+        if (usageThroughLabel != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+            child: Text(
+              usageThroughLabel!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        for (var index = 0; index < group.items.length; index++) ...[
+          const Divider(height: 1),
+          BudgetCompactRow(
+            progress: group.items[index],
+            onTap: () => onOpenBudget(group.items[index].budget.id),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class BudgetCompactRow extends StatelessWidget {
+  const BudgetCompactRow({
+    super.key,
+    required this.progress,
+    required this.onTap,
+  });
+
+  final BudgetProgress progress;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final budget = progress.budget;
+    final percentage = budgetPercentage(progress);
+    final statusColor = switch (progress.usageStatus) {
+      BudgetUsageStatus.exceeded ||
+      BudgetUsageStatus.exhausted => Theme.of(context).colorScheme.error,
+      BudgetUsageStatus.nearLimit => const Color(0xFF9D5A00),
+      BudgetUsageStatus.normal => forest,
+    };
+    final icon = progress.categories.length == 1
+        ? categoryIconFor(progress.categories.single.iconKey)
+        : Icons.category_outlined;
+    final iconLabel = progress.categories.length == 1
+        ? progress.categories.single.displayName
+        : '${progress.categories.length} kategori';
+    final semanticsLabel = [
+      budget.name,
+      budget.period.kind.label,
+      budgetPeriodLabel(budget.period),
+      iconLabel,
+      'Terpakai ${formatRupiah(progress.spentAmount)} dari '
+          '${formatRupiah(budget.limitAmount)}',
+      '$percentage persen',
+      budgetUsageText(progress),
+    ].join(', ');
+    final enlarged = MediaQuery.textScalerOf(context).scale(14) > 20;
+
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: InkWell(
+          key: ValueKey('open-budget-${budget.id}'),
+          onTap: onTap,
+          child: Container(
+            key: ValueKey('budget-card-${budget.id}'),
+            constraints: const BoxConstraints(minHeight: 64),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    icon,
+                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (enlarged) ...[
+                        Text(
+                          budget.name,
+                          key: ValueKey('budget-name-${budget.id}'),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '$percentage%',
+                          key: ValueKey('budget-percent-${budget.id}'),
+                          style: TextStyle(
+                            color: statusColor,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ] else
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                budget.name,
+                                key: ValueKey('budget-name-${budget.id}'),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              '$percentage%',
+                              key: ValueKey('budget-percent-${budget.id}'),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${formatRupiah(progress.spentAmount)} dari '
+                        '${formatRupiah(budget.limitAmount)}',
+                        key: ValueKey('budget-spent-${budget.id}'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 7),
+                      LinearProgressIndicator(
+                        key: ValueKey('budget-progress-${budget.id}'),
+                        value: progress.visualRatio,
+                        minHeight: 5,
+                        borderRadius: BorderRadius.circular(5),
+                        color: statusColor,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        budgetUsageText(progress),
+                        key: ValueKey('budget-status-${budget.id}'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

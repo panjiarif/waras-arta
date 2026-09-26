@@ -11,9 +11,16 @@ import '../view_models/budget_view_model.dart';
 import 'budget_widgets.dart';
 
 class BudgetFormScreen extends ConsumerStatefulWidget {
-  const BudgetFormScreen({super.key, this.initial});
+  const BudgetFormScreen({
+    super.key,
+    this.initial,
+    this.initialKind,
+    this.initialMonth,
+  });
 
   final BudgetDetails? initial;
+  final BudgetPeriodKind? initialKind;
+  final DateTime? initialMonth;
 
   @override
   ConsumerState<BudgetFormScreen> createState() => _BudgetFormScreenState();
@@ -79,9 +86,12 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
     _limit = TextEditingController(
       text: initial?.budget.limitAmount.toString() ?? '',
     );
-    _kind = initial?.budget.period.kind ?? BudgetPeriodKind.monthly;
+    _kind =
+        initial?.budget.period.kind ??
+        widget.initialKind ??
+        BudgetPeriodKind.monthly;
     final start = initial == null
-        ? today
+        ? widget.initialMonth ?? today
         : civilDayToDateTime(initial.budget.period.startDay);
     final end = initial == null
         ? today
@@ -353,14 +363,15 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   }
 
   Future<void> _pickPeriod() async {
+    final today = dateOnly(ref.read(currentDateProvider));
     switch (_kind) {
       case BudgetPeriodKind.monthly:
         final selected = await showDatePicker(
           context: context,
           helpText: 'Pilih tanggal dalam bulan anggaran',
-          initialDate: _month,
+          initialDate: _month.isAfter(today) ? today : _month,
           firstDate: DateTime(2000),
-          lastDate: DateTime(9999, 12, 31),
+          lastDate: today,
         );
         if (selected != null && mounted) {
           setState(() {
@@ -380,9 +391,9 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
               height: 360,
               child: YearPicker(
                 firstDate: DateTime(2000),
-                lastDate: DateTime(9999, 12, 31),
-                selectedDate: DateTime(_year),
-                currentDate: dateOnly(ref.read(currentDateProvider)),
+                lastDate: DateTime(today.year, 12, 31),
+                selectedDate: DateTime(_year > today.year ? today.year : _year),
+                currentDate: today,
                 onChanged: (value) => Navigator.pop(context, value.year),
               ),
             ),
@@ -399,6 +410,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
       case BudgetPeriodKind.custom:
         final selected = await showDateRangePicker(
           context: context,
+          currentDate: today,
           helpText: 'Pilih rentang anggaran',
           firstDate: DateTime(2000),
           lastDate: DateTime(9999, 12, 31),
@@ -423,6 +435,14 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
     final period = _period;
     if (period == null) {
       setState(() => _localError = 'Pilih rentang tanggal anggaran.');
+      return;
+    }
+    if (!_editing &&
+        period.startDay > dateTimeToCivilDay(ref.read(currentDateProvider))) {
+      setState(
+        () => _localError =
+            'Periode anggaran tidak boleh dimulai setelah hari ini.',
+      );
       return;
     }
     if (_categoryIds.isEmpty) {

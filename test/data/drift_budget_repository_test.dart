@@ -540,6 +540,161 @@ void main() {
     },
   );
 
+  test(
+    'browses overlapping budgets and caps usage at the selected cutoff',
+    () async {
+      final expenseGroups = await categoryGroups(CategoryKind.expense);
+      final monthlyCategory = expenseGroups[0].children.single.id;
+      final yearlyCategory = expenseGroups[1].children.single.id;
+      final customCategory = expenseGroups[2].children.single.id;
+      final accountId = await createAccount();
+
+      Future<void> addExpense(
+        int categoryId,
+        int amount,
+        DateTime occurredAt,
+      ) async {
+        await finance.addEntry(
+          EntryDraft.singleAllocation(
+            kind: EntryKind.expense,
+            accountId: accountId,
+            amount: amount,
+            categoryId: categoryId,
+            occurredAt: occurredAt,
+          ),
+        );
+      }
+
+      await budgets.createBudget(
+        draft(
+          period: BudgetPeriod.custom(20240801, 20240831),
+          name: 'Agustus saja',
+          categoryIds: {monthlyCategory},
+        ),
+      );
+      await budgets.createBudget(
+        draft(
+          period: BudgetPeriod.monthly(2024, 9),
+          name: 'September',
+          categoryIds: {monthlyCategory},
+          limitAmount: 1000,
+        ),
+      );
+      await budgets.createBudget(
+        draft(
+          period: BudgetPeriod.monthly(2024, 10),
+          name: 'Oktober saja',
+          categoryIds: {monthlyCategory},
+        ),
+      );
+      await budgets.createBudget(
+        draft(
+          period: BudgetPeriod.yearly(2024),
+          name: 'Tahunan',
+          categoryIds: {yearlyCategory},
+          limitAmount: 2000,
+        ),
+      );
+      await budgets.createBudget(
+        draft(
+          period: BudgetPeriod.custom(20240820, 20241010),
+          name: 'Lintas bulan',
+          categoryIds: {customCategory},
+          limitAmount: 1500,
+        ),
+      );
+
+      await addExpense(monthlyCategory, 10, DateTime(2024, 9, 5));
+      await addExpense(monthlyCategory, 20, DateTime(2024, 9, 20));
+      await addExpense(yearlyCategory, 100, DateTime(2024, 1, 10));
+      await addExpense(yearlyCategory, 200, DateTime(2024, 9, 5));
+      await addExpense(yearlyCategory, 300, DateTime(2024, 9, 20));
+      await addExpense(yearlyCategory, 400, DateTime(2024, 10, 1));
+      await addExpense(customCategory, 40, DateTime(2024, 8, 25));
+      await addExpense(customCategory, 50, DateTime(2024, 9, 5));
+      await addExpense(customCategory, 60, DateTime(2024, 9, 20));
+      await addExpense(customCategory, 70, DateTime(2024, 10, 1));
+
+      final midMonth = await budgets.loadBudgetsForPeriod(
+        BudgetBrowseFilter.month(
+          year: 2024,
+          month: 9,
+          usageThroughDay: 20240915,
+        ),
+      );
+      expect(midMonth.items.map((item) => item.budget.name), [
+        'September',
+        'Tahunan',
+        'Lintas bulan',
+      ]);
+      expect(midMonth.groups.map((group) => group.periodKind), [
+        BudgetPeriodKind.monthly,
+        BudgetPeriodKind.yearly,
+        BudgetPeriodKind.custom,
+      ]);
+      final midMonthByName = byName(midMonth);
+      expect(midMonthByName['September']!.spentAmount, 10);
+      expect(midMonthByName['Tahunan']!.spentAmount, 300);
+      expect(midMonthByName['Lintas bulan']!.spentAmount, 90);
+
+      final monthEnd = await budgets.loadBudgetsForPeriod(
+        BudgetBrowseFilter.month(
+          year: 2024,
+          month: 9,
+          usageThroughDay: 20240930,
+        ),
+      );
+      final monthEndByName = byName(monthEnd);
+      expect(monthEndByName['September']!.spentAmount, 30);
+      expect(monthEndByName['Tahunan']!.spentAmount, 600);
+      expect(monthEndByName['Lintas bulan']!.spentAmount, 150);
+
+      final yearlyOnly = await budgets.loadBudgetsForPeriod(
+        BudgetBrowseFilter.month(
+          year: 2024,
+          month: 9,
+          usageThroughDay: 20240930,
+          periodKind: BudgetPeriodKind.yearly,
+        ),
+      );
+      expect(yearlyOnly.items.map((item) => item.budget.name), ['Tahunan']);
+    },
+  );
+
+  test('rejects invalid budget browse windows and cutoffs', () async {
+    for (final invalid in [
+      const BudgetBrowseFilter(
+        windowStartDay: 20240230,
+        windowEndDay: 20240229,
+        usageThroughDay: 20240229,
+      ),
+      const BudgetBrowseFilter(
+        windowStartDay: 20240301,
+        windowEndDay: 20240229,
+        usageThroughDay: 20240301,
+      ),
+      const BudgetBrowseFilter(
+        windowStartDay: 20240201,
+        windowEndDay: 20240229,
+        usageThroughDay: 20240131,
+      ),
+      const BudgetBrowseFilter(
+        windowStartDay: 20240201,
+        windowEndDay: 20240229,
+        usageThroughDay: 20240301,
+      ),
+    ]) {
+      await expectLater(
+        budgets.loadBudgetsForPeriod(invalid),
+        throwsA(validationError),
+      );
+      expect(
+        () => budgets.watchBudgetsForPeriod(invalid),
+        throwsA(validationError),
+      );
+    }
+  });
+
   test('detail and conflict streams react to update and delete', () async {
     final expenseGroups = await categoryGroups(CategoryKind.expense);
     final categoryId = expenseGroups.first.children.single.id;
@@ -661,6 +816,336 @@ void main() {
     expect(snapshot.groups.first.totalSpent, 150);
     expect(snapshot.groups.first.countForStatus(BudgetUsageStatus.exceeded), 1);
     expect(snapshot.groups.first.countForStatus(BudgetUsageStatus.normal), 1);
+  });
+
+  test('keeps identical ranges separate by budget kind', () async {
+    final expenseGroups = await categoryGroups(CategoryKind.expense);
+    final monthlyCategory = expenseGroups[0].children.single.id;
+    final customCategory = expenseGroups[1].children.single.id;
+    final accountId = await createAccount();
+    final january = BudgetPeriod.monthly(2024, 1);
+
+    await budgets.createBudget(
+      draft(
+        period: january,
+        name: 'Bulanan',
+        categoryIds: {monthlyCategory},
+        limitAmount: 100,
+      ),
+    );
+    await budgets.createBudget(
+      draft(
+        period: BudgetPeriod.custom(january.startDay, january.endDay),
+        name: 'Kustom',
+        categoryIds: {customCategory},
+        limitAmount: 200,
+      ),
+    );
+    await finance.addEntry(
+      EntryDraft.singleAllocation(
+        kind: EntryKind.expense,
+        accountId: accountId,
+        amount: 40,
+        categoryId: monthlyCategory,
+        occurredAt: DateTime(2024, 1, 10),
+      ),
+    );
+    await finance.addEntry(
+      EntryDraft.singleAllocation(
+        kind: EntryKind.expense,
+        accountId: accountId,
+        amount: 70,
+        categoryId: customCategory,
+        occurredAt: DateTime(2024, 1, 10),
+      ),
+    );
+
+    final snapshot = await budgets.loadBudgetsForPeriod(
+      BudgetBrowseFilter.month(year: 2024, month: 1, usageThroughDay: 20240131),
+    );
+    expect(snapshot.groups, hasLength(2));
+    expect(snapshot.groups.map((group) => group.periodKind), [
+      BudgetPeriodKind.monthly,
+      BudgetPeriodKind.custom,
+    ]);
+    expect(
+      (snapshot.groups[0].totalSpent, snapshot.groups[0].totalLimit),
+      (40, 100),
+    );
+    expect(
+      (snapshot.groups[1].totalSpent, snapshot.groups[1].totalLimit),
+      (70, 200),
+    );
+  });
+
+  test(
+    'copies monthly budgets atomically as independent ordered snapshots',
+    () async {
+      final expenseGroups = await categoryGroups(CategoryKind.expense);
+      final firstCategory = expenseGroups[0].children.single.id;
+      final secondCategory = expenseGroups[1].children.single.id;
+      final thirdCategory = expenseGroups[2].children.single.id;
+      final source = BudgetPeriod.monthly(2023, 12);
+      final january = BudgetPeriod.monthly(2024, 1);
+
+      final foodId = await budgets.createBudget(
+        draft(
+          period: source,
+          name: 'Makan',
+          categoryIds: {thirdCategory, firstCategory},
+          limitAmount: 500000,
+        ),
+      );
+      final transportId = await budgets.createBudget(
+        draft(
+          period: source,
+          name: 'Transportasi',
+          categoryIds: {secondCategory},
+          limitAmount: 250000,
+        ),
+      );
+      final sourceFood = (await budgets.getBudget(foodId))!;
+      final sourceFoodCategoryOrder = sourceFood.categories
+          .map((category) => category.id)
+          .toList();
+
+      final targetFilter = BudgetBrowseFilter.month(
+        year: 2024,
+        month: 1,
+        usageThroughDay: 20240131,
+        periodKind: BudgetPeriodKind.monthly,
+      );
+      final iterator = StreamIterator(
+        budgets.watchBudgetsForPeriod(targetFilter),
+      );
+      addTearDown(iterator.cancel);
+      expect(await iterator.moveNext(), isTrue);
+      expect(iterator.current.items, isEmpty);
+
+      expect(
+        await budgets.copyMonthlyBudgets(source: source, target: january),
+        2,
+      );
+      expect(await iterator.moveNext(), isTrue);
+      expect(iterator.current.items.map((item) => item.budget.name), [
+        'Makan',
+        'Transportasi',
+      ]);
+
+      final januaryByName = byName(iterator.current);
+      final copiedFood = januaryByName['Makan']!;
+      final copiedTransport = januaryByName['Transportasi']!;
+      expect(copiedFood.budget.id, isNot(foodId));
+      expect(copiedTransport.budget.id, isNot(transportId));
+      expect(copiedFood.budget.period, january);
+      expect(copiedFood.budget.limitAmount, 500000);
+      expect(
+        copiedFood.categories.map((category) => category.id),
+        sourceFoodCategoryOrder,
+      );
+
+      final february = BudgetPeriod.monthly(2024, 2);
+      expect(
+        await budgets.copyMonthlyBudgets(source: january, target: february),
+        2,
+      );
+      final februarySnapshot = await budgets.loadBudgetsForPeriod(
+        BudgetBrowseFilter.month(
+          year: 2024,
+          month: 2,
+          usageThroughDay: 20240229,
+          periodKind: BudgetPeriodKind.monthly,
+        ),
+      );
+      expect(februarySnapshot.items, hasLength(2));
+      expect(
+        februarySnapshot.items.map((item) => item.budget.period.endDay).toSet(),
+        {20240229},
+      );
+
+      await budgets.updateBudget(
+        foodId,
+        BudgetUpdateDraft(
+          name: 'Makan berubah',
+          limitAmount: 999999,
+          categoryIds: {thirdCategory, firstCategory},
+        ),
+      );
+      await budgets.deleteBudget(transportId);
+
+      final unchangedJanuary = await budgets.loadBudgetsForPeriod(targetFilter);
+      expect(unchangedJanuary.items.map((item) => item.budget.name), [
+        'Makan',
+        'Transportasi',
+      ]);
+      expect(byName(unchangedJanuary)['Makan']!.budget.limitAmount, 500000);
+    },
+  );
+
+  test(
+    'rejects empty, non-monthly, non-consecutive, and occupied copies',
+    () async {
+      final expenseGroups = await categoryGroups(CategoryKind.expense);
+      final firstCategory = expenseGroups[0].children.single.id;
+      final secondCategory = expenseGroups[1].children.single.id;
+
+      await expectLater(
+        budgets.copyMonthlyBudgets(
+          source: BudgetPeriod.monthly(2025, 1),
+          target: BudgetPeriod.monthly(2025, 2),
+        ),
+        throwsA(validationError),
+      );
+      await expectLater(
+        budgets.copyMonthlyBudgets(
+          source: BudgetPeriod.yearly(2025),
+          target: BudgetPeriod.monthly(2026, 1),
+        ),
+        throwsA(validationError),
+      );
+
+      await budgets.createBudget(
+        draft(
+          period: BudgetPeriod.monthly(2025, 1),
+          name: 'Sumber',
+          categoryIds: {firstCategory},
+        ),
+      );
+      await expectLater(
+        budgets.copyMonthlyBudgets(
+          source: BudgetPeriod.monthly(2025, 1),
+          target: BudgetPeriod.monthly(2025, 3),
+        ),
+        throwsA(validationError),
+      );
+
+      await budgets.createBudget(
+        draft(
+          period: BudgetPeriod.monthly(2025, 2),
+          name: 'Sudah ada',
+          categoryIds: {secondCategory},
+        ),
+      );
+      await expectLater(
+        budgets.copyMonthlyBudgets(
+          source: BudgetPeriod.monthly(2025, 1),
+          target: BudgetPeriod.monthly(2025, 2),
+        ),
+        throwsA(validationError),
+      );
+      final target = await budgets.loadBudgetsForPeriod(
+        BudgetBrowseFilter.month(
+          year: 2025,
+          month: 2,
+          usageThroughDay: 20250228,
+          periodKind: BudgetPeriodKind.monthly,
+        ),
+      );
+      expect(target.items.map((item) => item.budget.name), ['Sudah ada']);
+    },
+  );
+
+  test('copy rolls back every row when a target category conflicts', () async {
+    final expenseGroups = await categoryGroups(CategoryKind.expense);
+    final firstCategory = expenseGroups[0].children.single.id;
+    final conflictingCategory = expenseGroups[1].children.single.id;
+    final source = BudgetPeriod.monthly(2025, 4);
+    final target = BudgetPeriod.monthly(2025, 5);
+
+    await budgets.createBudget(
+      draft(period: source, name: 'Aman', categoryIds: {firstCategory}),
+    );
+    await budgets.createBudget(
+      draft(
+        period: source,
+        name: 'Bentrok',
+        categoryIds: {conflictingCategory},
+      ),
+    );
+    await budgets.createBudget(
+      draft(
+        period: BudgetPeriod.custom(target.startDay, target.endDay),
+        name: 'Kustom tujuan',
+        categoryIds: {conflictingCategory},
+      ),
+    );
+
+    await expectLater(
+      budgets.copyMonthlyBudgets(source: source, target: target),
+      throwsA(validationError),
+    );
+    final monthlyTarget = await budgets.loadBudgetsForPeriod(
+      BudgetBrowseFilter.month(
+        year: 2025,
+        month: 5,
+        usageThroughDay: 20250531,
+        periodKind: BudgetPeriodKind.monthly,
+      ),
+    );
+    expect(monthlyTarget.items, isEmpty);
+  });
+
+  test('copy rolls back every row when a target name conflicts', () async {
+    final expenseGroups = await categoryGroups(CategoryKind.expense);
+    final firstCategory = expenseGroups[0].children.single.id;
+    final secondCategory = expenseGroups[1].children.single.id;
+    final thirdCategory = expenseGroups[2].children.single.id;
+    final source = BudgetPeriod.monthly(2025, 6);
+    final target = BudgetPeriod.monthly(2025, 7);
+
+    await budgets.createBudget(
+      draft(period: source, name: 'Alpha', categoryIds: {firstCategory}),
+    );
+    await budgets.createBudget(
+      draft(period: source, name: 'Zulu', categoryIds: {secondCategory}),
+    );
+    await budgets.createBudget(
+      draft(
+        period: BudgetPeriod.custom(target.startDay, target.endDay),
+        name: 'Zulu',
+        categoryIds: {thirdCategory},
+      ),
+    );
+
+    await expectLater(
+      budgets.copyMonthlyBudgets(source: source, target: target),
+      throwsA(validationError),
+    );
+    final monthlyTarget = await budgets.loadBudgetsForPeriod(
+      BudgetBrowseFilter.month(
+        year: 2025,
+        month: 7,
+        usageThroughDay: 20250731,
+        periodKind: BudgetPeriodKind.monthly,
+      ),
+    );
+    expect(monthlyTarget.items, isEmpty);
+  });
+
+  test('copy rejects archived source categories without target rows', () async {
+    final expenseGroups = await categoryGroups(CategoryKind.expense);
+    final category = expenseGroups[0].children.single;
+    final source = BudgetPeriod.monthly(2025, 8);
+    final target = BudgetPeriod.monthly(2025, 9);
+
+    await budgets.createBudget(
+      draft(period: source, name: 'Diarsipkan', categoryIds: {category.id}),
+    );
+    await finance.setCategoryArchived(category.id, true);
+
+    await expectLater(
+      budgets.copyMonthlyBudgets(source: source, target: target),
+      throwsA(validationError),
+    );
+    final monthlyTarget = await budgets.loadBudgetsForPeriod(
+      BudgetBrowseFilter.month(
+        year: 2025,
+        month: 9,
+        usageThroughDay: 20250930,
+        periodKind: BudgetPeriodKind.monthly,
+      ),
+    );
+    expect(monthlyTarget.items, isEmpty);
   });
 
   test(

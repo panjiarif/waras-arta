@@ -78,6 +78,70 @@ class DriftBudgetRepository implements BudgetRepository {
   }
 
   @override
+  Stream<BudgetListSnapshot> watchBudgetsForPeriod(BudgetBrowseFilter filter) {
+    _validateBrowseFilter(filter);
+    return _db
+        .customSelect(
+          'SELECT COUNT(*) AS change_marker FROM budgets',
+          readsFrom: {
+            _db.budgets,
+            _db.budgetCategories,
+            _db.categories,
+            _db.ledgerEntries,
+            _db.ledgerAllocations,
+          },
+        )
+        .watchSingle()
+        .asyncMap((_) => loadBudgetsForPeriod(filter));
+  }
+
+  @override
+  Future<BudgetListSnapshot> loadBudgetsForPeriod(
+    BudgetBrowseFilter filter,
+  ) async {
+    _validateBrowseFilter(filter);
+    return _db.transaction(() async {
+      final query = _db.select(_db.budgets)
+        ..where((budget) {
+          var condition =
+              budget.startDay.isSmallerOrEqualValue(filter.windowEndDay) &
+              budget.endDay.isBiggerOrEqualValue(filter.windowStartDay);
+          final kind = filter.periodKind;
+          if (kind != null) {
+            condition = condition & budget.periodKind.equals(kind.index);
+          }
+          return condition;
+        });
+      final rows = await query.get();
+      if (rows.isEmpty) {
+        return BudgetListSnapshot(items: const [], groups: const []);
+      }
+
+      final budgetIds = rows.map((row) => row.id).toSet();
+      final categoriesByBudget = await _loadCategoriesForBudgets(budgetIds);
+      final spentByBudget = await _loadSpentForBudgets(
+        budgetIds,
+        usageThroughDay: filter.usageThroughDay,
+      );
+      final items = <BudgetProgress>[];
+      for (final row in rows) {
+        final categories = categoriesByBudget[row.id];
+        if (categories == null || categories.isEmpty) {
+          throw StateError('Anggaran tidak memiliki subkategori.');
+        }
+        items.add(
+          BudgetProgress(
+            budget: _toBudget(row),
+            categories: categories,
+            spentAmount: spentByBudget[row.id] ?? 0,
+          ),
+        );
+      }
+      return _sortBrowseSnapshot(items);
+    });
+  }
+
+  @override
   Stream<BudgetDetails?> watchBudget(int id) {
     if (id < 1) return Stream.value(null);
     return _db
@@ -224,6 +288,109 @@ class DriftBudgetRepository implements BudgetRepository {
     });
   }
 
+  @override
+  Future<int> copyMonthlyBudgets({
+    required BudgetPeriod source,
+    required BudgetPeriod target,
+  }) async {
+    _validateMonthlyCopyPeriods(source, target);
+    return _db.transaction(() async {
+      final targetRows =
+          await (_db.select(_db.budgets)..where(
+                (budget) =>
+                    budget.periodKind.equals(BudgetPeriodKind.monthly.index) &
+                    budget.startDay.equals(target.startDay) &
+                    budget.endDay.equals(target.endDay),
+              ))
+              .get();
+      if (targetRows.isNotEmpty) {
+        throw const BudgetValidationException(
+          'Bulan tujuan sudah memiliki anggaran bulanan.',
+        );
+      }
+
+      final sourceQuery = _db.select(_db.budgets)
+        ..where(
+          (budget) =>
+              budget.periodKind.equals(BudgetPeriodKind.monthly.index) &
+              budget.startDay.equals(source.startDay) &
+              budget.endDay.equals(source.endDay),
+        )
+        ..orderBy([
+          (budget) => OrderingTerm.asc(budget.normalizedName),
+          (budget) => OrderingTerm.asc(budget.id),
+        ]);
+      final sourceRows = await sourceQuery.get();
+      if (sourceRows.isEmpty) {
+        throw const BudgetValidationException(
+          'Bulan sumber belum memiliki anggaran bulanan.',
+        );
+      }
+
+      final sourceIds = sourceRows.map((row) => row.id).toSet();
+      final categoriesByBudget = await _loadCategoriesForBudgets(sourceIds);
+      final allCategoryIds = <int>{};
+      final seenNames = <String>{};
+      final seenCategoryIds = <int>{};
+      for (final row in sourceRows) {
+        final categories = categoriesByBudget[row.id];
+        if (categories == null || categories.isEmpty) {
+          throw const BudgetValidationException(
+            'Anggaran sumber tidak memiliki subkategori.',
+          );
+        }
+        if (!seenNames.add(row.normalizedName)) {
+          throw const BudgetValidationException(
+            'Nama anggaran sumber tidak unik.',
+          );
+        }
+        final categoryIds = categories.map((category) => category.id).toSet();
+        if (categoryIds.any((id) => !seenCategoryIds.add(id))) {
+          throw const BudgetValidationException(
+            'Subkategori anggaran sumber saling bertumpang tindih.',
+          );
+        }
+        allCategoryIds.addAll(categoryIds);
+      }
+      await _requireUsableCategories(allCategoryIds);
+
+      for (final row in sourceRows) {
+        final categoryIds = categoriesByBudget[row.id]!
+            .map((category) => category.id)
+            .toSet();
+        await _ensureUniqueName(
+          period: target,
+          normalizedName: row.normalizedName,
+        );
+        await _ensureNoConflicts(target, categoryIds);
+      }
+
+      final now = _clock().toUtc();
+      for (final row in sourceRows) {
+        final copiedId = await _db
+            .into(_db.budgets)
+            .insert(
+              BudgetsCompanion.insert(
+                periodKind: BudgetPeriodKind.monthly.index,
+                startDay: target.startDay,
+                endDay: target.endDay,
+                name: row.name,
+                normalizedName: row.normalizedName,
+                limitAmount: row.limitAmount,
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+        await _insertMappings(
+          copiedId,
+          categoriesByBudget[row.id]!.map((category) => category.id).toSet(),
+        );
+        await _assertHasCategory(copiedId);
+      }
+      return sourceRows.length;
+    });
+  }
+
   Future<Map<int, List<BudgetCategoryRef>>> _loadCategoriesForBudgets(
     Set<int> budgetIds,
   ) async {
@@ -272,10 +439,16 @@ class DriftBudgetRepository implements BudgetRepository {
     };
   }
 
-  Future<Map<int, int>> _loadSpentForBudgets(Set<int> budgetIds) async {
+  Future<Map<int, int>> _loadSpentForBudgets(
+    Set<int> budgetIds, {
+    int? usageThroughDay,
+  }) async {
     if (budgetIds.isEmpty) return const {};
     final sortedIds = budgetIds.toList()..sort();
     final placeholders = List.filled(sortedIds.length, '?').join(', ');
+    final cutoffCondition = usageThroughDay == null
+        ? ''
+        : 'AND entry.occurred_day <= ?';
     final rows = await _db
         .customSelect(
           '''
@@ -290,11 +463,13 @@ class DriftBudgetRepository implements BudgetRepository {
             AND entry.kind = ?
             AND entry.occurred_day >= budget.start_day
             AND entry.occurred_day <= budget.end_day
+            $cutoffCondition
           GROUP BY mapping.budget_id
           ''',
           variables: [
             for (final id in sortedIds) Variable.withInt(id),
             Variable.withInt(EntryKind.expense.index),
+            if (usageThroughDay != null) Variable.withInt(usageThroughDay),
           ],
           readsFrom: {
             _db.budgets,
@@ -540,6 +715,50 @@ class DriftBudgetRepository implements BudgetRepository {
     }
   }
 
+  static void _validateBrowseFilter(BudgetBrowseFilter filter) {
+    if (!isValidCivilDay(filter.windowStartDay) ||
+        !isValidCivilDay(filter.windowEndDay) ||
+        !isValidCivilDay(filter.usageThroughDay)) {
+      throw const BudgetValidationException(
+        'Rentang penelusuran anggaran tidak valid.',
+      );
+    }
+    if (filter.windowStartDay > filter.windowEndDay) {
+      throw const BudgetValidationException(
+        'Awal rentang tidak boleh setelah akhir rentang.',
+      );
+    }
+    if (filter.usageThroughDay < filter.windowStartDay ||
+        filter.usageThroughDay > filter.windowEndDay) {
+      throw const BudgetValidationException(
+        'Batas pemakaian harus berada dalam rentang yang dipilih.',
+      );
+    }
+  }
+
+  static void _validateMonthlyCopyPeriods(
+    BudgetPeriod source,
+    BudgetPeriod target,
+  ) {
+    if (source.kind != BudgetPeriodKind.monthly ||
+        target.kind != BudgetPeriodKind.monthly) {
+      throw const BudgetValidationException(
+        'Anggaran hanya dapat disalin antarbulan kalender.',
+      );
+    }
+    final sourceDate = civilDayToDateTime(source.startDay);
+    final expectedYear = sourceDate.month == 12
+        ? sourceDate.year + 1
+        : sourceDate.year;
+    final expectedMonth = sourceDate.month == 12 ? 1 : sourceDate.month + 1;
+    if (expectedYear > 9999 ||
+        target.startDay != expectedYear * 10000 + expectedMonth * 100 + 1) {
+      throw const BudgetValidationException(
+        'Anggaran hanya dapat disalin ke bulan berikutnya.',
+      );
+    }
+  }
+
   static void _validateBudgetId(int value) {
     if (value < 1) _throwBudgetNotFound();
   }
@@ -563,14 +782,54 @@ class DriftBudgetRepository implements BudgetRepository {
     endDay: row.endDay,
   );
 
+  static BudgetListSnapshot _sortBrowseSnapshot(List<BudgetProgress> source) {
+    final byRange = <(BudgetPeriodKind, int, int), List<BudgetProgress>>{};
+    for (final item in source) {
+      final period = item.budget.period;
+      byRange
+          .putIfAbsent((period.kind, period.startDay, period.endDay), () => [])
+          .add(item);
+    }
+    final groups = <BudgetRangeGroup>[];
+    for (final entry in byRange.entries) {
+      entry.value.sort((left, right) {
+        final name = left.budget.normalizedName.compareTo(
+          right.budget.normalizedName,
+        );
+        return name != 0 ? name : left.budget.id.compareTo(right.budget.id);
+      });
+      groups.add(
+        BudgetRangeGroup(
+          startDay: entry.key.$2,
+          endDay: entry.key.$3,
+          items: entry.value,
+        ),
+      );
+    }
+    groups.sort((left, right) {
+      var result = left.periodKind.index.compareTo(right.periodKind.index);
+      if (result == 0) result = left.startDay.compareTo(right.startDay);
+      if (result == 0) result = left.endDay.compareTo(right.endDay);
+      return result != 0
+          ? result
+          : _minimumBudgetId(left).compareTo(_minimumBudgetId(right));
+    });
+    return BudgetListSnapshot(
+      items: groups.expand((group) => group.items),
+      groups: groups,
+    );
+  }
+
   static BudgetListSnapshot _sortSnapshot(
     List<BudgetProgress> source,
     BudgetTemporalStatus temporalStatus,
   ) {
-    final byRange = <(int, int), List<BudgetProgress>>{};
+    final byRange = <(BudgetPeriodKind, int, int), List<BudgetProgress>>{};
     for (final item in source) {
       final period = item.budget.period;
-      byRange.putIfAbsent((period.startDay, period.endDay), () => []).add(item);
+      byRange
+          .putIfAbsent((period.kind, period.startDay, period.endDay), () => [])
+          .add(item);
     }
     final groups = <BudgetRangeGroup>[];
     for (final entry in byRange.entries) {
@@ -587,8 +846,8 @@ class DriftBudgetRepository implements BudgetRepository {
       });
       groups.add(
         BudgetRangeGroup(
-          startDay: entry.key.$1,
-          endDay: entry.key.$2,
+          startDay: entry.key.$2,
+          endDay: entry.key.$3,
           items: entry.value,
         ),
       );
@@ -605,6 +864,9 @@ class DriftBudgetRepository implements BudgetRepository {
       } else {
         result = right.endDay.compareTo(left.endDay);
         if (result == 0) result = right.startDay.compareTo(left.startDay);
+      }
+      if (result == 0) {
+        result = left.periodKind.index.compareTo(right.periodKind.index);
       }
       return result != 0
           ? result

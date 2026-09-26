@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/formatters.dart';
 import '../../../domain/budget.dart';
 import '../../ledger/views/form_widgets.dart';
 import '../view_models/budget_view_model.dart';
@@ -33,7 +34,7 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
   Widget build(BuildContext context) {
     final selection = ref.watch(budgetFilterProvider);
     final budgets = ref.watch(filteredBudgetListProvider);
-    final upcoming = ref.watch(upcomingBudgetSummaryProvider);
+    final copyAvailability = ref.watch(budgetMonthlyCopyAvailabilityProvider);
     final actions = ref.watch(budgetActionsProvider);
     final stackStatus =
         MediaQuery.sizeOf(context).width < 360 ||
@@ -72,27 +73,9 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                       ] else
                         const SizedBox(height: 8),
                     ],
-                    SegmentedButton<BudgetTemporalStatus>(
-                      key: const Key('budget-status-filter'),
-                      direction: stackStatus ? Axis.vertical : Axis.horizontal,
-                      expandedInsets: stackStatus ? null : EdgeInsets.zero,
-                      segments: [
-                        for (final status in BudgetTemporalStatus.values)
-                          ButtonSegment(
-                            value: status,
-                            label: Text(
-                              status.label,
-                              key: ValueKey('budget-status-${status.name}'),
-                            ),
-                          ),
-                      ],
-                      selected: {selection.temporalStatus},
-                      showSelectedIcon: false,
-                      onSelectionChanged: actions.isSaving
-                          ? null
-                          : (values) => ref
-                                .read(budgetFilterProvider.notifier)
-                                .selectStatus(values.single),
+                    _BudgetPeriodNavigator(
+                      selection: selection,
+                      enabled: !actions.isSaving,
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton(
@@ -135,12 +118,20 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
                       budgetSnapshotProvider(ref.read(budgetListQueryProvider)),
                     ),
                   ),
-                  data: (snapshot) => snapshot.items.isEmpty
-                      ? _BudgetEmptyState(
+                  data: (snapshot) =>
+                      snapshot.items.isEmpty &&
+                          copyAvailability.asData?.value == null
+                      ? _BudgetEmptyState(selection: selection)
+                      : _BudgetGroupList(
+                          snapshot: snapshot,
                           selection: selection,
-                          upcoming: upcoming,
-                        )
-                      : _BudgetGroupList(snapshot: snapshot),
+                          usageThroughDay: ref
+                              .read(budgetListQueryProvider)
+                              .usageThroughDay,
+                          copyContext: copyAvailability.asData?.value,
+                          copying: actions.isSaving,
+                          onCopy: _confirmCopy,
+                        ),
                 ),
               ),
             ],
@@ -192,6 +183,140 @@ class _BudgetListScreenState extends ConsumerState<BudgetListScreen> {
       ref.read(budgetFilterProvider.notifier).selectKind(option.kind);
     }
   }
+
+  Future<void> _confirmCopy(BudgetMonthlyCopyContext copy) async {
+    ref.read(budgetActionsProvider.notifier).clearError();
+    final sourceLabel = formatMonth(civilDayToDateTime(copy.source.startDay));
+    final targetLabel = formatMonth(civilDayToDateTime(copy.target.startDay));
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Salin anggaran bulanan?'),
+        content: Text(
+          'Salin ${copy.itemCount} anggaran dari $sourceLabel ke '
+          '$targetLabel? Hasil salinan berdiri sendiri sehingga perubahan '
+          'setelahnya tidak mengubah bulan lain.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            key: const Key('confirm-copy-monthly-budgets'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Salin anggaran'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final copied = await ref
+        .read(budgetActionsProvider.notifier)
+        .copyMonthlyBudgets(source: copy.source, target: copy.target);
+    if (!mounted || copied == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$copied anggaran berhasil disalin.')),
+    );
+  }
+}
+
+class _BudgetPeriodNavigator extends ConsumerWidget {
+  const _BudgetPeriodNavigator({
+    required this.selection,
+    required this.enabled,
+  });
+
+  final BudgetFilterSelection selection;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final today = civilDayToDateTime(ref.watch(budgetReferenceDayProvider));
+    final yearly = selection.usesYearNavigator;
+    final label = yearly
+        ? '${selection.selectedYear}'
+        : formatMonth(
+            DateTime(selection.selectedYear, selection.selectedMonth),
+          );
+    final canGoPrevious = yearly
+        ? selection.selectedYear > 2000
+        : selection.selectedYear > 2000 || selection.selectedMonth > 1;
+    final canGoNext = yearly
+        ? selection.selectedYear < today.year
+        : selection.selectedYear * 12 + selection.selectedMonth <
+              today.year * 12 + today.month;
+    final unit = yearly ? 'tahun' : 'bulan';
+    final previousAction = enabled && canGoPrevious
+        ? () => ref.read(budgetFilterProvider.notifier).showPreviousPeriod()
+        : null;
+    final nextAction = enabled && canGoNext
+        ? () => ref.read(budgetFilterProvider.notifier).showNextPeriod()
+        : null;
+
+    return Semantics(
+      key: const Key('budget-period-navigator'),
+      container: true,
+      explicitChildNodes: true,
+      header: true,
+      liveRegion: true,
+      label: 'Periode anggaran $label',
+      child: Row(
+        children: [
+          Semantics(
+            key: const Key('previous-budget-period-semantics'),
+            container: true,
+            button: true,
+            enabled: previousAction != null,
+            label: '$unit sebelumnya',
+            onTap: previousAction,
+            child: ExcludeSemantics(
+              child: IconButton(
+                key: const Key('previous-budget-period'),
+                tooltip: '$unit sebelumnya',
+                onPressed: previousAction,
+                icon: const Icon(Icons.chevron_left),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ExcludeSemantics(
+              child: Text(
+                label,
+                key: const Key('budget-period-label'),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+          Semantics(
+            key: const Key('next-budget-period-semantics'),
+            container: true,
+            button: true,
+            enabled: nextAction != null,
+            label: '$unit berikutnya',
+            onTap: nextAction,
+            child: ExcludeSemantics(
+              child: IconButton(
+                key: const Key('next-budget-period'),
+                tooltip: '$unit berikutnya',
+                onPressed: nextAction,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _budgetCreateLocation(BudgetFilterSelection selection) {
+  final kind = selection.periodKind ?? BudgetPeriodKind.monthly;
+  return '/budgets/new?kind=${kind.name}'
+      '&year=${selection.selectedYear}'
+      '&month=${selection.selectedMonth}';
 }
 
 class BudgetAddButton extends ConsumerWidget {
@@ -202,13 +327,14 @@ class BudgetAddButton extends ConsumerWidget {
     final isSaving = ref.watch(
       budgetActionsProvider.select((state) => state.isSaving),
     );
+    final selection = ref.watch(budgetFilterProvider);
     final compact =
         MediaQuery.sizeOf(context).width < 360 ||
         MediaQuery.textScalerOf(context).scale(14) > 20;
 
     void openForm() {
       ref.read(budgetActionsProvider.notifier).clearError();
-      context.push('/budgets/new');
+      context.push(_budgetCreateLocation(selection));
     }
 
     if (compact) {
@@ -242,65 +368,138 @@ extension on _BudgetKindOption {
 }
 
 class _BudgetGroupList extends StatelessWidget {
-  const _BudgetGroupList({required this.snapshot});
+  const _BudgetGroupList({
+    required this.snapshot,
+    required this.selection,
+    required this.usageThroughDay,
+    required this.copyContext,
+    required this.copying,
+    required this.onCopy,
+  });
 
   final BudgetListSnapshot snapshot;
+  final BudgetFilterSelection selection;
+  final int usageThroughDay;
+  final BudgetMonthlyCopyContext? copyContext;
+  final bool copying;
+  final ValueChanged<BudgetMonthlyCopyContext> onCopy;
 
   @override
   Widget build(BuildContext context) {
     final rows = <Widget>[];
+    if (copyContext != null) {
+      rows.add(
+        _MonthlyCopySection(
+          context: copyContext!,
+          copying: copying,
+          onCopy: () => onCopy(copyContext!),
+        ),
+      );
+      rows.add(const SizedBox(height: 12));
+    }
     for (final group in snapshot.groups) {
-      rows.add(BudgetRangeHeader(group: group));
-      rows.add(const SizedBox(height: 8));
-      for (final progress in group.items) {
-        rows.add(
-          BudgetProgressCard(
-            progress: progress,
-            onTap: () => context.push('/budgets/${progress.budget.id}'),
-          ),
-        );
-        rows.add(const SizedBox(height: 8));
-      }
-      rows.add(const SizedBox(height: 8));
+      final showCutoff =
+          group.periodKind != BudgetPeriodKind.monthly &&
+          usageThroughDay >= group.startDay &&
+          usageThroughDay < group.endDay;
+      rows.add(
+        BudgetPeriodSection(
+          group: group,
+          usageThroughLabel: showCutoff
+              ? 'Pemakaian s.d. '
+                    '${formatDate(civilDayToDateTime(usageThroughDay))}'
+              : null,
+          onOpenBudget: (id) => context.push('/budgets/$id'),
+        ),
+      );
+      rows.add(const SizedBox(height: 12));
     }
 
+    final kind = selection.periodKind?.name ?? 'all';
+    final period = selection.usesYearNavigator
+        ? '${selection.selectedYear}'
+        : '${selection.selectedYear}-${selection.selectedMonth}';
     return ListView(
-      key: const PageStorageKey('budget-list'),
+      key: PageStorageKey('budget-list-$kind-$period'),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 112),
       children: rows,
     );
   }
 }
 
+class _MonthlyCopySection extends StatelessWidget {
+  const _MonthlyCopySection({
+    required this.context,
+    required this.copying,
+    required this.onCopy,
+  });
+
+  final BudgetMonthlyCopyContext context;
+  final bool copying;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext buildContext) {
+    final sourceLabel = formatMonth(
+      civilDayToDateTime(context.source.startDay),
+    );
+    final targetLabel = formatMonth(
+      civilDayToDateTime(context.target.startDay),
+    );
+    return Card(
+      key: const Key('budget-monthly-copy-section'),
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'BULANAN · ${targetLabel.toUpperCase()}',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Belum ada anggaran bulanan. Gunakan ${context.itemCount} '
+              'anggaran dari $sourceLabel sebagai titik awal.',
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              key: const Key('copy-previous-month-budgets'),
+              onPressed: copying ? null : onCopy,
+              icon: const Icon(Icons.content_copy_outlined),
+              label: const Text('Salin anggaran bulan sebelumnya'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BudgetEmptyState extends ConsumerWidget {
-  const _BudgetEmptyState({required this.selection, required this.upcoming});
+  const _BudgetEmptyState({required this.selection});
 
   final BudgetFilterSelection selection;
-  final AsyncValue<BudgetListSnapshot> upcoming;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hasKindFilter = selection.periodKind != null;
-    final upcomingItems =
-        upcoming.asData?.value.items ?? const <BudgetProgress>[];
-    final nearestUpcoming = upcomingItems.isEmpty ? null : upcomingItems.first;
-    final title = hasKindFilter
-        ? 'Tidak ada hasil untuk filter ini'
-        : switch (selection.temporalStatus) {
-            BudgetTemporalStatus.active => 'Belum ada anggaran aktif hari ini',
-            BudgetTemporalStatus.upcoming => 'Belum ada anggaran mendatang',
-            BudgetTemporalStatus.history => 'Belum ada riwayat anggaran',
-          };
-    final description = hasKindFilter
-        ? 'Coba tampilkan semua jenis anggaran.'
-        : selection.temporalStatus == BudgetTemporalStatus.active &&
-              nearestUpcoming != null
-        ? 'Anggaran terdekat: ${nearestUpcoming.budget.name}, '
-              '${budgetPeriodLabel(nearestUpcoming.budget.period)}.'
-        : 'Buat anggaran untuk membatasi pengeluaran tanpa mengubah saldo rekening.';
+    final periodLabel = selection.usesYearNavigator
+        ? '${selection.selectedYear}'
+        : formatMonth(
+            DateTime(selection.selectedYear, selection.selectedMonth),
+          );
+    final kindLabel = selection.periodKind?.label.toLowerCase();
+    final title = kindLabel == null
+        ? 'Belum ada anggaran untuk $periodLabel'
+        : 'Belum ada anggaran $kindLabel untuk $periodLabel';
 
     return ListView(
-      key: const PageStorageKey('budget-empty-list'),
+      key: PageStorageKey(
+        'budget-empty-list-${selection.periodKind?.name ?? 'all'}-'
+        '${selection.selectedYear}-${selection.selectedMonth}',
+      ),
       padding: const EdgeInsets.fromLTRB(24, 40, 24, 120),
       children: [
         Icon(
@@ -316,7 +515,10 @@ class _BudgetEmptyState extends ConsumerWidget {
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 8),
-        Text(description, textAlign: TextAlign.center),
+        const Text(
+          'Buat anggaran untuk membatasi pengeluaran tanpa mengubah saldo rekening.',
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 20),
         if (hasKindFilter)
           FilledButton.tonal(
@@ -325,19 +527,10 @@ class _BudgetEmptyState extends ConsumerWidget {
                 ref.read(budgetFilterProvider.notifier).selectKind(null),
             child: const Text('Lihat semua jenis'),
           )
-        else if (selection.temporalStatus == BudgetTemporalStatus.active &&
-            nearestUpcoming != null)
-          FilledButton.tonal(
-            key: const Key('view-upcoming-budgets'),
-            onPressed: () => ref
-                .read(budgetFilterProvider.notifier)
-                .selectStatus(BudgetTemporalStatus.upcoming),
-            child: const Text('Lihat mendatang'),
-          )
         else
           FilledButton.icon(
             key: const Key('create-first-budget'),
-            onPressed: () => context.push('/budgets/new'),
+            onPressed: () => context.push(_budgetCreateLocation(selection)),
             icon: const Icon(Icons.add),
             label: const Text('Buat anggaran'),
           ),

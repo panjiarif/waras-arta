@@ -264,6 +264,74 @@ class BudgetListFilter {
   int get hashCode => Object.hash(temporalStatus, periodKind, referenceDay);
 }
 
+class BudgetBrowseFilter {
+  const BudgetBrowseFilter({
+    required this.windowStartDay,
+    required this.windowEndDay,
+    required this.usageThroughDay,
+    this.periodKind,
+  });
+
+  factory BudgetBrowseFilter.month({
+    required int year,
+    required int month,
+    required int usageThroughDay,
+    BudgetPeriodKind? periodKind,
+  }) {
+    final window = BudgetPeriod.monthly(year, month);
+    return BudgetBrowseFilter(
+      windowStartDay: window.startDay,
+      windowEndDay: window.endDay,
+      usageThroughDay: usageThroughDay,
+      periodKind: periodKind,
+    );
+  }
+
+  factory BudgetBrowseFilter.year({
+    required int year,
+    required int usageThroughDay,
+    BudgetPeriodKind? periodKind,
+  }) {
+    final window = BudgetPeriod.yearly(year);
+    return BudgetBrowseFilter(
+      windowStartDay: window.startDay,
+      windowEndDay: window.endDay,
+      usageThroughDay: usageThroughDay,
+      periodKind: periodKind,
+    );
+  }
+
+  final int windowStartDay;
+  final int windowEndDay;
+  final int usageThroughDay;
+  final BudgetPeriodKind? periodKind;
+
+  BudgetBrowseFilter copyWith({
+    int? windowStartDay,
+    int? windowEndDay,
+    int? usageThroughDay,
+    BudgetPeriodKind? periodKind,
+    bool clearPeriodKind = false,
+  }) => BudgetBrowseFilter(
+    windowStartDay: windowStartDay ?? this.windowStartDay,
+    windowEndDay: windowEndDay ?? this.windowEndDay,
+    usageThroughDay: usageThroughDay ?? this.usageThroughDay,
+    periodKind: clearPeriodKind ? null : periodKind ?? this.periodKind,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is BudgetBrowseFilter &&
+      windowStartDay == other.windowStartDay &&
+      windowEndDay == other.windowEndDay &&
+      usageThroughDay == other.usageThroughDay &&
+      periodKind == other.periodKind;
+
+  @override
+  int get hashCode =>
+      Object.hash(windowStartDay, windowEndDay, usageThroughDay, periodKind);
+}
+
 class BudgetRangeGroup {
   BudgetRangeGroup({
     required this.startDay,
@@ -274,6 +342,8 @@ class BudgetRangeGroup {
   final int startDay;
   final int endDay;
   final List<BudgetProgress> items;
+
+  BudgetPeriodKind get periodKind => items.first.budget.period.kind;
 
   int get totalLimit =>
       items.fold(0, (total, item) => total + item.budget.limitAmount);
@@ -286,11 +356,7 @@ class BudgetRangeGroup {
 
   double get visualRatio => actualRatio.clamp(0.0, 1.0).toDouble();
 
-  List<BudgetPeriodKind> get periodKinds => List.unmodifiable(
-    BudgetPeriodKind.values.where(
-      (kind) => items.any((item) => item.budget.period.kind == kind),
-    ),
-  );
+  List<BudgetPeriodKind> get periodKinds => List.unmodifiable([periodKind]);
 
   int get attentionCount => items
       .where((item) => item.usageStatus != BudgetUsageStatus.normal)
@@ -319,17 +385,26 @@ class BudgetListSnapshot {
 
   factory BudgetListSnapshot.fromItems(Iterable<BudgetProgress> source) {
     final items = List<BudgetProgress>.unmodifiable(source);
-    final grouped = <(int, int), List<BudgetProgress>>{};
+    final grouped = <(BudgetPeriodKind, int, int), List<BudgetProgress>>{};
     for (final item in items) {
       final period = item.budget.period;
-      grouped.putIfAbsent((period.startDay, period.endDay), () => []).add(item);
+      grouped
+          .putIfAbsent((period.kind, period.startDay, period.endDay), () => [])
+          .add(item);
     }
+    final entries = grouped.entries.toList()
+      ..sort((left, right) {
+        var result = left.key.$1.index.compareTo(right.key.$1.index);
+        if (result == 0) result = left.key.$2.compareTo(right.key.$2);
+        if (result == 0) result = left.key.$3.compareTo(right.key.$3);
+        return result;
+      });
     return BudgetListSnapshot(
       items: items,
-      groups: grouped.entries.map(
+      groups: entries.map(
         (entry) => BudgetRangeGroup(
-          startDay: entry.key.$1,
-          endDay: entry.key.$2,
+          startDay: entry.key.$2,
+          endDay: entry.key.$3,
           items: entry.value,
         ),
       ),

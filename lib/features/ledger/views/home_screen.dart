@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
+import '../../budgets/view_models/budget_view_model.dart';
 import '../../budgets/views/budget_list_screen.dart';
 import '../../calendar/view_models/calendar_view_model.dart';
 import '../../calendar/views/calendar_view.dart';
@@ -49,6 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (!mounted) return;
     ref.invalidate(currentDateProvider);
     ref.read(calendarStateProvider.notifier).refreshToday();
+    ref.read(budgetFilterProvider.notifier).refreshToday();
     _scheduleCalendarDateRefresh();
   }
 

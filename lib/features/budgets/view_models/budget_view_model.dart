@@ -8,20 +8,36 @@ import '../../calendar/view_models/calendar_view_model.dart';
 
 class BudgetFilterSelection {
   const BudgetFilterSelection({
-    this.temporalStatus = BudgetTemporalStatus.active,
+    required this.selectedYear,
+    required this.selectedMonth,
     this.periodKind,
+    this.followsCurrentPeriod = true,
   });
 
-  final BudgetTemporalStatus temporalStatus;
+  factory BudgetFilterSelection.current(DateTime today) =>
+      BudgetFilterSelection(
+        selectedYear: today.year,
+        selectedMonth: today.month,
+      );
+
+  final int selectedYear;
+  final int selectedMonth;
   final BudgetPeriodKind? periodKind;
+  final bool followsCurrentPeriod;
+
+  bool get usesYearNavigator => periodKind == BudgetPeriodKind.yearly;
 
   BudgetFilterSelection copyWith({
-    BudgetTemporalStatus? temporalStatus,
+    int? selectedYear,
+    int? selectedMonth,
     BudgetPeriodKind? periodKind,
     bool clearPeriodKind = false,
+    bool? followsCurrentPeriod,
   }) => BudgetFilterSelection(
-    temporalStatus: temporalStatus ?? this.temporalStatus,
+    selectedYear: selectedYear ?? this.selectedYear,
+    selectedMonth: selectedMonth ?? this.selectedMonth,
     periodKind: clearPeriodKind ? null : periodKind ?? this.periodKind,
+    followsCurrentPeriod: followsCurrentPeriod ?? this.followsCurrentPeriod,
   );
 }
 
@@ -32,15 +48,23 @@ final budgetFilterProvider =
 
 class BudgetFilterController extends Notifier<BudgetFilterSelection> {
   @override
-  BudgetFilterSelection build() => const BudgetFilterSelection();
+  BudgetFilterSelection build() =>
+      BudgetFilterSelection.current(ref.read(currentDateProvider));
 
   void reset() {
-    state = const BudgetFilterSelection();
+    state = BudgetFilterSelection.current(ref.read(currentDateProvider));
   }
 
-  void selectStatus(BudgetTemporalStatus value) {
-    if (value != state.temporalStatus) {
-      state = state.copyWith(temporalStatus: value);
+  void refreshToday({DateTime? today}) {
+    final DateTime current = today ?? ref.read(currentDateProvider);
+    final selectedIndex = state.selectedYear * 12 + state.selectedMonth;
+    final currentIndex = current.year * 12 + current.month;
+    if (state.followsCurrentPeriod || selectedIndex > currentIndex) {
+      state = state.copyWith(
+        selectedYear: current.year,
+        selectedMonth: current.month,
+        followsCurrentPeriod: true,
+      );
     }
   }
 
@@ -50,22 +74,86 @@ class BudgetFilterController extends Notifier<BudgetFilterSelection> {
         ? state.copyWith(clearPeriodKind: true)
         : state.copyWith(periodKind: value);
   }
+
+  void showPreviousPeriod() {
+    if (state.usesYearNavigator) {
+      if (state.selectedYear <= 2000) return;
+      state = state.copyWith(
+        selectedYear: state.selectedYear - 1,
+        followsCurrentPeriod: false,
+      );
+      return;
+    }
+    final previous = DateTime(state.selectedYear, state.selectedMonth - 1);
+    if (previous.year < 2000) return;
+    state = state.copyWith(
+      selectedYear: previous.year,
+      selectedMonth: previous.month,
+      followsCurrentPeriod: false,
+    );
+  }
+
+  void showNextPeriod() {
+    final today = ref.read(currentDateProvider);
+    if (state.usesYearNavigator) {
+      if (state.selectedYear >= today.year) return;
+      final nextYear = state.selectedYear + 1;
+      state = state.copyWith(
+        selectedYear: nextYear,
+        followsCurrentPeriod: nextYear == today.year,
+      );
+      return;
+    }
+    final currentIndex = today.year * 12 + today.month;
+    final selectedIndex = state.selectedYear * 12 + state.selectedMonth;
+    if (selectedIndex >= currentIndex) return;
+    final next = DateTime(state.selectedYear, state.selectedMonth + 1);
+    state = state.copyWith(
+      selectedYear: next.year,
+      selectedMonth: next.month,
+      followsCurrentPeriod:
+          next.year == today.year && next.month == today.month,
+    );
+  }
 }
 
 final budgetReferenceDayProvider = Provider<int>((ref) {
   return dateTimeToCivilDay(ref.watch(currentDateProvider));
 });
 
-final budgetListQueryProvider = Provider.autoDispose<BudgetListFilter>((ref) {
+final budgetListQueryProvider = Provider.autoDispose<BudgetBrowseFilter>((ref) {
   final selection = ref.watch(budgetFilterProvider);
-  return BudgetListFilter(
-    temporalStatus: selection.temporalStatus,
+  final referenceDay = ref.watch(budgetReferenceDayProvider);
+  if (selection.usesYearNavigator) {
+    final period = BudgetPeriod.yearly(selection.selectedYear);
+    return BudgetBrowseFilter.year(
+      year: selection.selectedYear,
+      usageThroughDay: referenceDay < period.endDay
+          ? referenceDay
+          : period.endDay,
+      periodKind: BudgetPeriodKind.yearly,
+    );
+  }
+  final period = BudgetPeriod.monthly(
+    selection.selectedYear,
+    selection.selectedMonth,
+  );
+  return BudgetBrowseFilter.month(
+    year: selection.selectedYear,
+    month: selection.selectedMonth,
+    usageThroughDay: referenceDay < period.endDay
+        ? referenceDay
+        : period.endDay,
     periodKind: selection.periodKind,
-    referenceDay: ref.watch(budgetReferenceDayProvider),
   );
 });
 
 final budgetSnapshotProvider = StreamProvider.autoDispose
+    .family<BudgetListSnapshot, BudgetBrowseFilter>((ref, filter) {
+      return ref.watch(budgetRepositoryProvider).watchBudgetsForPeriod(filter);
+    });
+
+final legacyBudgetSnapshotProvider = StreamProvider.autoDispose
     .family<BudgetListSnapshot, BudgetListFilter>((ref, filter) {
       return ref.watch(budgetRepositoryProvider).watchBudgets(filter);
     });
@@ -74,6 +162,76 @@ final filteredBudgetListProvider =
     Provider.autoDispose<AsyncValue<BudgetListSnapshot>>((ref) {
       return ref.watch(
         budgetSnapshotProvider(ref.watch(budgetListQueryProvider)),
+      );
+    });
+
+class BudgetMonthlyCopyContext {
+  const BudgetMonthlyCopyContext({
+    required this.source,
+    required this.target,
+    required this.itemCount,
+  });
+
+  final BudgetPeriod source;
+  final BudgetPeriod target;
+  final int itemCount;
+}
+
+final budgetMonthlyCopyAvailabilityProvider =
+    Provider.autoDispose<AsyncValue<BudgetMonthlyCopyContext?>>((ref) {
+      final selection = ref.watch(budgetFilterProvider);
+      if (selection.periodKind == BudgetPeriodKind.yearly ||
+          selection.periodKind == BudgetPeriodKind.custom) {
+        return const AsyncValue.data(null);
+      }
+      final target = BudgetPeriod.monthly(
+        selection.selectedYear,
+        selection.selectedMonth,
+      );
+      final previousDate = DateTime(
+        selection.selectedYear,
+        selection.selectedMonth - 1,
+      );
+      if (previousDate.year < 2000) return const AsyncValue.data(null);
+      final source = BudgetPeriod.monthly(
+        previousDate.year,
+        previousDate.month,
+      );
+      final targetFilter = BudgetBrowseFilter(
+        windowStartDay: target.startDay,
+        windowEndDay: target.endDay,
+        usageThroughDay: target.endDay,
+        periodKind: BudgetPeriodKind.monthly,
+      );
+      final sourceFilter = BudgetBrowseFilter(
+        windowStartDay: source.startDay,
+        windowEndDay: source.endDay,
+        usageThroughDay: source.endDay,
+        periodKind: BudgetPeriodKind.monthly,
+      );
+      final targetSnapshot = ref.watch(budgetSnapshotProvider(targetFilter));
+      final sourceSnapshot = ref.watch(budgetSnapshotProvider(sourceFilter));
+      return targetSnapshot.when(
+        loading: () => const AsyncValue.loading(),
+        error: AsyncValue.error,
+        data: (targetValue) {
+          if (targetValue.items.isNotEmpty) {
+            return const AsyncValue.data(null);
+          }
+          return sourceSnapshot.when(
+            loading: () => const AsyncValue.loading(),
+            error: AsyncValue.error,
+            data: (sourceValue) => sourceValue.items.isEmpty
+                ? const AsyncValue.data(null)
+                : AsyncValue.data(
+                    BudgetMonthlyCopyContext(
+                      source: source,
+                      target: target,
+                      itemCount: sourceValue.items.length,
+                    ),
+                  ),
+          );
+        },
       );
     });
 
@@ -123,7 +281,9 @@ final budgetProgressProvider = Provider.autoDispose
             ),
             referenceDay: ref.watch(budgetReferenceDayProvider),
           );
-          return ref.watch(budgetSnapshotProvider(filter)).whenData((snapshot) {
+          return ref.watch(legacyBudgetSnapshotProvider(filter)).whenData((
+            snapshot,
+          ) {
             for (final progress in snapshot.items) {
               if (progress.budget.id == budgetId) return progress;
             }
@@ -152,7 +312,7 @@ final budgetExpenseCategoriesProvider =
           .watchCategoryTree(CategoryKind.expense, includeArchived: true);
     });
 
-enum BudgetOperation { create, update, delete }
+enum BudgetOperation { create, update, delete, copy }
 
 class BudgetActionState {
   const BudgetActionState({this.operation, this.targetId, this.error});
@@ -203,6 +363,32 @@ class BudgetActions extends Notifier<BudgetActionState> {
     targetId: id,
     action: (repository) => repository.deleteBudget(id),
   );
+
+  Future<int?> copyMonthlyBudgets({
+    required BudgetPeriod source,
+    required BudgetPeriod target,
+  }) async {
+    if (state.isSaving) return null;
+    state = const BudgetActionState(operation: BudgetOperation.copy);
+    try {
+      final count = await ref
+          .read(budgetRepositoryProvider)
+          .copyMonthlyBudgets(source: source, target: target);
+      if (ref.mounted) state = const BudgetActionState();
+      return count;
+    } on BudgetValidationException catch (error) {
+      if (ref.mounted) state = BudgetActionState(error: error.message);
+    } on FinanceValidationException catch (error) {
+      if (ref.mounted) state = BudgetActionState(error: error.message);
+    } catch (_) {
+      if (ref.mounted) {
+        state = const BudgetActionState(
+          error: 'Anggaran belum disalin. Coba lagi beberapa saat lagi.',
+        );
+      }
+    }
+    return null;
+  }
 
   void clearError() {
     if (!state.isSaving && state.error != null) {

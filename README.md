@@ -25,7 +25,8 @@ Yang tersedia:
 - Detail transaksi beserta nama rekening, tanggal kejadian, catatan, waktu pencatatan, dan seluruh rincian split.
 - Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
 - Hapus permanen transaksi biasa melalui dialog konfirmasi.
-- Mengelola anggaran bulanan, tahunan, atau rentang kustom langsung dari tab **Anggaran**, dengan satu atau beberapa subkategori pengeluaran; progres mengikuti nominal alokasi transaksi dan konflik kategori pada periode beririsan ditolak.
+- Mengelola anggaran bulanan, tahunan, atau rentang kustom langsung dari tab **Anggaran**, dengan satu atau beberapa subkategori pengeluaran; daftar ditelusuri per bulan/tahun, progres mengikuti nominal alokasi transaksi, dan konflik kategori pada periode beririsan ditolak.
+- Menyalin anggaran bulanan sebelumnya secara manual setelah konfirmasi ketika bulan tujuan masih kosong. Salinan menjadi data baru yang independen dan tidak tersinkron dengan bulan asal.
 - Penyimpanan persisten lokal menggunakan Drift/SQLite.
 - Migrasi schema bertahap v1 sampai v6 yang menjaga transaksi serta saldo lama ketika kategori, siklus rekening, alokasi transaksi, kelompok saldo, dan anggaran berevolusi.
 - Backup manual terenkripsi ke file `.warasarta` melalui pemilih dokumen Android; hasil simpan dibuka ulang dan diverifikasi sebelum dianggap berhasil.

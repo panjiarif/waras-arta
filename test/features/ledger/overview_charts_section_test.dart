@@ -18,6 +18,10 @@ void main() {
     expect(find.text('Tren terkini'), findsOneWidget);
     expect(find.byKey(const Key('weekly-expense-chart-card')), findsOneWidget);
     expect(find.byKey(const Key('primary-balance-chart-card')), findsOneWidget);
+    expect(
+      find.text('Saldo utama enam bulan terakhir dan saldo saat ini.'),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('weekly-expense-bars')), findsOneWidget);
     expect(find.byKey(const Key('primary-balance-line')), findsOneWidget);
     for (var index = 0; index < 7; index++) {
@@ -84,7 +88,10 @@ void main() {
     final balanceSummary = tester.getSemantics(
       find.byKey(const Key('primary-balance-chart-card-semantics')),
     );
-    expect(balanceSummary.label, contains('Enam saldo akhir bulan'));
+    expect(
+      balanceSummary.label,
+      contains('Tren saldo utama enam bulan terakhir'),
+    );
     expect(balanceSummary.label, contains('Rp 1.800.000'));
     expect(
       tester

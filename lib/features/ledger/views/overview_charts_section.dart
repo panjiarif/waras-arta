@@ -36,10 +36,6 @@ class OverviewChartsSection extends StatelessWidget {
         style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
       ),
       const SizedBox(height: 4),
-      Text(
-        'Mengikuti tanggal hari ini, terpisah dari bulan yang dipilih.',
-        style: TextStyle(color: Theme.of(context).colorScheme.outline),
-      ),
       const SizedBox(height: 12),
       _WeeklyExpenseCard(points: snapshot.dailyExpenses),
       const SizedBox(height: 12),
@@ -58,7 +54,7 @@ class _WeeklyExpenseCard extends StatelessWidget {
     final total = points.fold<int>(0, (sum, point) => sum + point.expense);
     final range = points.isEmpty
         ? 'Rentang tanggal belum tersedia'
-        : '${_formatCompactDateRange(points.first.day, points.last.day)} · hari ini di kanan';
+        : '${_formatCompactDateRange(points.first.day, points.last.day)} ';
 
     return Semantics(
       key: const Key('weekly-expense-chart-card-semantics'),
@@ -202,7 +198,7 @@ class _PrimaryBalanceTrendCard extends StatelessWidget {
       container: true,
       explicitChildNodes: true,
       label:
-          'Tren saldo utama. Enam saldo akhir bulan sebelumnya dan saldo saat ini${current == null ? '.' : ', ${formatRupiah(current.balance)}.'}',
+          'Tren saldo utama enam bulan terakhir dan saldo saat ini${current == null ? '.' : ', ${formatRupiah(current.balance)}.'}',
       child: SizedBox(
         width: double.infinity,
         child: Card(
@@ -222,7 +218,7 @@ class _PrimaryBalanceTrendCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 ExcludeSemantics(
                   child: Text(
-                    'Enam saldo akhir bulan sebelumnya dan saldo saat ini.',
+                    'Saldo utama enam bulan terakhir dan saldo saat ini.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.outline,
                     ),

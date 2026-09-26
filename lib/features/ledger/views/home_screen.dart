@@ -1059,15 +1059,23 @@ class _MonthlyTotals extends StatelessWidget {
         ],
       ),
       const SizedBox(height: 12),
-      Text(
-        'Selisih bulan ini: ${formatRupiah(data.net)}',
-        style: const TextStyle(fontWeight: FontWeight.w600),
+      // Kotak selisih
+      Row(
+        key: const Key('monthly-metric-net'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _Metric(
+              metricKey: const Key('monthly-metric-net'),
+              label: 'Selisih',
+              amount: data.net,
+              icon: Icons.compare_arrows,
+              color: data.net >= 0 ? forest : const Color(0xFF9D492B),
+            ),
+          ),
+        ],
       ),
-      const SizedBox(height: 4),
-      const Text(
-        'Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.',
-        style: TextStyle(fontSize: 12),
-      ),
+      const SizedBox(height: 8),
     ],
   );
 }

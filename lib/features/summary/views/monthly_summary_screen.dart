@@ -42,6 +42,42 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
     setState(() => _year = target);
   }
 
+  Future<void> _showAccountFilter(AccountBalanceGroup? selected) async {
+    final option = await showModalBottomSheet<_AccountGroupOption>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(bottom: 16),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Text(
+              'Filter rekening',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          for (final option in _AccountGroupOption.values)
+            ListTile(
+              key: ValueKey('summary-account-option-${option.name}'),
+              selected: option.balanceGroup == selected,
+              leading: Icon(
+                option.balanceGroup == selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+              ),
+              title: Text(option.label),
+              onTap: () => Navigator.pop(context, option),
+            ),
+        ],
+      ),
+    );
+    if (option != null && mounted) {
+      setState(() => _balanceGroup = option.balanceGroup);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final today = dateOnly(ref.watch(currentDateProvider));
@@ -71,17 +107,7 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
                 ),
                 _AccountGroupFilter(
                   value: _balanceGroup,
-                  onChanged: (value) => setState(() => _balanceGroup = value),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Text(
-                    '${_balanceGroup?.label ?? 'Semua rekening'}. '
-                    'Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.',
-                    key: const Key('summary-scope-caption'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12),
-                  ),
+                  onPressed: () => _showAccountFilter(_balanceGroup),
                 ),
                 Expanded(
                   child: summary.when(
@@ -109,36 +135,49 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
 }
 
 class _AccountGroupFilter extends StatelessWidget {
-  const _AccountGroupFilter({required this.value, required this.onChanged});
+  const _AccountGroupFilter({required this.value, required this.onPressed});
 
   final AccountBalanceGroup? value;
-  final ValueChanged<AccountBalanceGroup?> onChanged;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-    child: Wrap(
+    child: OutlinedButton(
       key: const Key('summary-account-filter'),
-      alignment: WrapAlignment.center,
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        FilterChip(
-          key: const Key('summary-filter-all'),
-          label: const Text('Semua rekening'),
-          selected: value == null,
-          onSelected: (_) => onChanged(null),
-        ),
-        for (final group in AccountBalanceGroup.values)
-          FilterChip(
-            key: ValueKey('summary-filter-${group.name}'),
-            label: Text(group.label),
-            selected: value == group,
-            onSelected: (_) => onChanged(group),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(52),
+        alignment: Alignment.centerLeft,
+      ),
+      onPressed: onPressed,
+      child: Row(
+        children: [
+          const Icon(Icons.filter_list),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Rekening: ${value?.label ?? 'Semua'}',
+              key: const Key('summary-account-filter-label'),
+            ),
           ),
-      ],
+          const Icon(Icons.expand_more),
+        ],
+      ),
     ),
   );
+}
+
+enum _AccountGroupOption { all, primary, savingsInvestment }
+
+extension on _AccountGroupOption {
+  AccountBalanceGroup? get balanceGroup => switch (this) {
+    _AccountGroupOption.all => null,
+    _AccountGroupOption.primary => AccountBalanceGroup.primary,
+    _AccountGroupOption.savingsInvestment =>
+      AccountBalanceGroup.savingsInvestment,
+  };
+
+  String get label => balanceGroup?.label ?? 'Semua rekening';
 }
 
 class _YearSelector extends StatelessWidget {

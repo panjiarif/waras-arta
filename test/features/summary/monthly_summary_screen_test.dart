@@ -204,29 +204,27 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        tester
-            .widget<FilterChip>(find.byKey(const Key('summary-filter-all')))
-            .selected,
-        isTrue,
-      );
+      expect(find.text('Rekening: Semua'), findsOneWidget);
+      expect(find.byKey(const Key('summary-scope-caption')), findsNothing);
       expect(requestedQueries.last.balanceGroup, isNull);
       expect(find.text('Rp 100.000'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('summary-filter-primary')));
+      await tester.tap(find.byKey(const Key('summary-account-filter')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Filter rekening'), findsOneWidget);
+      expect(find.text('Semua rekening'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('summary-account-option-primary')));
       await tester.pumpAndSettle();
 
       expect(requestedQueries.last.balanceGroup, AccountBalanceGroup.primary);
       expect(find.text('Rp 200.000'), findsOneWidget);
-      expect(
-        find.text(
-          'Saldo utama. Transfer, penyesuaian saldo, dan saldo awal tidak dihitung.',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('Rekening: Saldo utama'), findsOneWidget);
 
+      await tester.tap(find.byKey(const Key('summary-account-filter')));
+      await tester.pumpAndSettle();
       await tester.tap(
-        find.byKey(const Key('summary-filter-savingsInvestment')),
+        find.byKey(const Key('summary-account-option-savingsInvestment')),
       );
       await tester.pumpAndSettle();
 
@@ -235,14 +233,7 @@ void main() {
         AccountBalanceGroup.savingsInvestment,
       );
       expect(find.text('Rp 300.000'), findsOneWidget);
-      expect(
-        tester
-            .widget<FilterChip>(
-              find.byKey(const Key('summary-filter-savingsInvestment')),
-            )
-            .selected,
-        isTrue,
-      );
+      expect(find.text('Rekening: Simpanan & investasi'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('summary-previous-year')));
       await tester.pumpAndSettle();
@@ -252,6 +243,14 @@ void main() {
         requestedQueries.last.balanceGroup,
         AccountBalanceGroup.savingsInvestment,
       );
+
+      await tester.tap(find.byKey(const Key('summary-account-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('summary-account-option-all')));
+      await tester.pumpAndSettle();
+
+      expect(requestedQueries.last.balanceGroup, isNull);
+      expect(find.text('Rekening: Semua'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

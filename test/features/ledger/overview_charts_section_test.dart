@@ -19,7 +19,7 @@ void main() {
     expect(find.byKey(const Key('weekly-expense-chart-card')), findsOneWidget);
     expect(find.byKey(const Key('primary-balance-chart-card')), findsOneWidget);
     expect(
-      find.text('Saldo utama enam bulan terakhir dan saldo saat ini.'),
+      find.text('Saldo enam bulan terakhir dan saldo saat ini.'),
       findsOneWidget,
     );
     expect(find.byKey(const Key('weekly-expense-bars')), findsOneWidget);

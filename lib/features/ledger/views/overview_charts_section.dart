@@ -218,7 +218,7 @@ class _PrimaryBalanceTrendCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 ExcludeSemantics(
                   child: Text(
-                    'Saldo utama enam bulan terakhir dan saldo saat ini.',
+                    'Saldo enam bulan terakhir dan saldo saat ini.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.outline,
                     ),

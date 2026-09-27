@@ -840,6 +840,42 @@ class DriftFinanceRepository implements FinanceRepository {
     });
   }
 
+  @override
+  Future<CategoryDeletionImpact> inspectCategoryDeletion(int categoryId) {
+    _validateCategoryId(categoryId);
+    return _db.transaction(() => _inspectCategoryDeletion(categoryId));
+  }
+
+  @override
+  Future<void> deleteCategoryPermanently(int categoryId) async {
+    _validateCategoryId(categoryId);
+    await _db.transaction(() async {
+      // Rebuild the impact inside the same transaction as the deletes. The UI
+      // may have shown an older preflight result, but deletion must always use
+      // the current references and category tree.
+      final impact = await _inspectCategoryDeletion(categoryId);
+      _requireCategoryCanBeDeleted(impact);
+
+      if (impact.isGroup) {
+        final deletedChildren = await (_db.delete(
+          _db.categories,
+        )..where((category) => category.parentId.equals(categoryId))).go();
+        if (deletedChildren != impact.childCount) {
+          throw StateError('Pohon kategori berubah saat sedang dihapus.');
+        }
+      }
+
+      final deleted = await (_db.delete(
+        _db.categories,
+      )..where((category) => category.id.equals(categoryId))).go();
+      if (deleted != 1) {
+        throw const FinanceValidationException('Kategori tidak ditemukan.');
+      }
+
+      await _assertCategoryDeletionInvariants(impact.category.kind.index);
+    });
+  }
+
   static _NormalizedEntryDraft _validateAndNormalizeEntry(EntryDraft draft) {
     if (draft.kind == EntryKind.adjustment) {
       throw const FinanceValidationException(
@@ -1146,6 +1182,145 @@ class DriftFinanceRepository implements FinanceRepository {
         : allocationCount == 0;
     if (!valid) {
       throw StateError('Invariant alokasi transaksi tidak valid.');
+    }
+  }
+
+  Future<CategoryDeletionImpact> _inspectCategoryDeletion(
+    int categoryId,
+  ) async {
+    final category = await _requireCategory(categoryId);
+    final children = category.parentId == null
+        ? await (_db.select(
+            _db.categories,
+          )..where((child) => child.parentId.equals(category.id))).get()
+        : const <CategoryRow>[];
+    final targetRows = [category, ...children];
+    final targetIds = targetRows.map((row) => row.id).toList(growable: false);
+
+    final siblingCount = category.parentId == null
+        ? null
+        : await _categorySiblingCount(
+            parentId: category.parentId!,
+            exceptId: category.id,
+          );
+    final effectiveLeafCount = await _effectiveLeafCount(category.kind);
+    final effectiveLeavesRemoved = await _effectiveLeavesRemoved(category);
+
+    return CategoryDeletionImpact(
+      category: _toCategory(category),
+      childCount: children.length,
+      referencedEntryCount: await _categoryEntryReferenceCount(targetIds),
+      referencedBudgetCount: await _categoryBudgetReferenceCount(targetIds),
+      containsBuiltInCategory: targetRows.any((row) => row.systemKey != null),
+      wouldLeaveParentWithoutChildren: siblingCount == 0,
+      wouldRemoveLastEffectiveLeaf:
+          effectiveLeafCount - effectiveLeavesRemoved < 1,
+    );
+  }
+
+  Future<int> _categoryEntryReferenceCount(List<int> categoryIds) async {
+    final placeholders = List.filled(categoryIds.length, '?').join(', ');
+    final result = await _db
+        .customSelect(
+          '''SELECT COUNT(DISTINCT entry_id) AS amount
+             FROM ledger_allocations
+             WHERE category_id IN ($placeholders)''',
+          variables: [
+            for (final categoryId in categoryIds) Variable.withInt(categoryId),
+          ],
+          readsFrom: {_db.ledgerAllocations},
+        )
+        .getSingle();
+    return result.read<int>('amount');
+  }
+
+  Future<int> _categoryBudgetReferenceCount(List<int> categoryIds) async {
+    final placeholders = List.filled(categoryIds.length, '?').join(', ');
+    final result = await _db
+        .customSelect(
+          '''SELECT COUNT(DISTINCT budget_id) AS amount
+             FROM budget_categories
+             WHERE category_id IN ($placeholders)''',
+          variables: [
+            for (final categoryId in categoryIds) Variable.withInt(categoryId),
+          ],
+          readsFrom: {_db.budgetCategories},
+        )
+        .getSingle();
+    return result.read<int>('amount');
+  }
+
+  Future<int> _categorySiblingCount({
+    required int parentId,
+    required int exceptId,
+  }) async {
+    final result = await _db
+        .customSelect(
+          '''SELECT COUNT(*) AS amount
+             FROM categories
+             WHERE parent_id = ? AND id <> ?''',
+          variables: [Variable.withInt(parentId), Variable.withInt(exceptId)],
+          readsFrom: {_db.categories},
+        )
+        .getSingle();
+    return result.read<int>('amount');
+  }
+
+  static void _requireCategoryCanBeDeleted(CategoryDeletionImpact impact) {
+    if (impact.containsBuiltInCategory) {
+      throw const FinanceValidationException(
+        'Kategori bawaan tidak dapat dihapus. Arsipkan jika tidak ingin menggunakannya.',
+      );
+    }
+    if (impact.referencedEntryCount > 0 && impact.referencedBudgetCount > 0) {
+      throw const FinanceValidationException(
+        'Kategori digunakan oleh transaksi dan anggaran sehingga tidak dapat dihapus. Arsipkan agar tidak dipakai lagi.',
+      );
+    }
+    if (impact.referencedEntryCount > 0) {
+      throw const FinanceValidationException(
+        'Kategori yang memiliki riwayat transaksi tidak dapat dihapus. Arsipkan agar tidak dipakai lagi.',
+      );
+    }
+    if (impact.referencedBudgetCount > 0) {
+      throw const FinanceValidationException(
+        'Kategori yang digunakan oleh anggaran tidak dapat dihapus. Ubah atau hapus anggaran terkait terlebih dahulu.',
+      );
+    }
+    if (impact.wouldLeaveParentWithoutChildren) {
+      throw const FinanceValidationException(
+        'Kelompok kategori harus memiliki minimal satu subkategori. Hapus kelompoknya atau tambahkan subkategori lain.',
+      );
+    }
+    if (impact.wouldRemoveLastEffectiveLeaf) {
+      throw const FinanceValidationException(
+        'Sisakan minimal satu subkategori aktif untuk jenis transaksi ini.',
+      );
+    }
+    if (!impact.canDelete) {
+      throw const FinanceValidationException(
+        'Kategori tidak dapat dihapus permanen.',
+      );
+    }
+  }
+
+  Future<void> _assertCategoryDeletionInvariants(int kind) async {
+    final emptyGroup = await _db
+        .customSelect(
+          '''SELECT COUNT(*) AS amount
+             FROM categories AS parent
+             WHERE parent.kind = ? AND parent.parent_id IS NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM categories AS child
+                 WHERE child.parent_id = parent.id
+               )''',
+          variables: [Variable.withInt(kind)],
+          readsFrom: {_db.categories},
+        )
+        .getSingle();
+    if (emptyGroup.read<int>('amount') != 0 ||
+        await _effectiveLeafCount(kind) < 1) {
+      throw StateError('Invariant pohon kategori tidak valid setelah dihapus.');
     }
   }
 

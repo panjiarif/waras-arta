@@ -52,7 +52,14 @@ final categoryTreeProvider = StreamProvider.autoDispose
           );
     });
 
-enum CategoryOperation { create, update, archive, restore }
+enum CategoryOperation {
+  create,
+  update,
+  archive,
+  restore,
+  inspectDelete,
+  delete,
+}
 
 class CategoryActionState {
   const CategoryActionState({this.operation, this.targetId, this.error});
@@ -97,6 +104,36 @@ class CategoryActions extends Notifier<CategoryActionState> {
     targetId: categoryId,
     action: (repository) =>
         repository.setCategoryArchived(categoryId, archived),
+  );
+
+  Future<CategoryDeletionImpact?> inspectDeletion(int categoryId) async {
+    if (state.isSaving) return null;
+    state = CategoryActionState(
+      operation: CategoryOperation.inspectDelete,
+      targetId: categoryId,
+    );
+    try {
+      final impact = await ref
+          .read(financeRepositoryProvider)
+          .inspectCategoryDeletion(categoryId);
+      if (ref.mounted) state = const CategoryActionState();
+      return impact;
+    } on FinanceValidationException catch (error) {
+      if (ref.mounted) state = CategoryActionState(error: error.message);
+    } catch (_) {
+      if (ref.mounted) {
+        state = const CategoryActionState(
+          error: 'Kategori belum diperiksa. Coba lagi beberapa saat lagi.',
+        );
+      }
+    }
+    return null;
+  }
+
+  Future<bool> deleteCategory(int categoryId) => _run(
+    operation: CategoryOperation.delete,
+    targetId: categoryId,
+    action: (repository) => repository.deleteCategoryPermanently(categoryId),
   );
 
   void clearError() {

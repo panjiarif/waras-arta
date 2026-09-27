@@ -1363,6 +1363,163 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('custom subcategory and group can be deleted permanently', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    final groupId = await repository.createCategoryGroup(
+      const CategoryGroupDraft(
+        kind: CategoryKind.expense,
+        parentName: 'Rumah',
+        parentIconKey: 'home',
+        firstChildName: 'Listrik',
+        firstChildIconKey: 'receipt_long',
+      ),
+    );
+    final extraChildId = await repository.createSubcategory(
+      CategoryDraft(parentId: groupId, name: 'Air', iconKey: 'payments'),
+    );
+    final customGroup = repository.categoryGroups.removeLast();
+    repository.categoryGroups.insert(0, customGroup);
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('manage-categories')));
+    await tester.pumpAndSettle();
+
+    Future<void> openCategoryMenu(int categoryId) async {
+      final menu = find.byKey(ValueKey('category-menu-$categoryId'));
+      if (menu.evaluate().isEmpty) {
+        await tester.fling(
+          find.byType(Scrollable).last,
+          const Offset(0, 1000),
+          3000,
+        );
+        await tester.pumpAndSettle();
+      }
+      expect(menu, findsOneWidget);
+      await tester.ensureVisible(menu);
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+    }
+
+    await openCategoryMenu(extraChildId);
+    await tester.tap(find.byKey(ValueKey('delete-category-$extraChildId')));
+    await tester.pumpAndSettle();
+    expect(find.text('Hapus Air?'), findsOneWidget);
+    expect(
+      find.text(
+        'Subkategori ini akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('confirm-delete-category')));
+    await tester.pumpAndSettle();
+    expect(
+      repository.categoryGroups
+          .singleWhere((group) => group.parent.id == groupId)
+          .children
+          .any((child) => child.id == extraChildId),
+      isFalse,
+    );
+    expect(find.text('Kategori dihapus permanen.'), findsOneWidget);
+
+    await openCategoryMenu(groupId);
+    await tester.tap(find.byKey(ValueKey('delete-category-$groupId')));
+    await tester.pumpAndSettle();
+    expect(find.text('Hapus kelompok Rumah?'), findsOneWidget);
+    expect(
+      find.text(
+        'Kelompok dan 1 subkategori akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('confirm-delete-category')));
+    await tester.pumpAndSettle();
+    expect(
+      repository.categoryGroups.any((group) => group.parent.id == groupId),
+      isFalse,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('built-in category does not offer permanent deletion', (
+    tester,
+  ) async {
+    await pumpApp(tester, _UiRepository(withAccounts: true));
+    await tester.tap(find.byKey(const Key('manage-categories')));
+    await tester.pumpAndSettle();
+
+    final menu = find.byKey(const ValueKey('category-menu-9'));
+    await tester.scrollUntilVisible(
+      menu,
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('delete-category-9')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('used custom category explains why deletion is blocked', (
+    tester,
+  ) async {
+    final repository = _UiRepository(withAccounts: true);
+    final groupId = await repository.createCategoryGroup(
+      const CategoryGroupDraft(
+        kind: CategoryKind.expense,
+        parentName: 'Rumah',
+        parentIconKey: 'home',
+        firstChildName: 'Listrik',
+        firstChildIconKey: 'receipt_long',
+      ),
+    );
+    final usedChildId = await repository.createSubcategory(
+      CategoryDraft(parentId: groupId, name: 'Air', iconKey: 'payments'),
+    );
+    final customGroup = repository.categoryGroups.removeLast();
+    repository.categoryGroups.insert(0, customGroup);
+    repository.entries.add(
+      _financeEntry(
+        id: 501,
+        kind: EntryKind.expense,
+        accountId: 1,
+        amount: 75000,
+        categoryId: usedChildId,
+        categoryName: 'Air',
+        parentCategoryName: 'Rumah',
+        note: '',
+        occurredAt: DateTime(2024, 8, 17),
+        createdAt: DateTime(2024, 8, 17),
+      ),
+    );
+    await pumpApp(tester, repository);
+    await tester.tap(find.byKey(const Key('manage-categories')));
+    await tester.pumpAndSettle();
+
+    final menu = find.byKey(ValueKey('category-menu-$usedChildId'));
+    await tester.scrollUntilVisible(
+      menu,
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('delete-category-$usedChildId')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('category-delete-blocked')), findsOneWidget);
+    expect(find.text('Digunakan pada 1 transaksi.'), findsOneWidget);
+    expect(
+      repository.categoryGroups
+          .singleWhere((group) => group.parent.id == groupId)
+          .children
+          .any((child) => child.id == usedChildId),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('back from a dirty category form confirms before discarding', (
     tester,
   ) async {
@@ -3278,6 +3435,126 @@ class _UiRepository implements FinanceRepository {
       }
     }
     throw const FinanceValidationException('Kategori tidak ditemukan.');
+  }
+
+  @override
+  Future<CategoryDeletionImpact> inspectCategoryDeletion(int categoryId) async {
+    for (final group in categoryGroups) {
+      if (group.parent.id == categoryId) {
+        return _categoryDeletionImpact(
+          category: group.parent,
+          group: group,
+          targets: [group.parent, ...group.children],
+        );
+      }
+      final child = group.children
+          .where((candidate) => candidate.id == categoryId)
+          .firstOrNull;
+      if (child != null) {
+        return _categoryDeletionImpact(
+          category: child,
+          group: group,
+          targets: [child],
+        );
+      }
+    }
+    throw const FinanceValidationException('Kategori tidak ditemukan.');
+  }
+
+  CategoryDeletionImpact _categoryDeletionImpact({
+    required FinanceCategory category,
+    required CategoryGroup group,
+    required List<FinanceCategory> targets,
+  }) {
+    final targetIds = targets.map((target) => target.id).toSet();
+    final referencedEntryCount = entries
+        .where(
+          (entry) => entry.allocations.any(
+            (allocation) => targetIds.contains(allocation.categoryId),
+          ),
+        )
+        .length;
+    final effectiveLeafCount = categoryGroups
+        .where(
+          (candidate) =>
+              candidate.parent.kind == category.kind &&
+              !candidate.parent.isArchived,
+        )
+        .expand((candidate) => candidate.children)
+        .where((child) => !child.isArchived)
+        .length;
+    final effectiveLeavesRemoved = group.parent.isArchived
+        ? 0
+        : targets
+              .where((target) => !target.isGroup && !target.isArchived)
+              .length;
+    return CategoryDeletionImpact(
+      category: category,
+      childCount: category.isGroup ? group.children.length : 0,
+      referencedEntryCount: referencedEntryCount,
+      referencedBudgetCount: 0,
+      containsBuiltInCategory: targets.any((target) => target.isBuiltIn),
+      wouldLeaveParentWithoutChildren:
+          !category.isGroup && group.children.length == 1,
+      wouldRemoveLastEffectiveLeaf:
+          effectiveLeafCount - effectiveLeavesRemoved < 1,
+    );
+  }
+
+  @override
+  Future<void> deleteCategoryPermanently(int categoryId) async {
+    final impact = await inspectCategoryDeletion(categoryId);
+    _requireUiCategoryCanBeDeleted(impact);
+    if (impact.isGroup) {
+      categoryGroups.removeWhere((group) => group.parent.id == categoryId);
+    } else {
+      for (var index = 0; index < categoryGroups.length; index++) {
+        final group = categoryGroups[index];
+        if (group.children.any((child) => child.id == categoryId)) {
+          categoryGroups[index] = CategoryGroup(
+            parent: group.parent,
+            children: group.children
+                .where((child) => child.id != categoryId)
+                .toList(growable: false),
+          );
+          break;
+        }
+      }
+    }
+    _changes.add(null);
+  }
+
+  static void _requireUiCategoryCanBeDeleted(CategoryDeletionImpact impact) {
+    if (impact.containsBuiltInCategory) {
+      throw const FinanceValidationException(
+        'Kategori bawaan tidak dapat dihapus. Arsipkan jika tidak ingin menggunakannya.',
+      );
+    }
+    if (impact.referencedEntryCount > 0) {
+      throw const FinanceValidationException(
+        'Kategori yang memiliki riwayat transaksi tidak dapat dihapus. Arsipkan agar tidak dipakai lagi.',
+      );
+    }
+    if (impact.referencedBudgetCount > 0) {
+      throw const FinanceValidationException(
+        'Kategori yang digunakan oleh anggaran tidak dapat dihapus. Ubah atau hapus anggaran terkait terlebih dahulu.',
+      );
+    }
+    if (impact.wouldLeaveParentWithoutChildren) {
+      throw const FinanceValidationException(
+        'Kelompok kategori harus memiliki minimal satu subkategori. Hapus kelompoknya atau tambahkan subkategori lain.',
+      );
+    }
+    if (impact.wouldRemoveLastEffectiveLeaf) {
+      throw const FinanceValidationException(
+        'Sisakan minimal satu subkategori aktif untuk jenis transaksi ini.',
+      );
+    }
+    if (!impact.canDelete) {
+      throw const FinanceValidationException(
+        'Kategori tidak dapat dihapus permanen.',
+      );
+    }
   }
 
   int get _nextCategoryId {

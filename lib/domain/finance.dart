@@ -112,6 +112,52 @@ class CategoryGroup {
   final List<FinanceCategory> children;
 }
 
+/// A read-only preflight result for permanently deleting a category.
+///
+/// When [category] is a group, the impact includes all of its direct children.
+/// Category depth is constrained by the database, so there are no deeper
+/// descendants to consider.
+class CategoryDeletionImpact {
+  const CategoryDeletionImpact({
+    required this.category,
+    required this.childCount,
+    required this.referencedEntryCount,
+    required this.referencedBudgetCount,
+    required this.containsBuiltInCategory,
+    required this.wouldLeaveParentWithoutChildren,
+    required this.wouldRemoveLastEffectiveLeaf,
+  });
+
+  final FinanceCategory category;
+  final int childCount;
+
+  /// Distinct transactions that reference the target or one of its children.
+  final int referencedEntryCount;
+
+  /// Distinct budgets that reference the target or one of its children.
+  final int referencedBudgetCount;
+
+  /// True when the target subtree contains seeded system data.
+  final bool containsBuiltInCategory;
+
+  /// True when deleting a leaf would leave its parent group empty.
+  final bool wouldLeaveParentWithoutChildren;
+
+  /// True when deletion would remove the final usable leaf of its kind.
+  final bool wouldRemoveLastEffectiveLeaf;
+
+  int get categoryCount => childCount + 1;
+
+  bool get isGroup => category.isGroup;
+
+  bool get canDelete =>
+      !containsBuiltInCategory &&
+      referencedEntryCount == 0 &&
+      referencedBudgetCount == 0 &&
+      !wouldLeaveParentWithoutChildren &&
+      !wouldRemoveLastEffectiveLeaf;
+}
+
 class CategoryGroupDraft {
   const CategoryGroupDraft({
     required this.kind,

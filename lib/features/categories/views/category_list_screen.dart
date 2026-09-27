@@ -187,15 +187,7 @@ class _CategoryTreeList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = <_CategoryRow>[];
-    for (final group in groups) {
-      rows.add(_CategoryRow(parent: group.parent));
-      for (final child in group.children) {
-        rows.add(_CategoryRow(parent: group.parent, child: child));
-      }
-    }
-
-    if (rows.isEmpty) {
+    if (groups.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
         children: [
@@ -219,52 +211,55 @@ class _CategoryTreeList extends StatelessWidget {
       );
     }
 
-    return ListView.builder(
+    return ListView.separated(
       key: PageStorageKey('category-list-${kind.name}'),
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-      itemCount: rows.length,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+      itemCount: groups.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final row = rows[index];
-        return Padding(
-          padding: EdgeInsets.only(
-            left: row.isChild ? 18 : 0,
-            top: row.isChild ? 0 : 14,
-            bottom: 8,
-          ),
-          child: _CategoryTile(
-            category: row.category,
-            parent: row.isChild ? row.parent : null,
-            childCount: row.isChild
-                ? null
-                : groups
-                      .firstWhere((group) => group.parent.id == row.parent.id)
-                      .children
-                      .length,
-            busy: busy,
-          ),
-        );
+        return _CategoryGroupSection(group: groups[index], busy: busy);
       },
     );
   }
 }
 
-class _CategoryRow {
-  const _CategoryRow({required this.parent, this.child});
+class _CategoryGroupSection extends StatelessWidget {
+  const _CategoryGroupSection({required this.group, required this.busy});
 
-  final FinanceCategory parent;
-  final FinanceCategory? child;
+  final CategoryGroup group;
+  final bool busy;
 
-  bool get isChild => child != null;
-  FinanceCategory get category => child ?? parent;
+  @override
+  Widget build(BuildContext context) => Card(
+    key: ValueKey('category-group-${group.parent.id}'),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      children: [
+        _CategoryTile(
+          category: group.parent,
+          childCount: group.children.length,
+          busy: busy,
+        ),
+        for (var index = 0; index < group.children.length; index++) ...[
+          Divider(height: 1, indent: index == 0 ? 16 : 76, endIndent: 12),
+          _CategoryTile(
+            category: group.children[index],
+            parent: group.parent,
+            busy: busy,
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
-enum _CategoryMenuAction { addChild, edit, toggleArchive }
+enum _CategoryMenuAction { addChild, edit, toggleArchive, delete }
 
 class _CategoryTile extends ConsumerWidget {
   const _CategoryTile({
     required this.category,
-    required this.parent,
-    required this.childCount,
+    this.parent,
+    this.childCount,
     required this.busy,
   });
 
@@ -277,102 +272,125 @@ class _CategoryTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final archived = category.isArchived || (parent?.isArchived ?? false);
+    final effectivelyArchived =
+        category.isArchived || (parent?.isArchived ?? false);
     return Opacity(
-      opacity: archived ? .62 : 1,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: isChild ? 19 : 22,
-                backgroundColor: isChild
-                    ? Theme.of(context).colorScheme.surfaceContainerHighest
-                    : Theme.of(context).colorScheme.primaryContainer,
-                foregroundColor: forest,
-                child: Icon(categoryIconFor(category.iconKey)),
+      opacity: effectivelyArchived ? .62 : 1,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          isChild ? 28 : 16,
+          isChild ? 9 : 12,
+          8,
+          isChild ? 9 : 12,
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: isChild ? 18 : 21,
+              backgroundColor: isChild
+                  ? Theme.of(context).colorScheme.surfaceContainerHighest
+                  : Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: forest,
+              child: Icon(
+                categoryIconFor(category.iconKey),
+                size: isChild ? 20 : 22,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            category.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: isChild
-                                  ? FontWeight.w600
-                                  : FontWeight.w700,
-                              fontSize: isChild ? 15 : 17,
-                            ),
-                          ),
-                        ),
-                        if (archived)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 8),
-                            child: _ArchivedBadge(),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      isChild
-                          ? 'Subkategori • ${parent!.name}'
-                          : '$childCount subkategori',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              PopupMenuButton<_CategoryMenuAction>(
-                key: ValueKey('category-menu-${category.id}'),
-                enabled: !busy,
-                tooltip: 'Tindakan untuk ${category.name}',
-                onSelected: (action) => _handleAction(context, ref, action),
-                itemBuilder: (context) => [
-                  if (!isChild)
-                    PopupMenuItem(
-                      value: _CategoryMenuAction.addChild,
-                      enabled: !category.isArchived,
-                      child: const ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.add),
-                        title: Text('Tambah subkategori'),
-                      ),
-                    ),
-                  const PopupMenuItem(
-                    value: _CategoryMenuAction.edit,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.edit_outlined),
-                      title: Text('Edit'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    category.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: isChild ? FontWeight.w600 : FontWeight.w700,
+                      fontSize: isChild ? 15 : 17,
                     ),
                   ),
+                  if (!isChild) ...[
+                    const SizedBox(height: 3),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          '$childCount subkategori',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        if (category.isArchived) const _ArchivedBadge(),
+                      ],
+                    ),
+                  ] else if (category.isArchived) ...[
+                    const SizedBox(height: 4),
+                    const _ArchivedBadge(),
+                  ],
+                ],
+              ),
+            ),
+            PopupMenuButton<_CategoryMenuAction>(
+              key: ValueKey('category-menu-${category.id}'),
+              enabled: !busy,
+              tooltip: 'Tindakan untuk ${category.name}',
+              onSelected: (action) => _handleAction(context, ref, action),
+              itemBuilder: (context) => [
+                if (!isChild)
                   PopupMenuItem(
-                    value: _CategoryMenuAction.toggleArchive,
-                    enabled: parent?.isArchived != true || category.isArchived,
+                    value: _CategoryMenuAction.addChild,
+                    enabled: !category.isArchived,
+                    child: const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.add),
+                      title: Text('Tambah subkategori'),
+                    ),
+                  ),
+                const PopupMenuItem(
+                  value: _CategoryMenuAction.edit,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.edit_outlined),
+                    title: Text('Edit'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _CategoryMenuAction.toggleArchive,
+                  enabled: parent?.isArchived != true || category.isArchived,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      category.isArchived
+                          ? Icons.unarchive_outlined
+                          : Icons.archive_outlined,
+                    ),
+                    title: Text(category.isArchived ? 'Pulihkan' : 'Arsipkan'),
+                  ),
+                ),
+                if (!category.isBuiltIn) ...[
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    key: ValueKey('delete-category-${category.id}'),
+                    value: _CategoryMenuAction.delete,
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(
-                        category.isArchived
-                            ? Icons.unarchive_outlined
-                            : Icons.archive_outlined,
+                        Icons.delete_outline,
+                        color: Theme.of(context).colorScheme.error,
                       ),
                       title: Text(
-                        category.isArchived ? 'Pulihkan' : 'Arsipkan',
+                        'Hapus permanen',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                       ),
                     ),
                   ),
                 ],
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -403,7 +421,97 @@ class _CategoryTile extends ConsumerWidget {
       case _CategoryMenuAction.toggleArchive:
         await _toggleArchived(context, ref);
         return;
+      case _CategoryMenuAction.delete:
+        await _deleteCategory(context, ref);
+        return;
     }
+  }
+
+  Future<void> _deleteCategory(BuildContext context, WidgetRef ref) async {
+    final actions = ref.read(categoryActionsProvider.notifier);
+    final impact = await actions.inspectDeletion(category.id);
+    if (!context.mounted || impact == null) return;
+
+    if (!impact.canDelete) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          key: const Key('category-delete-blocked'),
+          scrollable: true,
+          title: const Text('Kategori tidak dapat dihapus'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final reason in _categoryDeletionBlockReasons(impact))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('•'),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(reason)),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Text(
+                impact.category.isArchived
+                    ? 'Kategori tetap aman di arsip dan riwayat tidak berubah.'
+                    : 'Arsipkan kategori bila tidak ingin menampilkannya pada transaksi baru; riwayat tetap tersimpan.',
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton.tonal(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Mengerti'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        title: Text(
+          impact.isGroup
+              ? 'Hapus kelompok ${category.name}?'
+              : 'Hapus ${category.name}?',
+        ),
+        content: Text(
+          impact.isGroup
+              ? 'Kelompok dan ${impact.childCount} subkategori akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.'
+              : 'Subkategori ini akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            key: const Key('confirm-delete-category'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Hapus permanen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final deleted = await actions.deleteCategory(category.id);
+    if (!context.mounted || !deleted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Kategori dihapus permanen.')));
   }
 
   Future<void> _toggleArchived(BuildContext context, WidgetRef ref) async {
@@ -446,6 +554,18 @@ class _CategoryTile extends ConsumerWidget {
     );
   }
 }
+
+List<String> _categoryDeletionBlockReasons(CategoryDeletionImpact impact) => [
+  if (impact.containsBuiltInCategory) 'Kategori bawaan tidak dapat dihapus.',
+  if (impact.referencedEntryCount > 0)
+    'Digunakan pada ${impact.referencedEntryCount} transaksi.',
+  if (impact.referencedBudgetCount > 0)
+    'Digunakan pada ${impact.referencedBudgetCount} anggaran.',
+  if (impact.wouldLeaveParentWithoutChildren)
+    'Kelompok harus memiliki minimal satu subkategori.',
+  if (impact.wouldRemoveLastEffectiveLeaf)
+    'Harus tersisa minimal satu subkategori aktif untuk jenis transaksi ini.',
+];
 
 class _ArchivedBadge extends StatelessWidget {
   const _ArchivedBadge();

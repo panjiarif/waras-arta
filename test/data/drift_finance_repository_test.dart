@@ -942,6 +942,248 @@ void main() {
     },
   );
 
+  test('built-in categories cannot be deleted permanently', () async {
+    final impact = await repository.inspectCategoryDeletion(1);
+
+    expect(impact.category.name, 'Gaji');
+    expect(impact.isGroup, isTrue);
+    expect(impact.childCount, 1);
+    expect(impact.categoryCount, 2);
+    expect(impact.containsBuiltInCategory, isTrue);
+    expect(impact.canDelete, isFalse);
+    await expectLater(
+      repository.deleteCategoryPermanently(1),
+      throwsA(
+        isA<FinanceValidationException>().having(
+          (error) => error.message,
+          'message',
+          contains('Kategori bawaan'),
+        ),
+      ),
+    );
+  });
+
+  test(
+    'unused custom leaf and group deletion preserve category tree invariants',
+    () async {
+      final parentId = await repository.createCategoryGroup(
+        const CategoryGroupDraft(
+          kind: CategoryKind.expense,
+          parentName: 'Kendaraan pribadi',
+          parentIconKey: 'directions_car',
+          firstChildName: 'Servis',
+          firstChildIconKey: 'directions_car',
+        ),
+      );
+      final secondChildId = await repository.createSubcategory(
+        CategoryDraft(
+          parentId: parentId,
+          name: 'Cuci kendaraan',
+          iconKey: 'directions_car',
+        ),
+      );
+
+      final leafImpact = await repository.inspectCategoryDeletion(
+        secondChildId,
+      );
+      expect(leafImpact.isGroup, isFalse);
+      expect(leafImpact.wouldLeaveParentWithoutChildren, isFalse);
+      expect(leafImpact.canDelete, isTrue);
+      await repository.deleteCategoryPermanently(secondChildId);
+
+      final treeAfterLeaf = await repository
+          .watchCategoryTree(CategoryKind.expense, includeArchived: true)
+          .first;
+      final groupAfterLeaf = treeAfterLeaf.singleWhere(
+        (group) => group.parent.id == parentId,
+      );
+      expect(groupAfterLeaf.children, hasLength(1));
+      expect(groupAfterLeaf.children.single.name, 'Servis');
+
+      final onlyChildImpact = await repository.inspectCategoryDeletion(
+        groupAfterLeaf.children.single.id,
+      );
+      expect(onlyChildImpact.wouldLeaveParentWithoutChildren, isTrue);
+      expect(onlyChildImpact.canDelete, isFalse);
+      await expectLater(
+        repository.deleteCategoryPermanently(groupAfterLeaf.children.single.id),
+        throwsA(validationError),
+      );
+
+      final groupImpact = await repository.inspectCategoryDeletion(parentId);
+      expect(groupImpact.childCount, 1);
+      expect(groupImpact.canDelete, isTrue);
+      await repository.deleteCategoryPermanently(parentId);
+
+      final treeAfterGroup = await repository
+          .watchCategoryTree(CategoryKind.expense, includeArchived: true)
+          .first;
+      expect(
+        treeAfterGroup.any((group) => group.parent.id == parentId),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'category deletion is blocked by transaction and budget references',
+    () async {
+      final accountId = await account('Bank');
+      final parentId = await repository.createCategoryGroup(
+        const CategoryGroupDraft(
+          kind: CategoryKind.expense,
+          parentName: 'Peliharaan',
+          parentIconKey: 'pets',
+          firstChildName: 'Makanan kucing',
+          firstChildIconKey: 'pets',
+        ),
+      );
+      final group =
+          (await repository.watchCategoryTree(CategoryKind.expense).first)
+              .singleWhere((item) => item.parent.id == parentId);
+      final childId = group.children.single.id;
+      final entryId = await repository.addEntry(
+        entry(accountId, kind: EntryKind.expense, categoryId: childId),
+      );
+      final now = DateTime.utc(2024, 1, 1);
+      final budgetId = await db
+          .into(db.budgets)
+          .insert(
+            BudgetsCompanion.insert(
+              periodKind: 0,
+              startDay: 20240101,
+              endDay: 20240131,
+              name: 'Peliharaan Januari',
+              normalizedName: 'peliharaan januari',
+              limitAmount: 1000,
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+      await db
+          .into(db.budgetCategories)
+          .insert(BudgetCategoryRow(budgetId: budgetId, categoryId: childId));
+
+      final leafImpact = await repository.inspectCategoryDeletion(childId);
+      expect(leafImpact.referencedEntryCount, 1);
+      expect(leafImpact.referencedBudgetCount, 1);
+      expect(leafImpact.canDelete, isFalse);
+      final groupImpact = await repository.inspectCategoryDeletion(parentId);
+      expect(groupImpact.referencedEntryCount, 1);
+      expect(groupImpact.referencedBudgetCount, 1);
+      expect(groupImpact.canDelete, isFalse);
+      await expectLater(
+        repository.deleteCategoryPermanently(parentId),
+        throwsA(
+          isA<FinanceValidationException>().having(
+            (error) => error.message,
+            'message',
+            allOf(contains('transaksi'), contains('anggaran')),
+          ),
+        ),
+      );
+
+      await repository.deleteEntry(entryId);
+      final budgetOnlyImpact = await repository.inspectCategoryDeletion(
+        parentId,
+      );
+      expect(budgetOnlyImpact.referencedEntryCount, 0);
+      expect(budgetOnlyImpact.referencedBudgetCount, 1);
+      await expectLater(
+        repository.deleteCategoryPermanently(parentId),
+        throwsA(
+          isA<FinanceValidationException>().having(
+            (error) => error.message,
+            'message',
+            contains('anggaran'),
+          ),
+        ),
+      );
+
+      await (db.delete(
+        db.budgets,
+      )..where((budget) => budget.id.equals(budgetId))).go();
+      expect(
+        (await repository.inspectCategoryDeletion(parentId)).canDelete,
+        isTrue,
+      );
+      await repository.deleteCategoryPermanently(parentId);
+    },
+  );
+
+  test(
+    'category group deletion rolls back when its parent delete fails',
+    () async {
+      final parentId = await repository.createCategoryGroup(
+        const CategoryGroupDraft(
+          kind: CategoryKind.expense,
+          parentName: 'Sementara',
+          parentIconKey: 'category',
+          firstChildName: 'Pertama',
+          firstChildIconKey: 'category',
+        ),
+      );
+      await repository.createSubcategory(
+        CategoryDraft(parentId: parentId, name: 'Kedua', iconKey: 'category'),
+      );
+      await db.customStatement('''
+      CREATE TRIGGER reject_test_parent_delete BEFORE DELETE ON categories
+      WHEN OLD.id = $parentId
+      BEGIN SELECT RAISE(ABORT, 'test parent delete failed'); END
+    ''');
+
+      await expectLater(
+        repository.deleteCategoryPermanently(parentId),
+        throwsA(anything),
+      );
+
+      final group =
+          (await repository
+                  .watchCategoryTree(
+                    CategoryKind.expense,
+                    includeArchived: true,
+                  )
+                  .first)
+              .singleWhere((item) => item.parent.id == parentId);
+      expect(group.children, hasLength(2));
+    },
+  );
+
+  test('category deletion retains one effective leaf for each kind', () async {
+    final parentId = await repository.createCategoryGroup(
+      const CategoryGroupDraft(
+        kind: CategoryKind.income,
+        parentName: 'Royalti',
+        parentIconKey: 'payments',
+        firstChildName: 'Buku',
+        firstChildIconKey: 'payments',
+      ),
+    );
+    final incomeGroups = await repository
+        .watchCategoryTree(CategoryKind.income)
+        .first;
+    for (final group in incomeGroups.where(
+      (group) => group.parent.id != parentId,
+    )) {
+      await repository.setCategoryArchived(group.parent.id, true);
+    }
+
+    final impact = await repository.inspectCategoryDeletion(parentId);
+    expect(impact.containsBuiltInCategory, isFalse);
+    expect(impact.wouldRemoveLastEffectiveLeaf, isTrue);
+    expect(impact.canDelete, isFalse);
+    await expectLater(
+      repository.deleteCategoryPermanently(parentId),
+      throwsA(
+        isA<FinanceValidationException>().having(
+          (error) => error.message,
+          'message',
+          contains('minimal satu subkategori aktif'),
+        ),
+      ),
+    );
+  });
+
   test(
     'archiving preserves labels and blocks new use of inactive leaves',
     () async {

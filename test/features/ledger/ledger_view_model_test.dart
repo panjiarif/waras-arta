@@ -305,6 +305,13 @@ class FakeFinanceRepository implements FinanceRepository {
   Future<void> setCategoryArchived(int categoryId, bool archived) async {}
 
   @override
+  Future<CategoryDeletionImpact> inspectCategoryDeletion(int categoryId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> deleteCategoryPermanently(int categoryId) async {}
+
+  @override
   Future<int> createAccount(AccountDraft draft) async {
     accounts.add(draft);
     return onCreateAccount == null ? 1 : await onCreateAccount!(draft);

@@ -30,4 +30,6 @@ abstract interface class FinanceRepository {
   Future<int> createSubcategory(CategoryDraft draft);
   Future<void> updateCategory(int categoryId, CategoryDraft draft);
   Future<void> setCategoryArchived(int categoryId, bool archived);
+  Future<CategoryDeletionImpact> inspectCategoryDeletion(int categoryId);
+  Future<void> deleteCategoryPermanently(int categoryId);
 }

@@ -3,14 +3,15 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../../../core/formatters.dart';
 import '../../../domain/finance.dart';
 import '../../calendar/view_models/calendar_view_model.dart';
 import '../view_models/monthly_summary_view_model.dart';
 
 const _firstSummaryYear = 2000;
-const _incomeColor = Color(0xFF397A58);
-const _expenseColor = Color(0xFFB34F38);
+const _incomeColor = forest;
+const _expenseColor = Color(0xFF9D492B);
 
 class MonthlySummaryScreen extends ConsumerStatefulWidget {
   const MonthlySummaryScreen({super.key, this.initialMonth});
@@ -142,27 +143,50 @@ class _AccountGroupFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-    child: OutlinedButton(
-      key: const Key('summary-account-filter'),
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(52),
-        alignment: Alignment.centerLeft,
-      ),
-      onPressed: onPressed,
-      child: Row(
-        children: [
-          const Icon(Icons.filter_list),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Rekening: ${value?.label ?? 'Semua'}',
-              key: const Key('summary-account-filter-label'),
-            ),
+    padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final expanded =
+            constraints.maxWidth < 360 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.3;
+        final label = value?.label ?? 'Semua rekening';
+        final button = OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
           ),
-          const Icon(Icons.expand_more),
-        ],
-      ),
+          onPressed: onPressed,
+          child: Row(
+            mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
+            children: [
+              if (expanded)
+                Expanded(
+                  child: Text(
+                    label,
+                    key: const Key('summary-account-filter-label'),
+                  ),
+                )
+              else
+                Text(label, key: const Key('summary-account-filter-label')),
+              const SizedBox(width: 8),
+              const Icon(Icons.expand_more),
+            ],
+          ),
+        );
+        final accessibleButton = Semantics(
+          key: const Key('summary-account-filter'),
+          button: true,
+          label: 'Filter rekening: $label',
+          onTap: onPressed,
+          child: ExcludeSemantics(child: button),
+        );
+        return Align(
+          alignment: Alignment.centerRight,
+          child: expanded
+              ? SizedBox(width: double.infinity, child: accessibleButton)
+              : accessibleButton,
+        );
+      },
     ),
   );
 }
@@ -261,15 +285,16 @@ class MonthlySummaryYearView extends StatelessWidget {
       return const _SummaryEmptyState();
     }
 
-    return ListView.separated(
+    return ListView.builder(
       key: const PageStorageKey('monthly-summary-list'),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       itemCount: visibleMonths.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final item = visibleMonths[index];
-        return MonthlySummaryCard(
+        return MonthlySummaryRow(
           item: item,
+          first: index == 0,
+          last: index == visibleMonths.length - 1,
           highlighted: _sameMonth(item.month, highlightedMonth),
         );
       },
@@ -277,22 +302,35 @@ class MonthlySummaryYearView extends StatelessWidget {
   }
 }
 
-class MonthlySummaryCard extends StatelessWidget {
-  const MonthlySummaryCard({
+class MonthlySummaryRow extends StatelessWidget {
+  const MonthlySummaryRow({
     super.key,
     required this.item,
+    required this.first,
+    required this.last,
     this.highlighted = false,
   });
 
   final MonthlySummaryItem item;
+  final bool first;
+  final bool last;
   final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
     final monthKey = _monthKey(item.month);
     final empty = item.income == 0 && item.expense == 0;
+    final backgroundColor = highlighted
+        ? Theme.of(context).colorScheme.primaryContainer
+        : Theme.of(context).cardTheme.color ??
+              Theme.of(context).colorScheme.surface;
+    final radius = BorderRadius.vertical(
+      top: first ? const Radius.circular(16) : Radius.zero,
+      bottom: last ? const Radius.circular(16) : Radius.zero,
+    );
     final semanticLabel =
         '${formatMonth(item.month)}. '
+        '${highlighted ? 'Bulan terpilih. ' : ''}'
         'Pemasukan ${formatRupiah(item.income)}. '
         'Pengeluaran ${formatRupiah(item.expense)}. '
         'Selisih ${formatRupiah(item.net)}.';
@@ -300,96 +338,102 @@ class MonthlySummaryCard extends StatelessWidget {
     return Semantics(
       key: ValueKey('summary-month-semantics-$monthKey'),
       container: true,
+      selected: highlighted,
       label: semanticLabel,
       child: ExcludeSemantics(
-        child: Card(
+        child: Material(
           key: ValueKey('summary-month-$monthKey'),
-          color: highlighted
-              ? Theme.of(context).colorScheme.primaryContainer
-              : null,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(
-              color: highlighted
-                  ? Theme.of(context).colorScheme.primary
-                  : const Color(0xFFE4E7DE),
-              width: highlighted ? 1.5 : 1,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
+          color: backgroundColor,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Text(
-                        formatMonth(item.month),
-                        key: ValueKey('summary-month-title-$monthKey'),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            formatMonth(item.month),
+                            key: ValueKey('summary-month-title-$monthKey'),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        if (highlighted)
+                          Icon(
+                            Icons.check_circle,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                      ],
                     ),
-                    if (highlighted)
-                      Icon(
-                        Icons.radio_button_checked,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.primary,
+                    const SizedBox(height: 12),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final scaledBodySize = MediaQuery.textScalerOf(context)
+                            .scale(14);
+                        final stacked =
+                            constraints.maxWidth < 288 || scaledBodySize > 20;
+                        final donut = _MonthlySummaryDonut(
+                          monthKey: monthKey,
+                          income: item.income,
+                          expense: item.expense,
+                          backgroundColor: backgroundColor,
+                        );
+                        final metrics = _MonthlySummaryMetrics(
+                          monthKey: monthKey,
+                          income: item.income,
+                          expense: item.expense,
+                          net: item.net,
+                        );
+
+                        if (stacked) {
+                          return Column(
+                            key: ValueKey('summary-month-stacked-$monthKey'),
+                            children: [
+                              Align(child: donut),
+                              const SizedBox(height: 12),
+                              metrics,
+                            ],
+                          );
+                        }
+                        return Row(
+                          key: ValueKey('summary-month-horizontal-$monthKey'),
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            donut,
+                            const SizedBox(width: 16),
+                            Expanded(child: metrics),
+                          ],
+                        );
+                      },
+                    ),
+                    if (empty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Belum ada arus kas.',
+                        key: ValueKey('summary-month-empty-$monthKey'),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 14),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final scaledBodySize = MediaQuery.textScalerOf(context)
-                        .scale(14);
-                    final stacked =
-                        constraints.maxWidth < 360 || scaledBodySize > 20;
-                    final donut = _MonthlySummaryDonut(
-                      monthKey: monthKey,
-                      income: item.income,
-                      expense: item.expense,
-                    );
-                    final metrics = _MonthlySummaryMetrics(
-                      monthKey: monthKey,
-                      income: item.income,
-                      expense: item.expense,
-                      net: item.net,
-                    );
-
-                    if (stacked) {
-                      return Column(
-                        children: [
-                          Align(child: donut),
-                          const SizedBox(height: 16),
-                          metrics,
-                        ],
-                      );
-                    }
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        donut,
-                        const SizedBox(width: 20),
-                        Expanded(child: metrics),
-                      ],
-                    );
-                  },
+              ),
+              if (!last)
+                Divider(
+                  key: ValueKey('summary-month-divider-$monthKey'),
+                  height: 1,
+                  indent: 14,
+                  endIndent: 14,
                 ),
-                if (empty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Belum ada pemasukan atau pengeluaran.',
-                    key: ValueKey('summary-month-empty-$monthKey'),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+            ],
           ),
         ),
       ),
@@ -402,11 +446,13 @@ class _MonthlySummaryDonut extends StatelessWidget {
     required this.monthKey,
     required this.income,
     required this.expense,
+    required this.backgroundColor,
   });
 
   final String monthKey;
   final int income;
   final int expense;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -419,10 +465,10 @@ class _MonthlySummaryDonut extends StatelessWidget {
         incomeColor: _incomeColor,
         expenseColor: _expenseColor,
         emptyColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        holeColor: highlightedCardColor(context),
+        holeColor: backgroundColor,
       ),
       child: SizedBox.square(
-        dimension: 92,
+        dimension: 76,
         child: empty
             ? Center(
                 child: Icon(
@@ -433,11 +479,6 @@ class _MonthlySummaryDonut extends StatelessWidget {
             : null,
       ),
     );
-  }
-
-  Color highlightedCardColor(BuildContext context) {
-    final card = context.findAncestorWidgetOfExactType<Card>();
-    return card?.color ?? Theme.of(context).cardColor;
   }
 }
 

@@ -26,6 +26,7 @@ void main() {
         ),
         today: DateTime(2026, 9, 25),
         highlightedMonth: DateTime(2026, 9),
+        width: 360,
         height: 1200,
       );
 
@@ -34,6 +35,15 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const ValueKey('summary-month-2026-10')), findsNothing);
+      expect(find.byType(Card), findsNothing);
+      expect(
+        find.byKey(const ValueKey('summary-month-divider-2026-09')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('summary-month-horizontal-2026-09')),
+        findsOneWidget,
+      );
       expect(find.text('September 2026'), findsOneWidget);
       expect(
         _keyedText(tester, 'summary-month-income-2026-09-value'),
@@ -55,6 +65,7 @@ void main() {
             .label,
         allOf(
           contains('September 2026'),
+          contains('Bulan terpilih'),
           contains('Pemasukan Rp 3.000.000'),
           contains('Pengeluaran Rp 2.800.000'),
           contains('Selisih Rp 200.000'),
@@ -91,7 +102,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('zero month uses a neutral donut and a clear empty message', (
+  testWidgets('zero month uses a neutral donut and zero metrics', (
     tester,
   ) async {
     await _pumpView(
@@ -108,7 +119,7 @@ void main() {
       find.byKey(const ValueKey('summary-month-empty-2026-01')),
       findsOneWidget,
     );
-    expect(find.text('Belum ada pemasukan atau pengeluaran.'), findsOneWidget);
+    expect(find.text('Belum ada arus kas.'), findsOneWidget);
     expect(_keyedText(tester, 'summary-month-net-2026-01-value'), 'Rp 0');
   });
 
@@ -165,6 +176,7 @@ void main() {
   testWidgets(
     'account filter drives the query, persists across years, and fits narrow text',
     (tester) async {
+      final semantics = tester.ensureSemantics();
       tester.view.physicalSize = const Size(320, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -204,7 +216,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Rekening: Semua'), findsOneWidget);
+      expect(find.text('Semua rekening'), findsOneWidget);
+      expect(
+        tester
+            .getSemantics(find.byKey(const Key('summary-account-filter')))
+            .label,
+        'Filter rekening: Semua rekening',
+      );
       expect(find.byKey(const Key('summary-scope-caption')), findsNothing);
       expect(requestedQueries.last.balanceGroup, isNull);
       expect(find.text('Rp 100.000'), findsOneWidget);
@@ -213,13 +231,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Filter rekening'), findsOneWidget);
-      expect(find.text('Semua rekening'), findsOneWidget);
+      expect(find.text('Semua rekening'), findsWidgets);
       await tester.tap(find.byKey(const Key('summary-account-option-primary')));
       await tester.pumpAndSettle();
 
       expect(requestedQueries.last.balanceGroup, AccountBalanceGroup.primary);
       expect(find.text('Rp 200.000'), findsOneWidget);
-      expect(find.text('Rekening: Saldo utama'), findsOneWidget);
+      expect(find.text('Saldo utama'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('summary-account-filter')));
       await tester.pumpAndSettle();
@@ -233,7 +251,7 @@ void main() {
         AccountBalanceGroup.savingsInvestment,
       );
       expect(find.text('Rp 300.000'), findsOneWidget);
-      expect(find.text('Rekening: Simpanan & investasi'), findsOneWidget);
+      expect(find.text('Simpanan & investasi'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('summary-previous-year')));
       await tester.pumpAndSettle();
@@ -250,8 +268,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(requestedQueries.last.balanceGroup, isNull);
-      expect(find.text('Rekening: Semua'), findsOneWidget);
+      expect(find.text('Semua rekening'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      semantics.dispose();
     },
   );
 
@@ -279,6 +298,10 @@ void main() {
 
     expect(find.text('Rp 999.999.999.999'), findsOneWidget);
     expect(find.text('Rp 999.999.999.998'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('summary-month-stacked-2026-01')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 }

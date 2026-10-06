@@ -153,6 +153,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               switch (action) {
                 case _HomeMenuAction.backup:
                   context.push('/backup');
+                case _HomeMenuAction.about:
+                  context.push('/about');
               }
             },
             itemBuilder: (context) => const [
@@ -161,6 +163,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 child: ListTile(
                   leading: Icon(Icons.backup_outlined),
                   title: Text('Backup & pulihkan data'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuDivider(),
+              PopupMenuItem(
+                key: Key('about-menu-item'),
+                value: _HomeMenuAction.about,
+                child: ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('Tentang Waras Arta'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -487,7 +499,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 }
 
-enum _HomeMenuAction { backup }
+enum _HomeMenuAction { backup, about }
 
 enum _HomeTab { overview, history, calendar, budgets, accounts }
 

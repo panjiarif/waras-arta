@@ -17,6 +17,7 @@ dependencies:
   flutter_riverpod: ^3.4.3
   go_router: ^18.0.1
   intl: ^0.20.3
+  package_info_plus: ^10.2.2
   path_provider: ^2.1.6
   unorm_dart: ^0.3.2
 

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../core/formatters.dart';
 import '../domain/budget.dart';
 import '../domain/finance.dart';
+import '../features/about/views/about_screen.dart';
+import '../features/about/views/legal_document_screen.dart';
 import '../features/backup/views/backup_screen.dart';
 import '../features/budgets/views/budget_detail_screen.dart';
 import '../features/budgets/views/budget_form_screen.dart';
@@ -47,6 +49,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/',
         builder: (context, state) => const HomeScreen(),
         routes: [
+          GoRoute(
+            path: 'about',
+            builder: (context, state) => const AboutScreen(),
+            routes: [
+              GoRoute(
+                path: 'privacy',
+                builder: (context, state) =>
+                    const LegalDocumentScreen(kind: LegalDocumentKind.privacy),
+              ),
+              GoRoute(
+                path: 'terms',
+                builder: (context, state) =>
+                    const LegalDocumentScreen(kind: LegalDocumentKind.terms),
+              ),
+            ],
+          ),
           GoRoute(
             path: 'backup',
             builder: (context, state) => const BackupScreen(),

@@ -10,6 +10,7 @@ import 'package:waras_arta/app/providers.dart';
 import 'package:waras_arta/domain/budget.dart';
 import 'package:waras_arta/domain/finance.dart';
 import 'package:waras_arta/domain/finance_repository.dart';
+import 'package:waras_arta/features/about/view_models/app_version_info_provider.dart';
 import 'package:waras_arta/features/calendar/view_models/calendar_view_model.dart';
 import 'package:waras_arta/features/ledger/view_models/ledger_view_model.dart';
 import 'package:waras_arta/features/ledger/views/category_selection_field.dart';
@@ -26,6 +27,7 @@ void main() {
     _UiRepository repository, {
     DateTime? today,
     FakeBudgetRepository? budgetRepository,
+    AppVersionInfo? appVersionInfo,
   }) async {
     final budgets = budgetRepository ?? FakeBudgetRepository();
     addTearDown(repository.dispose);
@@ -36,6 +38,8 @@ void main() {
           financeRepositoryProvider.overrideWithValue(repository),
           budgetRepositoryProvider.overrideWithValue(budgets),
           if (today != null) currentDateProvider.overrideWithValue(today),
+          if (appVersionInfo != null)
+            appVersionInfoProvider.overrideWith((ref) async => appVersionInfo),
         ],
         child: const WarasArtaApp(),
       ),
@@ -80,6 +84,54 @@ void main() {
     );
     expect(find.byKey(const Key('create-backup')), findsOneWidget);
     expect(find.byKey(const Key('restore-backup')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('more menu opens about, privacy, and terms pages', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpApp(
+      tester,
+      _UiRepository(withAccounts: true),
+      appVersionInfo: const AppVersionInfo(version: '0.1.0', buildNumber: '1'),
+    );
+
+    await tester.tap(find.byKey(const Key('more-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('about-menu-item')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tentang Waras Arta'), findsOneWidget);
+    expect(find.byKey(const Key('about-brand-mark')), findsOneWidget);
+    expect(find.text('Versi 0.1.0 (1)'), findsOneWidget);
+    expect(find.byKey(const Key('about-local-first')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.ensureVisible(find.byKey(const Key('privacy-policy-link')));
+    await tester.tap(find.byKey(const Key('privacy-policy-link')));
+    await tester.pumpAndSettle();
+    expect(find.text('Kebijakan privasi'), findsNWidgets(2));
+    expect(find.textContaining('Pengumpulan dan pengiriman'), findsOneWidget);
+    expect(
+      find.textContaining('tidak menyertakan iklan atau analitik'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('terms-of-use-link')));
+    await tester.tap(find.byKey(const Key('terms-of-use-link')));
+    await tester.pumpAndSettle();
+    expect(find.text('Ketentuan penggunaan'), findsNWidgets(2));
+    expect(find.textContaining('Bukan nasihat keuangan'), findsOneWidget);
+    expect(find.textContaining('Versi pengujian'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

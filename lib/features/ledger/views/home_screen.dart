@@ -116,11 +116,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.spa_outlined, color: forest),
-            SizedBox(width: 10),
-            Expanded(
+            Image.asset(
+              'assets/branding/icons/app_icon_foreground.png',
+              key: const Key('app-brand-mark'),
+              width: 32,
+              height: 32,
+              fit: BoxFit.contain,
+              cacheWidth: 96,
+              cacheHeight: 96,
+              excludeFromSemantics: true,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
               child: Text(
                 'Waras Arta',
                 maxLines: 1,

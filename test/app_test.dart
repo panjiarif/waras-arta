@@ -89,6 +89,17 @@ void main() {
       final repository = _UiRepository();
       await pumpApp(tester, repository);
       expect(find.text('Waras Arta'), findsOneWidget);
+      final brandMark = tester.widget<Image>(
+        find.byKey(const Key('app-brand-mark')),
+      );
+      final resizedBrandMark = brandMark.image as ResizeImage;
+      expect(
+        (resizedBrandMark.imageProvider as AssetImage).assetName,
+        'assets/branding/icons/app_icon_foreground.png',
+      );
+      expect(resizedBrandMark.width, 96);
+      expect(resizedBrandMark.height, 96);
+      expect(brandMark.excludeFromSemantics, isTrue);
       expect(find.text('Tambah rekening'), findsOneWidget);
       await tester.tap(find.byKey(const Key('primary-action')));
       await tester.pumpAndSettle();

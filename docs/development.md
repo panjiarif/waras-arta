@@ -22,6 +22,20 @@ Ganti `DEVICE_ID` dengan ID HP pada `flutter devices`. Buka kunci HP dan izinkan
 
 `app_database.g.dart` dan `app_database.steps.dart` dihasilkan dari deklarasi serta langkah migrasi Drift dan ikut di-commit bersama sumbernya. Jangan mengedit berkas tersebut secara manual; jalankan ulang `build_runner` ketika deklarasi tabel atau migrasi berubah. Pertahankan snapshot schema di `drift_schemas/app_database/` dan `pubspec.lock` di Git agar perubahan database serta versi dependency yang dipakai bersama tetap tercatat.
 
+## Menghasilkan ikon dan splash screen
+
+Sumber desain asli berada di `assets/branding/icons/`, `assets/branding/logos/`, dan `assets/branding/splash/`. Berkas di `assets/branding/generated/` adalah turunan dengan ukuran serta safe area yang disiapkan untuk generator Android. Jangan mengganti turunan dengan ekspor yang menempel pada tepi kanvas karena launcher Android dapat memotongnya menjadi lingkaran atau squircle.
+
+Setelah mengubah aset branding atau konfigurasi YAML, jalankan:
+
+```bash
+flutter pub get
+dart run flutter_launcher_icons
+dart run flutter_native_splash:create
+```
+
+Commit konfigurasi, sumber branding yang memang diperlukan, dan resource Android hasil generator. Periksa launcher icon pada beberapa bentuk mask serta buka aplikasi dari ikon launcher untuk memeriksa splash Android 12+; splash dapat tidak tampil ketika aplikasi diluncurkan langsung dari alat debug tertentu.
+
 ## Pemeriksaan sebelum commit
 
 ```bash

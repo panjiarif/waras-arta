@@ -1,7 +1,57 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keystorePropertiesFile = rootProject.file("key.properties")
+val releaseBuildRequested = gradle.startParameter.taskNames.any { requestedTask ->
+    val taskName = requestedTask.substringAfterLast(':')
+    taskName.contains("release", ignoreCase = true) ||
+        taskName.equals("build", ignoreCase = true) ||
+        taskName.equals("assemble", ignoreCase = true) ||
+        taskName.equals("bundle", ignoreCase = true) ||
+        taskName.equals("buildNeeded", ignoreCase = true) ||
+        taskName.equals("buildDependents", ignoreCase = true)
+}
+if (releaseBuildRequested && !keystorePropertiesFile.isFile) {
+    throw GradleException(
+        "android/key.properties tidak ditemukan. Salin dari " +
+            "android/key.properties.example lalu isi kredensial signing lokal.",
+    )
+}
+
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.isFile) {
+        try {
+            keystorePropertiesFile.inputStream().use { load(it) }
+        } catch (exception: Exception) {
+            throw GradleException(
+                "android/key.properties tidak dapat dibaca.",
+                exception,
+            )
+        }
+    }
+}
+
+fun requiredSigningProperty(
+    name: String,
+    preserveWhitespace: Boolean = false,
+): String {
+    val value = keystoreProperties.getProperty(name)
+        ?: throw GradleException(
+            "Properti signing '$name' belum diisi di android/key.properties.",
+        )
+    val normalized = value.trim()
+    if (normalized.isEmpty() || normalized.startsWith("REPLACE_WITH_")) {
+        throw GradleException(
+            "Properti signing '$name' belum diisi di android/key.properties.",
+        )
+    }
+    return if (preserveWhitespace) value else normalized
 }
 
 android {
@@ -29,11 +79,40 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.isFile) {
+                keyAlias = requiredSigningProperty("keyAlias")
+                keyPassword = requiredSigningProperty(
+                    "keyPassword",
+                    preserveWhitespace = true,
+                )
+                storePassword = requiredSigningProperty(
+                    "storePassword",
+                    preserveWhitespace = true,
+                )
+                val configuredStoreFile = File(
+                    requiredSigningProperty("storeFile"),
+                )
+                if (!configuredStoreFile.isAbsolute) {
+                    throw GradleException(
+                        "Properti 'storeFile' harus berupa path absolut. " +
+                            "Di Windows gunakan format C:/Users/.../file.jks.",
+                    )
+                }
+                if (!configuredStoreFile.isFile) {
+                    throw GradleException(
+                        "Keystore release tidak ditemukan: $configuredStoreFile",
+                    )
+                }
+                storeFile = configuredStoreFile
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

@@ -67,7 +67,43 @@ Untuk menilai kelancaran pada HP referensi, gunakan profile mode setelah alur de
 flutter run --profile -d DEVICE_ID
 ```
 
-Jangan menyimpulkan performa release berdasarkan debug mode. Build release saat ini belum merupakan rilis Play Store: konfigurasi penandatanganan produksi dan prosedur distribusi perlu disiapkan terpisah.
+Jangan menyimpulkan performa release berdasarkan debug mode. Sebelum membagikan
+APK, siapkan penandatanganan dan prosedur distribusi berikut.
+
+## Penandatanganan APK release
+
+Simpan keystore release permanen di luar repository dan buat sedikitnya satu
+salinan pemulihan. Kehilangan keystore atau kata sandinya membuat APK berikutnya
+tidak dapat dipasang sebagai pembaruan dari versi yang sudah dibagikan.
+
+Salin template konfigurasi lokal:
+
+```bash
+cp android/key.properties.example android/key.properties
+```
+
+Isi `storePassword` dan `keyPassword` secara lokal. Jangan memasukkan password
+ke command history, chat, commit, atau dokumentasi. `android/key.properties`,
+`*.jks`, dan `*.keystore` sudah dikecualikan oleh `.gitignore`, tetapi tetap
+periksa sebelum commit:
+
+```bash
+git check-ignore -v android/key.properties
+git status --short
+```
+
+Build APK universal untuk distribusi langsung:
+
+```bash
+flutter build apk --release
+```
+
+Hasil default berada di `build/app/outputs/flutter-apk/app-release.apk`. Semua
+pembaruan harus mempertahankan `applicationId`, memakai keystore dan alias yang
+sama, serta menaikkan build number setelah tanda `+` pada versi `pubspec.yaml`.
+Instalasi debug yang sudah ada tidak dapat ditimpa oleh APK release dengan
+signature baru; buat dan verifikasi backup `.warasarta` sebelum transisi satu
+kali melalui uninstall, instal release, dan restore.
 
 ## Checklist manual alpha
 

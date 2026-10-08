@@ -1,52 +1,164 @@
-# Waras Arta
+<p align="center">
+  <img src="assets/branding/logos/logo_lockup_stacked.svg" alt="Waras Arta" width="240">
+</p>
 
-> Catat, atur, tetap waras.
+<p align="center">
+  <strong>Catat, atur, tetap waras.</strong>
+</p>
 
-Aplikasi keuangan pribadi berbasis Flutter dengan pendekatan local-first. Target pertama adalah Android, dengan antarmuka bahasa Indonesia dan mata uang rupiah.
+<p align="center">
+  Aplikasi pencatatan keuangan pribadi local-first untuk Android.<br>
+  Berbahasa Indonesia, menggunakan rupiah, dan dapat dipakai tanpa akun maupun koneksi internet untuk fungsi utamanya.
+</p>
 
-## Status: alpha pertama
+<p align="center">
+  <a href="https://github.com/panjiarif/waras-arta/releases/download/v0.1.0/waras-arta-v0.1.0-android.apk">Unduh APK v0.1.0</a>
+  ·
+  <a href="https://github.com/panjiarif/waras-arta/releases/tag/v0.1.0">Catatan rilis</a>
+  ·
+  <a href="https://github.com/panjiarif/waras-arta/issues/new">Laporkan masalah</a>
+</p>
 
-Ini adalah alpha aktif menuju versi 0.1 pada [product brief](docs/product-brief.md), **belum MVP lengkap**. Fondasi alokasi transaksi dan Anggaran v1 dari ruang lingkup 0.2 sudah dibawa lebih awal agar perhitungan kategori dibangun di atas model data yang benar.
+## Status proyek
 
-Yang tersedia:
+Versi publik terbaru adalah **v0.1.0 — Alpha 1** untuk Android 7.0 atau lebih baru.
 
-- Membuat rekening tunai, bank, e-wallet, atau lainnya pada kelompok aktif **Saldo utama** atau **Simpanan & investasi**, dengan saldo awal yang dicatat sebagai penyesuaian ledger.
-- Membuka detail rekening, mengubah nama/jenis/kelompok, serta mengoreksi saldo melalui entri penyesuaian bertanda yang dapat ditelusuri dan tidak masuk ringkasan arus kas.
-- Memisahkan rekening aktif dari **Rekening diarsipkan**; rekening bersaldo nol dapat diarsipkan dan dipulihkan ke kelompok aktif sebelumnya, sedangkan rekening tanpa referensi ledger dapat dihapus permanen tanpa menghapus riwayat secara berantai.
-- Mencatat pemasukan dan pengeluaran dengan 1–50 rincian nominal–subkategori, tanggal kejadian, dan catatan; total split dihitung otomatis.
-- Mengelola kategori pemasukan/pengeluaran dalam hierarki dua tingkat: kelompok dan subkategori.
-- Mengubah nama serta ikon Material kategori, lalu mengarsipkannya tanpa memutus riwayat lama.
-- Transfer satu transaksi antar-rekening sendiri, termasuk lintas kelompok saldo, tidak dihitung sebagai pemasukan/pengeluaran dan tidak mengubah total seluruh rekening.
-- Kalender bulanan Senin–Minggu dengan penanda pemasukan, pengeluaran, serta aktivitas lain per tanggal.
-- Memilih tanggal menampilkan total harian dan seluruh pemasukan, pengeluaran, transfer, serta penyesuaian pada hari tersebut.
-- Pencatatan tanggal lampau melalui kalender atau pemilih tanggal; tombol tambah pada tab kalender otomatis memakai tanggal yang dipilih.
-- Ikhtisar dengan urutan Saldo utama, pemasukan/pengeluaran bulan terpilih, **Tren terkini**, lalu transaksi terbaru. Tren terkini menampilkan pengeluaran tujuh hari terakhir dan perubahan Saldo utama pada enam akhir bulan sebelumnya hingga saldo saat ini; subtotal Saldo utama serta Simpanan & investasi tersedia terpisah pada tab Rekening.
-- Riwayat bulanan yang dimuat bertahap mulai 50 entri.
-- Detail transaksi beserta nama rekening, tanggal kejadian, catatan, waktu pencatatan, dan seluruh rincian split.
-- Edit transaksi biasa dengan perhitungan ulang saldo dan ringkasan.
-- Hapus permanen transaksi biasa melalui dialog konfirmasi.
-- Mengelola anggaran bulanan, tahunan, atau rentang kustom langsung dari tab **Anggaran**, dengan satu atau beberapa subkategori pengeluaran; daftar ditelusuri per bulan/tahun, progres mengikuti nominal alokasi transaksi, dan konflik kategori pada periode beririsan ditolak.
-- Menyalin anggaran bulanan sebelumnya secara manual setelah konfirmasi ketika bulan tujuan masih kosong. Salinan menjadi data baru yang independen dan tidak tersinkron dengan bulan asal.
-- Penyimpanan persisten lokal menggunakan Drift/SQLite.
-- Migrasi schema bertahap v1 sampai v6 yang menjaga transaksi serta saldo lama ketika kategori, siklus rekening, alokasi transaksi, kelompok saldo, dan anggaran berevolusi.
-- Backup manual terenkripsi ke file `.warasarta` melalui pemilih dokumen Android; hasil simpan dibuka ulang dan diverifikasi sebelum dianggap berhasil.
-- Restore replace-all dengan pemeriksaan kata sandi, ringkasan isi, konfirmasi, transaksi database atomik, dan safety backup terenkripsi yang wajib disimpan lebih dahulu.
+> [!WARNING]
+> Ini adalah versi alpha untuk pengujian awal. Gunakan data percobaan terlebih dahulu dan jangan menjadikannya satu-satunya tempat menyimpan catatan keuangan penting.
 
-`Saldo utama` dan `Simpanan & investasi` adalah kelompok rekening aktif, sedangkan arsip merupakan status terpisah. Rekening arsip disembunyikan secara default, tetap dapat ditampilkan, menyimpan kelompok aktif terakhirnya untuk pemulihan, serta tidak dapat dipilih untuk transaksi baru. Entri penyesuaian, termasuk saldo awal, bersifat tetap agar jejak perubahan saldo tidak ditulis ulang.
+## Tangkapan layar
 
-Backup aktif memakai payload v4/schema v6 dan membawa `balanceGroup`, seluruh anggaran, pilihan subkategori, serta sequence terkait. Restore payload v1/schema 3, v2/schema 4, dan v3/schema 5 tetap didukung. Rekening dari v1/v2 dipetakan ke `Saldo utama`, v3 mempertahankan `balanceGroup`, dan seluruh format legacy dipulihkan dengan daftar anggaran kosong karena belum menyimpan data tersebut.
+Seluruh nama rekening dan nominal pada tangkapan layar merupakan data contoh.
 
-Belum tersedia: gambar kategori unggahan pengguna, backup rutin terjadwal, implementasi [Tujuan Keuangan v1](docs/financial-goals.md), fitur **Diagram** penuh seperti komposisi kategori serta analitik anggaran/tujuan, dan utang/piutang. Diagram lingkaran arus bulan serta dua grafik ringan pada Ikhtisar sudah tersedia, tetapi belum menandai seluruh fitur analitik selesai. Kontrak Tujuan Keuangan sudah ditulis, tetapi schema/payload aktif belum memuatnya.
+<table>
+  <tr>
+    <td align="center"><strong>Ikhtisar</strong></td>
+    <td align="center"><strong>Tren terkini</strong></td>
+    <td align="center"><strong>Transaksi dengan rincian</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/overview-top.jpeg" alt="Ikhtisar saldo dan arus kas Waras Arta" width="240"></td>
+    <td><img src="docs/screenshots/overview-trends.jpeg" alt="Grafik pengeluaran dan tren saldo Waras Arta" width="240"></td>
+    <td><img src="docs/screenshots/transaction-split.jpeg" alt="Form transaksi dengan beberapa rincian kategori" width="240"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Anggaran</strong></td>
+    <td align="center"><strong>Kalender</strong></td>
+    <td align="center"><strong>Rekening</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/budgets.jpeg" alt="Daftar dan progres anggaran Waras Arta" width="240"></td>
+    <td><img src="docs/screenshots/calendar.jpeg" alt="Kalender aktivitas keuangan Waras Arta" width="240"></td>
+    <td><img src="docs/screenshots/accounts.jpeg" alt="Pemisahan Saldo utama serta Simpanan dan investasi" width="240"></td>
+  </tr>
+</table>
 
-Backup rutin adalah snapshot manual saat tombol ditekan; aplikasi belum menjadwalkan, mengunggah, merotasi, atau memverifikasi backup secara otomatis. Verifikasi tepat setelah penulisan hanya memastikan ukuran dan SHA-256 file yang baru disimpan cocok pada saat itu, bukan memantau retensi file berikutnya. Pengecualiannya adalah jalur restore: setelah pengguna mengonfirmasi restore, aplikasi wajib menyimpan safety backup terenkripsi dari data aktif dengan kata sandi yang sama sebelum melakukan replace-all. Jika penyimpanan dibatalkan, gagal, atau tidak lolos verifikasi penulisan, restore tidak dijalankan. Simpan beberapa file di luar HP, misalnya pada penyedia dokumen cloud dan komputer, lalu uji restore menggunakan data percobaan sebelum mengandalkannya. **Kata sandi backup tidak disimpan dan tidak dapat dipulihkan. Jika lupa, file tersebut tidak dapat direstore.**
+## Unduh dan instal
 
-File backup dienkripsi, tetapi database SQLite yang sedang dipakai aplikasi belum dienkripsi khusus oleh Waras Arta. Penyimpanan privat Android juga bukan jaminan pemulihan: uninstall, hapus data, atau kehilangan HP tetap dapat menghilangkan data yang belum masuk backup terbaru.
+- [Unduh langsung APK Android v0.1.0](https://github.com/panjiarif/waras-arta/releases/download/v0.1.0/waras-arta-v0.1.0-android.apk)
+- [Buka halaman rilis v0.1.0](https://github.com/panjiarif/waras-arta/releases/tag/v0.1.0)
 
-Backup otomatis dan transfer data aplikasi milik Android dinonaktifkan serta dikecualikan lewat aturan platform agar database kerja yang belum dienkripsi tidak menjadi salinan portabel di luar alur `.warasarta`. Konsekuensinya, pindah HP harus dilakukan dengan membuat dan merestore file backup terenkripsi secara manual.
+Setelah APK selesai diunduh:
 
-## Mulai mengembangkan
+1. Buka file `waras-arta-v0.1.0-android.apk`.
+2. Jika diminta, izinkan pemasangan aplikasi dari sumber tersebut.
+3. Ikuti konfirmasi instalasi Android.
+4. Untuk pembaruan berikutnya, pasang APK baru di atas versi lama tanpa menghapus aplikasi terlebih dahulu.
 
-Siapkan Flutter, JDK 17, Android SDK, dan HP dengan USB debugging. Dari root repository:
+Jika perangkat sebelumnya memakai build debug atau APK dengan signature berbeda, Android mungkin meminta versi lama dihapus. Buat backup lebih dahulu karena menghapus aplikasi juga menghapus database lokalnya.
+
+## Fitur utama
+
+- Mencatat pemasukan, pengeluaran, dan transfer antar-rekening.
+- Membagi satu transaksi ke beberapa nominal dan subkategori.
+- Mengelola rekening dalam kelompok **Saldo utama** serta **Simpanan & investasi**.
+- Mengoreksi saldo melalui entri penyesuaian yang tetap dapat ditelusuri.
+- Mengarsipkan dan memulihkan rekening tanpa memutus riwayat transaksi.
+- Mengelola kategori dan subkategori pemasukan maupun pengeluaran.
+- Menelusuri aktivitas melalui kalender, riwayat bulanan, dan detail transaksi.
+- Membuat anggaran bulanan, tahunan, atau periode kustom.
+- Menyalin anggaran bulanan sebelumnya secara manual.
+- Melihat ikhtisar saldo, arus kas, ringkasan bulanan, dan grafik ringan.
+- Membuat serta memulihkan backup terenkripsi berformat `.warasarta`.
+
+## Tentang data dan backup
+
+Data aktif disimpan secara lokal pada penyimpanan privat aplikasi. Waras Arta tidak meminta akun, tidak memiliki server aplikasi, tidak meminta izin Internet pada APK release, dan tidak menyinkronkan data ke cloud secara otomatis.
+
+Hal yang perlu diperhatikan:
+
+- Uninstall, hapus data aplikasi, kerusakan, atau kehilangan perangkat dapat menghapus data yang belum dicadangkan.
+- Backup hanya dibuat secara manual saat pengguna menekan tombol **Buat backup**.
+- Simpan beberapa salinan backup di lokasi berbeda.
+- Kata sandi backup tidak disimpan dan tidak dapat dipulihkan jika terlupa.
+- File `.warasarta` dienkripsi, tetapi database SQLite aktif belum dienkripsi secara khusus oleh Waras Arta.
+- Uji proses backup dan restore menggunakan data percobaan sebelum mengandalkannya.
+
+Rincian teknis tersedia di [dokumentasi backup dan restore](docs/backup-restore.md).
+
+## Panduan untuk tester
+
+Mulailah dengan data percobaan, lalu coba alur berikut:
+
+1. Buat beberapa rekening.
+2. Catat pemasukan, pengeluaran dengan rincian, dan transfer.
+3. Edit serta hapus transaksi percobaan.
+4. Buat anggaran dan periksa progresnya.
+5. Tutup lalu buka kembali aplikasi untuk memastikan data tetap ada.
+6. Buat backup terenkripsi dan uji restore.
+7. Laporkan perilaku yang tidak sesuai melalui [GitHub Issues](https://github.com/panjiarif/waras-arta/issues/new).
+
+Sertakan versi aplikasi, tipe HP, versi Android, langkah untuk mengulangi masalah, hasil yang diharapkan, dan hasil yang terjadi. Jangan unggah file backup, database, kata sandi, atau screenshot yang memuat data keuangan pribadi ke issue publik.
+
+## Batasan Alpha 1
+
+Belum tersedia:
+
+- Tujuan Keuangan.
+- Utang dan piutang.
+- Backup otomatis.
+- Sinkronisasi cloud.
+- Gambar kategori dari unggahan pengguna.
+- Analitik kategori, anggaran, dan tujuan yang lebih lengkap.
+
+## Verifikasi rilis
+
+Rilis `v0.1.0` menggunakan:
+
+| Item | Nilai |
+| --- | --- |
+| Versi aplikasi | `0.1.0` |
+| Build number | `1` |
+| Application ID | `io.github.panjiarif.waras_arta` |
+| Minimum Android | API 24 / Android 7.0 |
+| Schema database | v6 |
+| Payload backup | v4 |
+| Analisis statis | Tidak ditemukan masalah |
+| Pengujian otomatis | 316 tes berhasil |
+
+SHA-256 APK:
+
+```text
+E40592F42CF721943FE2EBADA6C685AF45F148D689E3E8A37892BC60B53506C5
+```
+
+SHA-256 sertifikat signing:
+
+```text
+877B638DCA2ACBE157669BD162BF7062FDC16E1A28AC4EF481A7C689C566B77E
+```
+
+Di Windows, checksum APK dapat diperiksa dengan:
+
+```powershell
+Get-FileHash .\waras-arta-v0.1.0-android.apk -Algorithm SHA256
+```
+
+## Pengembangan
+
+Waras Arta dibangun menggunakan Flutter/Dart, Material 3, Riverpod, `go_router`, dan Drift/SQLite. Arsitektur aplikasi memakai MVVM, repository, serta aliran data satu arah. Saldo berasal dari ledger dan nominal disimpan sebagai bilangan bulat rupiah.
+
+Siapkan Flutter, JDK 17, Android SDK, dan perangkat Android dengan USB debugging. Dari root repository:
 
 ```bash
 flutter pub get
@@ -57,18 +169,18 @@ flutter devices
 flutter run -d DEVICE_ID
 ```
 
-Ganti `DEVICE_ID` dengan ID HP. Proyek ini belum menargetkan runtime web atau desktop. Lihat [panduan pengembangan](docs/development.md) untuk checklist manual dan alur commit.
+Ganti `DEVICE_ID` dengan ID perangkat yang ditampilkan oleh `flutter devices`. Proyek ini saat ini hanya menargetkan Android.
 
-## Fondasi teknis
-
-Flutter/Dart, Material 3, MVVM dengan Riverpod, repository, Drift/SQLite dengan background isolate, dan `go_router`. Saldo berasal dari ledger, nominal menggunakan bilangan bulat rupiah, periode transaksi berdasarkan tanggal kejadian, dan identitas kategori memakai ID stabil.
+## Dokumentasi
 
 - [Product brief dan ruang lingkup versi](docs/product-brief.md)
-- [Spesifikasi Alokasi Kategori Transaksi](docs/transaction-allocations.md)
-- [Spesifikasi Anggaran v1](docs/budgets.md)
-- [Spesifikasi Tujuan Keuangan v1](docs/financial-goals.md)
 - [Arsitektur dan aturan data](docs/architecture.md)
-- [Format, keamanan, dan pemulihan backup](docs/backup-restore.md)
-- [Pengembangan, verifikasi, dan commit](docs/development.md)
+- [Backup, keamanan, dan pemulihan](docs/backup-restore.md)
+- [Alokasi kategori transaksi](docs/transaction-allocations.md)
+- [Anggaran v1](docs/budgets.md)
+- [Rancangan Tujuan Keuangan v1](docs/financial-goals.md)
+- [Panduan pengembangan dan verifikasi](docs/development.md)
 
-Package Dart: `waras_arta`. Application ID Android saat ini: `io.github.panjiarif.waras_arta`; nama tampilan: **Waras Arta**.
+## Lisensi
+
+Lisensi kode sumber belum ditetapkan. Repositori publik tidak otomatis berarti proyek open-source. Sampai file `LICENSE` ditambahkan, tidak ada izin umum untuk menggunakan, mengubah, atau mendistribusikan ulang kode sumber ini.

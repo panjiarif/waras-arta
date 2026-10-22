@@ -36,11 +36,13 @@ class MainActivity : FlutterActivity() {
     private class VerificationException : IOException()
 
     private var channel: MethodChannel? = null
+    private var updateInstaller: UpdateInstallerBridge? = null
     private var pendingOperation: PendingOperation? = null
     private val fileExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        updateInstaller = UpdateInstallerBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             BACKUP_FILE_CHANNEL,
@@ -50,6 +52,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        updateInstaller?.close()
+        updateInstaller = null
         pendingOperation?.let { operation ->
             operation.result.error(
                 "activity_unavailable",
@@ -71,6 +75,7 @@ class MainActivity : FlutterActivity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        updateInstaller?.onActivityResult(requestCode)
         val operation = pendingOperation ?: return
         val expectedCode = when (operation.type) {
             Operation.SAVE -> SAVE_BACKUP_REQUEST

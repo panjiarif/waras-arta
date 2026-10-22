@@ -20,6 +20,7 @@ dependencies:
   intl: ^0.20.3
   package_info_plus: ^10.2.2
   path_provider: ^2.1.6
+  pub_semver: ^2.2.1
   unorm_dart: ^0.3.2
 
 dev_dependencies:

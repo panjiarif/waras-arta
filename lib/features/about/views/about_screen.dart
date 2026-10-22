@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../ledger/views/form_widgets.dart';
 import '../view_models/app_version_info_provider.dart';
+import 'app_update_section.dart';
 
 class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
@@ -32,6 +33,8 @@ class AboutScreen extends ConsumerWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 24),
+            const AppUpdateSection(),
             const SizedBox(height: 24),
             const _LocalFirstCallout(),
             const SizedBox(height: 16),

@@ -107,6 +107,8 @@ kali melalui uninstall, instal release, dan restore.
 
 ## Checklist manual alpha
 
+Fitur cek/unduh/pasang APK dari GitHub berada di halaman Tentang. Kontrak nama APK, checksum, keamanan, batas versi, serta checklist uji pemasang tersedia pada [Pembaruan aplikasi](app-updates.md). Perubahan Android native memerlukan build ulang penuh, bukan hot reload; gunakan release signing yang sama untuk menguji di atas instalasi release tanpa menghapus data.
+
 Gunakan data percobaan. Backup/restore sudah tersedia dalam bentuk manual, tetapi keberadaan fitur tidak membuktikan bahwa suatu file tertentu aman atau dapat dipulihkan. Penghapusan permanen dan replace-all hanya boleh diuji pada data yang dapat dibuat ulang sampai alur Android selesai diverifikasi. Checklist ini adalah langkah verifikasi yang harus dijalankan, bukan laporan bahwa semua pengujian sudah lulus.
 
 ### Skenario perhitungan

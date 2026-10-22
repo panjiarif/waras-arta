@@ -26,7 +26,7 @@ class LegalDocumentScreen extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Diperbarui 6 Oktober 2026',
+                'Diperbarui 22 Oktober 2026',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -128,6 +128,17 @@ const _privacyPolicy = _LegalDocument(
           'dikirim kepada pengembang.',
     ),
     _LegalSection(
+      'Pembaruan aplikasi',
+      'Ketika kamu menekan cek atau unduh pembaruan, aplikasi menghubungi '
+          'GitHub dan penyimpanan aset rilisnya melalui HTTPS. Penyedia '
+          'jaringan menerima informasi teknis koneksi seperti alamat IP; '
+          'rekening, transaksi, catatan, dan file backup tidak dikirim. '
+          'Tidak ada pemeriksaan pembaruan otomatis di latar belakang. '
+          'APK disimpan sementara di cache privat aplikasi dan dapat '
+          'dihapus Android. Izin memasang aplikasi hanya digunakan untuk '
+          'membuka pemasang pembaruan Waras Arta atas permintaanmu.',
+    ),
+    _LegalSection(
       'Backup',
       'Backup dibuat hanya ketika kamu memintanya dan disimpan ke lokasi yang '
           'kamu pilih sebagai file .warasarta terenkripsi. Kata sandi tidak '
@@ -153,7 +164,7 @@ const _privacyPolicy = _LegalDocument(
   ],
   closing:
       'Kebijakan ini berlaku untuk versi saat ini dan perlu diperbarui jika '
-      'kelak ditambahkan sinkronisasi, akun, analitik, atau layanan jaringan.',
+      'kelak ditambahkan sinkronisasi, akun, analitik, atau layanan jaringan lain.',
 );
 
 const _termsOfUse = _LegalDocument(

@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:waras_arta/data/backup/drift_backup_data_store.dart';
+import 'package:waras_arta/data/backup/encrypted_backup_codec.dart';
 import 'package:waras_arta/data/database/app_database.dart';
 import 'package:waras_arta/data/repositories/drift_finance_repository.dart';
 import 'package:waras_arta/data/repositories/drift_budget_repository.dart';
@@ -79,6 +80,68 @@ void main() {
     note: note,
     occurredAt: occurredAt,
   );
+
+  for (final kind in CategoryKind.values) {
+    test('all $kind icons survive creation, encryption, and restore', () async {
+      final createdGroups = <int, String>{};
+      for (final key in categoryIconKeys) {
+        final id = await sourceFinance.createCategoryGroup(
+          CategoryGroupDraft(
+            kind: kind,
+            parentName: 'Contoh $key',
+            parentIconKey: key,
+            firstChildName: 'Umum',
+            firstChildIconKey: key,
+          ),
+        );
+        createdGroups[id] = key;
+      }
+      final original = await sourceStore.exportDocument(
+        createdAtUtc: createdAtUtc,
+      );
+      final codec = EncryptedBackupCodec(
+        parameters: const BackupCryptoParameters(memoryKiB: 64, iterations: 1),
+      );
+      const password = 'sandi-contoh-ikon';
+      final bytes = await codec.encrypt(original, password: password);
+      final decoded = await codec.decrypt(bytes, password: password);
+      await targetStore.restoreDocument(decoded);
+      final restored = await targetStore.exportDocument(
+        createdAtUtc: createdAtUtc,
+      );
+      expect(restored.toJson(), original.toJson());
+
+      final groups = await targetFinance.watchCategoryTree(kind).first;
+      for (final entry in createdGroups.entries) {
+        final group = groups.singleWhere(
+          (group) => group.parent.id == entry.key,
+        );
+        expect(group.parent.iconKey, entry.value);
+        expect(group.children.single.iconKey, entry.value);
+      }
+      // Editing an existing category must accept the expanded catalog as well.
+      final group = groups.singleWhere(
+        (group) => group.parent.id == createdGroups.keys.first,
+      );
+      await targetFinance.updateCategory(
+        group.children.single.id,
+        CategoryDraft(
+          parentId: group.parent.id,
+          name: 'Direvisi',
+          iconKey: 'water_drop',
+        ),
+      );
+      final updated = await targetFinance.watchCategoryTree(kind).first;
+      expect(
+        updated
+            .singleWhere((item) => item.parent.id == group.parent.id)
+            .children
+            .single
+            .iconKey,
+        'water_drop',
+      );
+    });
+  }
 
   test(
     'JSON v4 round-trip preserves budgets, account groups, and ID sequences',

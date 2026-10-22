@@ -36,6 +36,17 @@ void main() {
       expect(decrypted.budgets.single.categoryIds, [4]);
     });
 
+    test('continues rejecting unknown icon keys in backup data', () {
+      final json = _mutableJson(_backupDocument().toJson());
+      final data = json['data']! as Map<String, Object?>;
+      final categories = data['categories']! as List<Object?>;
+      (categories.first as Map<String, Object?>)['iconKey'] = 'unknown_icon';
+      expect(
+        () => BackupDocument.fromJson(json),
+        throwsA(isA<BackupValidationException>()),
+      );
+    });
+
     test('decodes strict payload v1 into the current allocation model', () {
       final legacyJson = _legacyV1Json();
 

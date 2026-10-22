@@ -14,7 +14,7 @@ class CategoryIconOption {
   final IconData icon;
 }
 
-/// A deliberately small, stable catalog. The database stores [key], never an
+/// A stable catalog. The database stores [key], never an
 /// IconData code point, so a Flutter upgrade cannot silently change user data.
 const categoryIconOptions = <CategoryIconOption>[
   CategoryIconOption(
@@ -119,6 +119,114 @@ const categoryIconOptions = <CategoryIconOption>[
     key: 'category',
     label: 'Kategori',
     icon: Icons.category_outlined,
+  ),
+  CategoryIconOption(key: 'bolt', label: 'Listrik', icon: Icons.bolt_outlined),
+  CategoryIconOption(
+    key: 'water_drop',
+    label: 'Air',
+    icon: Icons.water_drop_outlined,
+  ),
+  CategoryIconOption(
+    key: 'local_gas_station',
+    label: 'Bahan bakar',
+    icon: Icons.local_gas_station_outlined,
+  ),
+  CategoryIconOption(
+    key: 'laptop_mac',
+    label: 'Laptop',
+    icon: Icons.laptop_mac_outlined,
+  ),
+  CategoryIconOption(
+    key: 'smartphone',
+    label: 'Ponsel',
+    icon: Icons.smartphone_outlined,
+  ),
+  CategoryIconOption(key: 'wifi', label: 'Internet', icon: Icons.wifi_outlined),
+  CategoryIconOption(
+    key: 'kitchen',
+    label: 'Peralatan rumah',
+    icon: Icons.kitchen_outlined,
+  ),
+  CategoryIconOption(
+    key: 'construction',
+    label: 'Perbaikan',
+    icon: Icons.construction_outlined,
+  ),
+  CategoryIconOption(
+    key: 'plumbing',
+    label: 'Perpipaan',
+    icon: Icons.plumbing_outlined,
+  ),
+  CategoryIconOption(
+    key: 'local_parking',
+    label: 'Parkir',
+    icon: Icons.local_parking_outlined,
+  ),
+  CategoryIconOption(
+    key: 'two_wheeler',
+    label: 'Motor',
+    icon: Icons.two_wheeler_outlined,
+  ),
+  CategoryIconOption(
+    key: 'directions_bus',
+    label: 'Angkutan umum',
+    icon: Icons.directions_bus_outlined,
+  ),
+  CategoryIconOption(
+    key: 'fitness_center',
+    label: 'Olahraga',
+    icon: Icons.fitness_center_outlined,
+  ),
+  CategoryIconOption(
+    key: 'content_cut',
+    label: 'Perawatan diri',
+    icon: Icons.content_cut_outlined,
+  ),
+  CategoryIconOption(
+    key: 'child_care',
+    label: 'Anak',
+    icon: Icons.child_care_outlined,
+  ),
+  CategoryIconOption(key: 'paid', label: 'Gaji', icon: Icons.paid_outlined),
+  CategoryIconOption(
+    key: 'request_quote',
+    label: 'Honorarium',
+    icon: Icons.request_quote_outlined,
+  ),
+  CategoryIconOption(
+    key: 'design_services',
+    label: 'Freelance',
+    icon: Icons.design_services_outlined,
+  ),
+  CategoryIconOption(
+    key: 'point_of_sale',
+    label: 'Penjualan',
+    icon: Icons.point_of_sale_outlined,
+  ),
+  CategoryIconOption(
+    key: 'loyalty',
+    label: 'Bonus',
+    icon: Icons.loyalty_outlined,
+  ),
+  CategoryIconOption(
+    key: 'trending_up',
+    label: 'Investasi',
+    icon: Icons.trending_up_outlined,
+  ),
+  CategoryIconOption(
+    key: 'percent',
+    label: 'Bunga',
+    icon: Icons.percent_outlined,
+  ),
+  CategoryIconOption(
+    key: 'pie_chart',
+    label: 'Dividen',
+    icon: Icons.pie_chart_outline,
+  ),
+  CategoryIconOption(
+    key: 'currency_exchange',
+    label: 'Cashback',
+    icon: Icons.currency_exchange_outlined,
   ),
   CategoryIconOption(
     key: 'more_horiz',

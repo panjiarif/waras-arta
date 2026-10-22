@@ -3,7 +3,7 @@ import 'finance.dart';
 
 const warasArtaBackupFormat = 'waras-arta-backup';
 const oldestSupportedBackupVersion = 1;
-const currentBackupVersion = 4;
+const currentBackupVersion = 5;
 const maxBackupAccountRecords = 2000;
 const maxBackupCategoryRecords = 20000;
 const maxBackupLedgerRecords = 100000;
@@ -55,6 +55,11 @@ class BackupDocument {
         backupVersion: backupVersion,
       ),
       4 => _readBackupDocumentV4(
+        json,
+        format: format,
+        backupVersion: backupVersion,
+      ),
+      5 => _readBackupDocumentV4(
         json,
         format: format,
         backupVersion: backupVersion,
@@ -282,7 +287,7 @@ class BackupDocument {
         maximumLength: maxBackupCategoryRecords,
       ),
       ledgerEntries: _readBackupLedgerEntriesV2(data),
-      budgets: _readBackupBudgetsV4(data),
+      budgets: _readBackupBudgetsV4(data, includeIcon: backupVersion >= 5),
     );
     validateBackupDocument(document);
     return document;
@@ -316,6 +321,7 @@ class BackupDocument {
           2 => _writeBackupLedgerEntryV2,
           3 => _writeBackupLedgerEntryV2,
           4 => _writeBackupLedgerEntryV2,
+          5 => _writeBackupLedgerEntryV2,
           _ => throw const BackupFormatException(
             'Versi backup belum didukung oleh aplikasi ini.',
           ),
@@ -326,6 +332,7 @@ class BackupDocument {
           2 => _writeLegacyBackupAccount,
           3 => (item) => item.toJson(),
           4 => (item) => item.toJson(),
+          5 => (item) => item.toJson(),
           _ => throw const BackupFormatException(
             'Versi backup belum didukung oleh aplikasi ini.',
           ),
@@ -341,7 +348,9 @@ class BackupDocument {
         'categories': categories.map((item) => item.toJson()).toList(),
         'ledgerEntries': ledgerEntries.map(encodeLedgerEntry).toList(),
         if (backupVersion >= 4)
-          'budgets': budgets.map((item) => item.toJson()).toList(),
+          'budgets': budgets
+              .map((item) => item.toJson(includeIcon: backupVersion >= 5))
+              .toList(),
       },
     };
   }
@@ -364,6 +373,10 @@ bool canRestoreBackupDocumentToSchema(
         (document.backupVersion == 2 && document.databaseSchemaVersion == 4) ||
         (document.backupVersion == 3 && document.databaseSchemaVersion == 5) ||
         (document.backupVersion == 4 && document.databaseSchemaVersion == 6),
+  7 => _isSupportedBackupVersionSchemaPair(
+    document.backupVersion,
+    document.databaseSchemaVersion,
+  ),
   _ => false,
 };
 
@@ -449,10 +462,14 @@ class BackupBudget {
     required Iterable<int> categoryIds,
     required this.createdAtUtc,
     required this.updatedAtUtc,
+    this.iconKey,
   }) : categoryIds = List.unmodifiable(categoryIds);
 
-  factory BackupBudget.fromJson(Map<String, Object?> json) {
-    _requireExactKeys(json, const {
+  factory BackupBudget.fromJson(
+    Map<String, Object?> json, {
+    bool includeIcon = true,
+  }) {
+    _requireExactKeys(json, {
       'id',
       'periodKind',
       'startDay',
@@ -463,6 +480,7 @@ class BackupBudget {
       'categoryIds',
       'createdAtUtc',
       'updatedAtUtc',
+      if (includeIcon) 'iconKey',
     }, 'budget');
     final rawCategoryIds = _readList(
       json,
@@ -487,6 +505,9 @@ class BackupBudget {
         'budget.normalizedName',
       ),
       limitAmount: _readInt(json, 'limitAmount', 'budget.limitAmount'),
+      iconKey: includeIcon
+          ? _readNullableString(json, 'iconKey', 'budget.iconKey')
+          : null,
       categoryIds: [
         for (var index = 0; index < rawCategoryIds.length; index++)
           _asInt(rawCategoryIds[index], 'budget.categoryIds[$index]'),
@@ -503,11 +524,12 @@ class BackupBudget {
   final String name;
   final String normalizedName;
   final int limitAmount;
+  final String? iconKey;
   final List<int> categoryIds;
   final DateTime createdAtUtc;
   final DateTime updatedAtUtc;
 
-  Map<String, Object?> toJson() => {
+  Map<String, Object?> toJson({bool includeIcon = true}) => {
     'id': id,
     'periodKind': periodKind.name,
     'startDay': startDay,
@@ -515,6 +537,7 @@ class BackupBudget {
     'name': name,
     'normalizedName': normalizedName,
     'limitAmount': limitAmount,
+    if (includeIcon) 'iconKey': iconKey,
     'categoryIds': categoryIds,
     'createdAtUtc': createdAtUtc.toUtc().toIso8601String(),
     'updatedAtUtc': updatedAtUtc.toUtc().toIso8601String(),
@@ -862,7 +885,10 @@ List<BackupLedgerEntry> _readBackupLedgerEntriesV2(Map<String, Object?> data) {
   return entries;
 }
 
-List<BackupBudget> _readBackupBudgetsV4(Map<String, Object?> data) {
+List<BackupBudget> _readBackupBudgetsV4(
+  Map<String, Object?> data, {
+  required bool includeIcon,
+}) {
   final values = _readList(
     data,
     'budgets',
@@ -874,6 +900,7 @@ List<BackupBudget> _readBackupBudgetsV4(Map<String, Object?> data) {
   for (var index = 0; index < values.length; index++) {
     final budget = BackupBudget.fromJson(
       _asObject(values[index], 'data.budgets[$index]'),
+      includeIcon: includeIcon,
     );
     categoryCount += budget.categoryIds.length;
     if (categoryCount > maxBackupBudgetCategoryRecords) {
@@ -919,7 +946,8 @@ bool _isSupportedBackupVersionSchemaPair(
     (backupVersion == 1 && databaseSchemaVersion == 3) ||
     (backupVersion == 2 && databaseSchemaVersion == 4) ||
     (backupVersion == 3 && databaseSchemaVersion == 5) ||
-    (backupVersion == 4 && databaseSchemaVersion == 6);
+    (backupVersion == 4 && databaseSchemaVersion == 6) ||
+    (backupVersion == 5 && databaseSchemaVersion == 7);
 
 void _requireBackupVersionSchemaPair(
   int backupVersion,
@@ -1062,6 +1090,12 @@ void validateBackupDocument(
   final uniqueBudgetNames = <String>{};
   final intervalsByCategory = <int, List<_BackupBudgetInterval>>{};
   for (final budget in document.budgets) {
+    if (document.backupVersion < 5 && budget.iconKey != null) {
+      _invalid('Versi backup lama tidak dapat menyimpan ikon anggaran.');
+    }
+    if (budget.iconKey != null && !categoryIconKeys.contains(budget.iconKey)) {
+      _invalid('Ikon anggaran tidak dikenal.');
+    }
     _positiveId(budget.id, 'ID anggaran');
     if (!budgetIds.add(budget.id)) _invalid('ID anggaran duplikat.');
     _canonicalName(budget.name, budget.normalizedName, 'Nama anggaran');

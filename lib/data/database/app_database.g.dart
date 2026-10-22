@@ -2067,6 +2067,21 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _iconKeyMeta = const VerificationMeta(
+    'iconKey',
+  );
+  @override
+  late final GeneratedColumn<String> iconKey = GeneratedColumn<String>(
+    'icon_key',
+    aliasedName,
+    true,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 40,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -2098,6 +2113,7 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
     name,
     normalizedName,
     limitAmount,
+    iconKey,
     createdAt,
     updatedAt,
   ];
@@ -2170,6 +2186,12 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
     } else if (isInserting) {
       context.missing(_limitAmountMeta);
     }
+    if (data.containsKey('icon_key')) {
+      context.handle(
+        _iconKeyMeta,
+        iconKey.isAcceptableOrUnknown(data['icon_key']!, _iconKeyMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2223,6 +2245,10 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
         DriftSqlType.int,
         data['${effectivePrefix}limit_amount'],
       )!,
+      iconKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon_key'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -2248,6 +2274,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
   final String name;
   final String normalizedName;
   final int limitAmount;
+  final String? iconKey;
   final DateTime createdAt;
   final DateTime updatedAt;
   const BudgetRow({
@@ -2258,6 +2285,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     required this.name,
     required this.normalizedName,
     required this.limitAmount,
+    this.iconKey,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -2271,6 +2299,9 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     map['name'] = Variable<String>(name);
     map['normalized_name'] = Variable<String>(normalizedName);
     map['limit_amount'] = Variable<int>(limitAmount);
+    if (!nullToAbsent || iconKey != null) {
+      map['icon_key'] = Variable<String>(iconKey);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -2285,6 +2316,9 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       name: Value(name),
       normalizedName: Value(normalizedName),
       limitAmount: Value(limitAmount),
+      iconKey: iconKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(iconKey),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -2303,6 +2337,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       name: serializer.fromJson<String>(json['name']),
       normalizedName: serializer.fromJson<String>(json['normalizedName']),
       limitAmount: serializer.fromJson<int>(json['limitAmount']),
+      iconKey: serializer.fromJson<String?>(json['iconKey']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -2318,6 +2353,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       'name': serializer.toJson<String>(name),
       'normalizedName': serializer.toJson<String>(normalizedName),
       'limitAmount': serializer.toJson<int>(limitAmount),
+      'iconKey': serializer.toJson<String?>(iconKey),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -2331,6 +2367,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     String? name,
     String? normalizedName,
     int? limitAmount,
+    Value<String?> iconKey = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => BudgetRow(
@@ -2341,6 +2378,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     name: name ?? this.name,
     normalizedName: normalizedName ?? this.normalizedName,
     limitAmount: limitAmount ?? this.limitAmount,
+    iconKey: iconKey.present ? iconKey.value : this.iconKey,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -2359,6 +2397,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       limitAmount: data.limitAmount.present
           ? data.limitAmount.value
           : this.limitAmount,
+      iconKey: data.iconKey.present ? data.iconKey.value : this.iconKey,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -2374,6 +2413,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
           ..write('name: $name, ')
           ..write('normalizedName: $normalizedName, ')
           ..write('limitAmount: $limitAmount, ')
+          ..write('iconKey: $iconKey, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -2389,6 +2429,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     name,
     normalizedName,
     limitAmount,
+    iconKey,
     createdAt,
     updatedAt,
   );
@@ -2403,6 +2444,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
           other.name == this.name &&
           other.normalizedName == this.normalizedName &&
           other.limitAmount == this.limitAmount &&
+          other.iconKey == this.iconKey &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -2415,6 +2457,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
   final Value<String> name;
   final Value<String> normalizedName;
   final Value<int> limitAmount;
+  final Value<String?> iconKey;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   const BudgetsCompanion({
@@ -2425,6 +2468,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     this.name = const Value.absent(),
     this.normalizedName = const Value.absent(),
     this.limitAmount = const Value.absent(),
+    this.iconKey = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -2436,6 +2480,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     required String name,
     required String normalizedName,
     required int limitAmount,
+    this.iconKey = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
   }) : periodKind = Value(periodKind),
@@ -2454,6 +2499,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     Expression<String>? name,
     Expression<String>? normalizedName,
     Expression<int>? limitAmount,
+    Expression<String>? iconKey,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -2465,6 +2511,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
       if (name != null) 'name': name,
       if (normalizedName != null) 'normalized_name': normalizedName,
       if (limitAmount != null) 'limit_amount': limitAmount,
+      if (iconKey != null) 'icon_key': iconKey,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -2478,6 +2525,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     Value<String>? name,
     Value<String>? normalizedName,
     Value<int>? limitAmount,
+    Value<String?>? iconKey,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -2489,6 +2537,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
       name: name ?? this.name,
       normalizedName: normalizedName ?? this.normalizedName,
       limitAmount: limitAmount ?? this.limitAmount,
+      iconKey: iconKey ?? this.iconKey,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -2518,6 +2567,9 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     if (limitAmount.present) {
       map['limit_amount'] = Variable<int>(limitAmount.value);
     }
+    if (iconKey.present) {
+      map['icon_key'] = Variable<String>(iconKey.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -2537,6 +2589,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
           ..write('name: $name, ')
           ..write('normalizedName: $normalizedName, ')
           ..write('limitAmount: $limitAmount, ')
+          ..write('iconKey: $iconKey, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -4836,6 +4889,7 @@ typedef $$BudgetsTableCreateCompanionBuilder = BudgetsCompanion Function({
   required String name,
   required String normalizedName,
   required int limitAmount,
+  Value<String?> iconKey,
   required DateTime createdAt,
   required DateTime updatedAt,
 });
@@ -4847,6 +4901,7 @@ typedef $$BudgetsTableUpdateCompanionBuilder = BudgetsCompanion Function({
   Value<String> name,
   Value<String> normalizedName,
   Value<int> limitAmount,
+  Value<String?> iconKey,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
 });
@@ -4917,6 +4972,11 @@ class $$BudgetsTableFilterComposer
 
   ColumnFilters<int> get limitAmount => $composableBuilder(
     column: $table.limitAmount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5000,6 +5060,11 @@ class $$BudgetsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -5046,6 +5111,9 @@ class $$BudgetsTableAnnotationComposer
     column: $table.limitAmount,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get iconKey =>
+      $composableBuilder(column: $table.iconKey, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5114,6 +5182,7 @@ class $$BudgetsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String> normalizedName = const Value.absent(),
                 Value<int> limitAmount = const Value.absent(),
+                Value<String?> iconKey = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => BudgetsCompanion(
@@ -5124,6 +5193,7 @@ class $$BudgetsTableTableManager
                 name: name,
                 normalizedName: normalizedName,
                 limitAmount: limitAmount,
+                iconKey: iconKey,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),
@@ -5136,6 +5206,7 @@ class $$BudgetsTableTableManager
                 required String name,
                 required String normalizedName,
                 required int limitAmount,
+                Value<String?> iconKey = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
               }) => BudgetsCompanion.insert(
@@ -5146,6 +5217,7 @@ class $$BudgetsTableTableManager
                 name: name,
                 normalizedName: normalizedName,
                 limitAmount: limitAmount,
+                iconKey: iconKey,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
               ),

@@ -42,6 +42,66 @@ void main() {
     }
   });
 
+  test(
+    'v6 to v7 preserves live accounts, ledger, budgets and their mappings',
+    () async {
+      final schema = await verifier.schemaAt(6);
+      final oldDb = v6.DatabaseAtV6(schema.newConnection());
+      await oldDb.customStatement(
+        "INSERT INTO accounts (id, name, normalized_name, type, balance_group, is_archived, created_at) VALUES (1, 'Dompet', 'dompet', 0, 0, 0, 1700000000)",
+      );
+      await oldDb.customStatement(
+        "INSERT INTO categories (id, parent_id, kind, name, normalized_name, icon_key, is_archived, sort_order, created_at, updated_at) VALUES (1, NULL, 0, 'Gaji', 'gaji', 'work', 0, 0, 1700000000, 1700000000), (2, 1, 0, 'Umum', 'umum', 'work', 0, 0, 1700000000, 1700000000), (9, NULL, 1, 'Makan', 'makan', 'restaurant', 0, 0, 1700000000, 1700000000), (10, 9, 1, 'Umum', 'umum', 'restaurant', 0, 0, 1700000000, 1700000000)",
+      );
+      await oldDb.customStatement(
+        "INSERT INTO ledger_entries (id, kind, account_id, amount, note, occurred_day, created_at) VALUES (1, 0, 1, 100000, 'Gaji', 20261001, 1700000000), (2, 1, 1, 12500, 'Makan', 20261002, 1700000000)",
+      );
+      await oldDb.customStatement(
+        'INSERT INTO ledger_allocations (entry_id, position, category_id, amount) VALUES (1, 0, 2, 100000), (2, 0, 10, 12500)',
+      );
+      await oldDb.customStatement(
+        "INSERT INTO budgets (id, period_kind, start_day, end_day, name, normalized_name, limit_amount, created_at, updated_at) VALUES (4, 0, 20261001, 20261031, 'Makan bulanan', 'makan bulanan', 50000, 1700000000, 1700000000)",
+      );
+      await oldDb.customStatement(
+        'INSERT INTO budget_categories (budget_id, category_id) VALUES (4, 10)',
+      );
+      final before = <String, List<Map<String, Object?>>>{};
+      for (final table in [
+        'accounts',
+        'categories',
+        'ledger_entries',
+        'ledger_allocations',
+        'budget_categories',
+        'sqlite_sequence',
+      ]) {
+        before[table] = (await oldDb.customSelect('SELECT * FROM $table').get())
+            .map((row) => row.data)
+            .toList();
+      }
+      await oldDb.close();
+      final upgraded = AppDatabase(schema.newConnection());
+      await verifier.migrateAndValidate(upgraded, 7);
+      for (final table in before.keys) {
+        final after =
+            (await upgraded.customSelect('SELECT * FROM $table').get())
+                .map((row) => row.data)
+                .toList();
+        expect(after, before[table], reason: '$table must survive the upgrade');
+      }
+      final budget = (await upgraded.select(upgraded.budgets).get()).single;
+      expect(budget.id, 4);
+      expect(budget.limitAmount, 50000);
+      expect(budget.iconKey, null);
+      await upgraded.verifyBudgetIntegrity();
+      expect(
+        await upgraded.customSelect('PRAGMA foreign_key_check').get(),
+        isEmpty,
+      );
+      await upgraded.close();
+      schema.close();
+    },
+  );
+
   test('migration from v1 to v2 does not corrupt data', () async {
     const createdAtBase = 1700000000000;
     const legacyCategories =
@@ -1159,14 +1219,14 @@ void main() {
   });
 
   test(
-    'fresh v6 enforces row rules and exposes cross-row verification',
+    'fresh v7 enforces row rules and exposes cross-row verification',
     () async {
       final db = AppDatabase(NativeDatabase.memory());
       try {
         final version = await db
             .customSelect('PRAGMA user_version')
             .getSingle();
-        expect(version.read<int>('user_version'), 6);
+        expect(version.read<int>('user_version'), 7);
         await db.customStatement('''
         INSERT INTO accounts
           (id, name, normalized_name, type, is_archived, created_at)
@@ -1295,11 +1355,11 @@ void main() {
     },
   );
 
-  test('fresh v6 enforces budget periods, mappings, and relations', () async {
+  test('fresh v7 enforces budget periods, mappings, and relations', () async {
     final db = AppDatabase(NativeDatabase.memory());
     try {
       final version = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(version.read<int>('user_version'), 6);
+      expect(version.read<int>('user_version'), 7);
 
       Future<void> insertBudget({
         required int id,

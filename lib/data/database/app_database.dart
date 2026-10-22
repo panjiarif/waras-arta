@@ -184,6 +184,7 @@ class Budgets extends Table {
   TextColumn get name => text().withLength(min: 1, max: 80)();
   TextColumn get normalizedName => text().withLength(min: 1, max: 80)();
   IntColumn get limitAmount => integer()();
+  TextColumn get iconKey => text().withLength(min: 1, max: 40).nullable()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 
@@ -314,7 +315,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -338,6 +339,7 @@ class AppDatabase extends _$AppDatabase {
             from3To4: _migrateV3ToV4,
             from4To5: _migrateV4ToV5,
             from5To6: _migrateV5ToV6,
+            from6To7: _migrateV6ToV7,
           );
           await runSteps(migrator, from, to);
 
@@ -498,6 +500,10 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _migrateV5ToV6(Migrator migrator, Schema6 schema) async {
     await migrator.createTable(schema.budgets);
     await migrator.createTable(schema.budgetCategories);
+  }
+
+  Future<void> _migrateV6ToV7(Migrator migrator, Schema7 schema) async {
+    await migrator.addColumn(schema.budgets, schema.budgets.iconKey);
   }
 
   Future<void> _seedDefaultCategories() async {

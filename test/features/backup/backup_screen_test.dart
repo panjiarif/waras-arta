@@ -445,7 +445,7 @@ class _FakeBackupFileGateway implements BackupFileGateway {
 
 BackupDocument _backupDocument({
   int backupVersion = currentBackupVersion,
-  int databaseSchemaVersion = 6,
+  int databaseSchemaVersion = 7,
 }) {
   final createdAt = DateTime.utc(2026, 9, 6, 7, 30);
   return BackupDocument(

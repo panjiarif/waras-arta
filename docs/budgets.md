@@ -25,6 +25,17 @@ Tujuan versi pertama:
 - menyalin anggaran bulanan sebelumnya secara manual sebagai snapshot independen;
 - memasukkan seluruh data anggaran ke backup terenkripsi berikutnya.
 
+## Ikon anggaran dan pemilih subkategori — 22 Oktober 2026
+
+- Form tambah/edit menyediakan **Ikon anggaran** dari katalog ikon kategori, termasuk untuk anggaran multi-subkategori. Pilihan ikon tidak memengaruhi perhitungan atau kategori yang ditautkan.
+- `Budget.iconKey` nullable: null berarti **Otomatis**. Satu subkategori mengikuti ikonnya; multi-subkategori memakai ikon generik. Pilihan manual tetap sama meskipun kategori diubah, dan dapat direset ke otomatis.
+- Ikon yang sama tampil pada daftar serta detail, ikut disalin saat salin bulanan, dan ikut backup–restore.
+- Pemilih kategori adalah daftar datar berkelompok dengan pencarian induk/anak, ikon, centang grup tiga keadaan, jumlah pilihan, tombol **Gunakan pilihan**, dan **Batal**. Saat pencarian aktif, centang grup hanya memengaruhi anak yang terlihat; pilihan lain dipertahankan. Membatalkan tidak mengubah form.
+- Anak arsip/konflik yang belum dipilih dinonaktifkan dengan penjelasan per baris. Pilihan lama yang terblokir boleh dilepas, tetapi tidak dipilih ulang. Centang grup hanya menambahkan anak yang aktif dan tidak berkonflik.
+- Schema aktif **v7** menambah `budgets.icon_key` nullable melalui migrasi v6→v7 tanpa menulis ulang data lama; anggaran lama tetap memakai ikon otomatis. Snapshot dan verifier seluruh jalur migrasi dipertahankan.
+- Payload aktif **v5/schema 7** mewajibkan `iconKey` nullable pada setiap anggaran. Key asing ditolak. Parser v1–v4 tetap strict: v1–v3 tanpa anggaran; v4 mempertahankan anggaran dengan ikon otomatis. Payload v5 tidak dapat dipulihkan pada aplikasi lama. Container enkripsi tetap v1.
+- Bagian schema v6/payload v4 di bawah mendokumentasikan fondasi anggaran sebelum penambahan ikon ini; aturan integritas tetap berlaku. Safety backup dan export saat ini selalu v5/schema 7, termasuk saat restore legacy.
+
 ## Istilah
 
 - **Jenis periode** (`periodKind`) adalah `monthly`, `yearly`, atau `custom`.
@@ -73,7 +84,7 @@ Jenis periode mengatur input dan label di UI. Perhitungan progres serta konflik 
 9. Rentang tanggal boleh beririsan jika ID subkategorinya berbeda. Dua anak dari induk yang sama tetap merupakan kategori berbeda.
 10. Konflik ditolak secara atomik saat create, edit, dan restore, bukan sekadar diberi peringatan. Ini mencegah satu pengeluaran terhitung ganda.
 11. Ringkasan tahunan dari kumpulan anggaran bulanan merupakan fitur laporan mendatang, bukan anggaran tahunan yang menumpuk kategori sama pada v1.
-12. Aksi **Pilih semua** pada kelompok hanya memilih anak yang aktif dan tidak berkonflik saat itu. UI menyebut jumlah yang dilewati serta alasan singkat; subkategori yang dibuat kemudian tidak otomatis masuk ke anggaran lama.
+12. Centang kelompok hanya menambahkan anak yang aktif dan tidak berkonflik pada hasil pencarian saat itu; alasan blokir tampil per anak. Subkategori baru tidak otomatis masuk ke anggaran lama.
 13. Jika subkategori atau induknya diarsipkan setelah dipilih, relasinya dipertahankan dan transaksi historisnya tetap dihitung.
 14. Saat edit, kategori arsip yang sudah terhubung tetap terlihat dengan label **Arsip**. Kategori itu boleh dipertahankan atau dilepas, tetapi tidak dapat ditambahkan kembali sampai dipulihkan.
 
@@ -164,7 +175,7 @@ Total sumber kebenaran dihitung di dalam satu kelompok: `groupLimit = Σ limitAm
 
 Pada konteks historis, `groupSpent` tahunan/kustom bersifat kumulatif hanya sampai batas periode tampilan. Contohnya, anggaran Tahunan 2026 yang dibuka dari September 2026 tidak memasukkan transaksi Oktober–Desember. Label section atau semantics harus menjelaskan konteks waktu tersebut agar tidak disalahartikan sebagai nilai akhir seluruh periode.
 
-Setiap anggaran ditampilkan sebagai baris ringkas, bukan kartu besar: ikon kategori, nama, persentase, **Terpakai <nominal> dari <batas>**, progress bar, dan sisa/kelebihan. Ikon satu kategori mengikuti kategori tersebut; multi-kategori memakai ikon generik. Tanggal serta jenis yang sudah jelas dari header section tidak diulang pada setiap baris. Seluruh baris dapat diketuk untuk membuka detail lengkap dan mempunyai target minimal 48 dp.
+Setiap anggaran ditampilkan sebagai baris ringkas, bukan kartu besar: ikon kategori, nama, persentase, **Terpakai <nominal> dari <batas>**, progress bar, dan sisa/kelebihan. Ikon manual memakai pilihan pengguna; dalam mode otomatis satu subkategori mengikuti ikonnya dan multi-subkategori memakai ikon generik. Tanggal serta jenis yang sudah jelas dari header section tidak diulang pada setiap baris. Seluruh baris dapat diketuk untuk membuka detail lengkap dan mempunyai target minimal 48 dp.
 
 Nama di dalam satu kelompok diurutkan berdasarkan `normalizedName`, lalu ID. Kelompok kustom diurutkan menurut tanggal mulai, tanggal selesai, lalu ID terkecil. Urutan harus deterministik, nominal/status tidak hanya dibedakan melalui warna, dan semantic label menyebut nama, jenis/rentang, terpakai, batas, persentase, serta keadaan sisa/terlampaui.
 
@@ -184,10 +195,11 @@ Form tambah memuat:
 - pemilih rentang wajib untuk kustom, tanpa default satu hari secara diam-diam;
 - teks bantuan bahwa batas berlaku untuk seluruh periode dan tidak dibagi otomatis per bulan;
 - pemilih multi-subkategori yang dikelompokkan berdasarkan induk;
-- **Pilih semua** hanya memilih anak yang aktif dan tidak berkonflik serta menjelaskan jumlah yang dilewati;
-- **Hapus semua** melepas seluruh pilihan dalam kelompok, termasuk pilihan yang kemudian menjadi arsip atau konflik.
+- centang grup hanya menambahkan anak aktif/tidak berkonflik pada hasil pencarian;
+- centang grup penuh melepas pilihan pada hasil pencarian, termasuk pilihan lama yang kini terblokir;
+- pemilih ikon anggaran dengan pilihan **Otomatis** atau ikon manual.
 
-Pada form edit, jenis dan rentang periode read-only. Pemilih kategori membuka bottom sheet dengan jumlah pilihan, aksi per kelompok, dan tombol **Selesai (N)**. Kategori konflik yang belum dipilih dinonaktifkan dan menjelaskan seluruh nama anggaran serta rentang penyebabnya. Kategori konflik yang sudah terpilih tetap mempunyai aksi uncheck/**Hapus**, tetapi tidak dapat ditambahkan kembali selama konflik ada. Kategori arsip yang sudah terhubung tetap terlihat dan juga dapat dilepas.
+Pada form edit, jenis dan rentang periode read-only. Pemilih kategori membuka bottom sheet berisi pencarian, jumlah pilihan, centang grup, dan tombol **Gunakan pilihan**. Kategori konflik yang belum dipilih dinonaktifkan dan menjelaskan seluruh nama anggaran serta rentang penyebabnya. Kategori konflik yang sudah terpilih tetap mempunyai aksi uncheck/**Hapus**, tetapi tidak dapat ditambahkan kembali selama konflik ada. Kategori arsip yang sudah terhubung tetap terlihat dan juga dapat dilepas.
 
 Jika periode pada form tambah diubah setelah kategori dipilih, konflik dihitung ulang segera. Pilihan yang kini konflik tidak dihapus diam-diam: tetap terlihat sebagai error yang memblokir simpan sampai pengguna melepasnya atau mengembalikan periode.
 
@@ -246,7 +258,7 @@ Invariant minimal satu mapping tidak dapat dinyatakan sebagai constraint row lan
 
 Anggaran dibangun setelah fondasi alokasi kategori pada [spesifikasi alokasi transaksi](transaction-allocations.md). `databaseProvider` sudah ditempatkan pada composition root netral di `lib/app/providers.dart`. Ledger, kategori, kalender, backup, dan anggaran mengonsumsi provider bersama tanpa dependensi silang antarfitur.
 
-## Schema Drift v6
+## Schema Drift v6 (fondasi sebelum ikon anggaran)
 
 Schema anggaran adalah versi 6 dan menambahkan dua tabel di atas schema v5. Schema dasar tersebut sudah menormalkan kategori transaksi ke `ledger_allocations` serta menyimpan `balanceGroup` rekening.
 
@@ -329,7 +341,7 @@ Stream snapshot wajib mengamati `budgets`, `budget_categories`, `categories`, `l
 
 Target performa menggunakan data representatif sampai batas ledger yang didukung backup pada HP Snapdragon 460/RAM 4 GB. Nominal uang dan agregasi tetap integer; `double` hanya boleh dipakai untuk rasio tampilan setelah klasifikasi integer selesai.
 
-## Backup payload v4
+## Backup payload v4 (fondasi sebelum ikon anggaran)
 
 Schema anggaran dan evolusi backup telah diterapkan bersama agar aplikasi tidak menghasilkan backup parsial.
 
@@ -463,7 +475,7 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 - total tiap kombinasi jenis/rentang tetap terpisah; bulanan dan kustom bertanggal identik tidak digabung;
 - progres tahunan/kustom historis berhenti pada akhir bulan yang dilihat; Tahunan tahun berjalan berhenti pada hari ini;
 - baris ringkas menampilkan ikon, nama, nominal, persentase, progress, dan sisa/kelebihan lalu membuka detail saat diketuk;
-- satu kategori memakai ikon kategori dan multi-kategori memakai ikon generik;
+- mode otomatis mengikuti satu ikon subkategori atau ikon generik multi-subkategori; ikon manual yang sama tampil pada daftar/detail dan dapat direset;
 - nama/group order serta tie-breaker ID deterministik;
 - empty/loading/error/retry dan reset filter jenis;
 - CTA salin hanya muncul pada Semua/Bulanan ketika target bulanan kosong dan sumber ada;
@@ -496,12 +508,12 @@ Kesalahan apa pun me-rollback transaksi dan mempertahankan data aktif sebelum re
 ## Lokasi implementasi dan pengujian
 
 - Domain dan kontrak repository: `lib/domain/budget.dart` serta `lib/domain/budget_repository.dart`.
-- Schema, migrasi, constraint, trigger, dan integritas: `lib/data/database/app_database.dart`, `lib/data/database/app_database.steps.dart`, serta snapshot `drift_schemas/app_database/drift_schema_v6.json`.
+- Schema, migrasi, constraint, trigger, dan integritas: `lib/data/database/app_database.dart`, `lib/data/database/app_database.steps.dart`, serta snapshot `drift_schemas/app_database/drift_schema_v7.json`.
 - Repository Drift: `lib/data/repositories/drift_budget_repository.dart`.
 - State dan antarmuka CRUD/progres: `lib/features/budgets/`, dengan dependency wiring di `lib/app/providers.dart` serta rute di `lib/app/router.dart`.
-- Backup v4 dan restore legacy: `lib/domain/backup.dart` serta `lib/data/backup/`.
+- Backup v5 dan restore legacy: `lib/domain/backup.dart` serta `lib/data/backup/`.
 - Pengujian utama: `test/domain/budget_test.dart`, `test/data/drift_budget_repository_test.dart`, `test/drift/app_database/migration_test.dart`, `test/data/drift_backup_data_store_test.dart`, `test/data/encrypted_backup_codec_test.dart`, `test/features/budgets/`, dan `test/app_test.dart`.
 
 ## Kriteria selesai
 
-Kriteria implementasi dan integritas data Anggaran v1 mencakup CRUD bulanan/tahunan/kustom, navigator periode dengan total terpisah, progres historis yang berhenti pada konteks tampilan, salin bulanan manual yang atomik dan independen, penolakan overlap lintas jenis, histori kategori arsip, serta restore backup v1–v4 sesuai kontrak. Perubahan navigator/copy tidak mengubah schema v6 atau payload v4. Smoke test dasar Anggaran dan backup–restore v4 pada HP referensi telah berhasil sebelum redesign; alur navigator, tampilan ringkas, konfirmasi copy, aksesibilitas, dan performanya tetap harus diverifikasi kembali pada perangkat.
+Kriteria implementasi dan integritas data Anggaran v1 mencakup CRUD bulanan/tahunan/kustom, navigator periode dengan total terpisah, progres historis yang berhenti pada konteks tampilan, salin bulanan manual yang atomik dan independen, penolakan overlap lintas jenis, histori kategori arsip, serta restore backup v1–v5 sesuai kontrak. Perubahan navigator/copy tidak mengubah schema v6 atau payload v4. Smoke test dasar Anggaran dan backup–restore v4 pada HP referensi telah berhasil sebelum redesign; alur navigator, tampilan ringkas, konfirmasi copy, aksesibilitas, dan performanya tetap harus diverifikasi kembali pada perangkat.

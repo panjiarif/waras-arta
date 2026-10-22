@@ -38,7 +38,7 @@ Restore versi awal memakai strategi **replace-all**, bukan merge. Seluruh rekeni
 
 ## Isi dan versi format
 
-File `.warasarta` adalah container terenkripsi, bukan file SQLite dan bukan JSON polos. Setelah autentikasi serta dekripsi berhasil, payload logis versi 4 saat ini memuat:
+File `.warasarta` adalah container terenkripsi, bukan file SQLite dan bukan JSON polos. Setelah autentikasi serta dekripsi berhasil, payload logis versi 5 saat ini memuat:
 
 - identitas format dan `backupVersion`;
 - versi schema database sumber;
@@ -47,16 +47,16 @@ File `.warasarta` adalah container terenkripsi, bukan file SQLite dan bukan JSON
 - kelompok kategori dan subkategori, termasuk ikon, urutan, status arsip, serta identitas kategori bawaan;
 - seluruh ledger pemasukan, pengeluaran, transfer, dan penyesuaian saldo;
 - seluruh alokasi nominal–subkategori pada ledger pemasukan dan pengeluaran;
-- seluruh anggaran bulanan, tahunan, atau kustom beserta batas, rentang, pilihan subkategori, dan timestamp-nya;
+- seluruh anggaran bulanan, tahunan, atau kustom beserta batas, rentang, pilihan subkategori, ikon anggaran, dan timestamp-nya;
 - ID asli dan high-water mark ID SQLite untuk rekening, kategori, ledger, serta anggaran agar identitas berikutnya tetap konsisten setelah restore.
 
 Saldo, ringkasan, dan penanda kalender tidak disimpan sebagai salinan turunan. Nilai tersebut dihitung kembali dari ledger setelah restore.
 
-Ikon kategori disimpan sebagai `iconKey` stabil, bukan kode font. Penambahan pilihan ikon tidak mengubah schema database atau bentuk payload: backup lama tetap dapat dipulihkan pada aplikasi terbaru. Sebaliknya, aplikasi v0.1.0 belum mengenali ikon baru seperti `bolt`, `water_drop`, atau `paid` dan akan menolak backup yang memuatnya. Saat pindah perangkat, gunakan aplikasi dengan katalog ikon yang sama atau lebih baru untuk restore.
+Ikon kategori disimpan sebagai `iconKey` stabil, bukan kode font. Penambahan katalog ikon kategori saja tidak mengubah bentuk payload: backup lama tetap dapat dipulihkan pada aplikasi terbaru. Sebaliknya, aplikasi v0.1.0 belum mengenali ikon baru seperti `bolt`, `water_drop`, atau `paid` dan akan menolak backup yang memuatnya. Saat pindah perangkat, gunakan aplikasi dengan katalog ikon yang sama atau lebih baru untuk restore.
 
 `backupVersion` dan versi container enkripsi dipisahkan dari `databaseSchemaVersion`. Pemisahan ini memungkinkan format data, skema lokal, dan parameter keamanan berevolusi dengan jalur migrasi masing-masing. Versi aplikasi saat ini hanya menerima versi yang dikenal dan menolak versi yang lebih baru daripada yang didukung.
 
-Payload versi 1 adalah format lama dari schema 3 dan belum berisi allocation terpisah. Payload v2/schema 4 menambahkan seluruh allocation, tetapi belum menyimpan kelompok saldo rekening. Payload v3/schema 5 mempertahankan allocation dan menambahkan `balanceGroup` pada setiap rekening. Versi aplikasi saat ini membuat payload v4/schema 6 yang juga membawa seluruh anggaran. Saat membaca payload v1 atau v2, decoder memetakan seluruh rekening ke `primary`; v3 mempertahankan kelompok rekening yang tersimpan. Payload legacy v1–v3 tidak mempunyai anggaran sehingga dinormalisasi menjadi `budgets = []` dengan sequence anggaran 0. Tujuan keuangan, gambar unggahan, dan utang/piutang belum tersedia sehingga belum masuk backup aktif. [Spesifikasi Tujuan Keuangan v1](financial-goals.md) merencanakan payload v5/schema v7; rencana tersebut belum mengubah format aktif.
+Payload versi 1 adalah format lama dari schema 3 dan belum berisi allocation terpisah. Payload v2/schema 4 menambahkan seluruh allocation, tetapi belum menyimpan kelompok saldo rekening. Payload v3/schema 5 mempertahankan allocation dan menambahkan `balanceGroup` pada setiap rekening. Payload v4/schema 6 menambahkan seluruh anggaran. Versi saat ini membuat payload v5/schema 7 yang juga menyimpan `budget.iconKey` nullable; `null` berarti otomatis. Backup v4 tetap dipulihkan dengan ikon otomatis tanpa kehilangan anggaran. Saat membaca payload v1 atau v2, decoder memetakan seluruh rekening ke `primary`; v3 mempertahankan kelompok rekening yang tersimpan. Payload legacy v1–v3 tidak mempunyai anggaran sehingga dinormalisasi menjadi `budgets = []` dengan sequence anggaran 0. Tujuan keuangan, gambar unggahan, dan utang/piutang belum tersedia sehingga belum masuk backup aktif. [Spesifikasi Tujuan Keuangan v1](financial-goals.md) merencanakan payload v6/schema v8; rencana tersebut belum mengubah format aktif.
 
 Dukungan format saat ini dan evolusi berikutnya:
 
@@ -65,9 +65,10 @@ Dukungan format saat ini dan evolusi berikutnya:
 | v1 | 3 | Satu `categoryId` langsung pada ledger; tanpa `balanceGroup` | Tidak ada | Legacy, tetap dapat direstore |
 | v2 | 4 | `allocations[]` pada ledger; tanpa `balanceGroup` | Tidak ada | Legacy, tetap dapat direstore |
 | v3 | 5 | `allocations[]`; setiap rekening membawa `balanceGroup` | Tidak ada | Legacy, tetap dapat direstore |
-| v4 | 6 | `allocations[]` dan `balanceGroup` | Seluruh `data.budgets` | Aktif |
+| v4 | 6 | `allocations[]` dan `balanceGroup` | Seluruh `data.budgets`, ikon otomatis | Legacy, tetap dapat direstore |
+| v5 | 7 | `allocations[]` dan `balanceGroup` | Seluruh anggaran dengan `iconKey` nullable | Aktif |
 
-Exporter schema 6 saat ini selalu menulis payload v4. Decoder schema 6 menerima v1, v2, v3, maupun v4: v1 dinormalisasi dari `categoryId + amount` menjadi satu allocation, transfer dan penyesuaian menjadi daftar allocation kosong, rekening v1/v2 mendapat `balanceGroup = primary`, dan v3 mempertahankan kelompok eksplisitnya. Restore v1/v2/v3 menginisialisasi anggaran kosong. Parser dan encoder terpisah per versi, field semantik asing ditolak, dan aplikasi lama menolak versi lebih baru daripada yang dipahami. Container enkripsi tetap v1 karena evolusi ini mengubah isi logis, bukan primitive kriptografi.
+Exporter schema 7 selalu menulis payload v5. Decoder schema 7 menerima v1–v5: v1 dinormalisasi dari `categoryId + amount` menjadi satu allocation, transfer dan penyesuaian menjadi daftar allocation kosong, rekening v1/v2 mendapat `balanceGroup = primary`, dan v3 mempertahankan kelompok eksplisitnya. Restore v1/v2/v3 menginisialisasi anggaran kosong; v4 mempertahankan anggaran dengan ikon otomatis, sedangkan v5 mempertahankan pilihan ikonnya. Parser dan encoder terpisah per versi, field semantik asing ditolak, dan aplikasi lama menolak versi lebih baru daripada yang dipahami. Container enkripsi tetap v1 karena evolusi ini mengubah isi logis, bukan primitive kriptografi.
 
 Kompatibilitas ini adalah persyaratan untuk setiap rilis format baru: file v1 harus tetap dapat dibaca oleh versi aplikasi yang lebih baru dengan bagian fitur baru diinisialisasi kosong/default, sedangkan aplikasi lama harus menolak versi baru dan tidak boleh diam-diam mengabaikan datanya. Parser v1 karena itu menolak field semantik yang tidak dikenal; penambahan data baru wajib disertai kenaikan `backupVersion`.
 
@@ -89,7 +90,7 @@ Saat menyimpan, adapter menulis dan menutup stream, membuka kembali URI yang sam
 
 Versi saat ini mengekspor rekening beserta kelompok saldonya, kategori, anggaran beserta mapping-nya, ledger, allocation, dan seluruh sequence terkait dalam satu transaksi baca sehingga bagian-bagian snapshot berasal dari keadaan database yang konsisten.
 
-Sebelum restore, payload diperiksa terhadap batas nominal, bentuk tanggal, keunikan ID/nama, hierarki kategori, foreign key, aturan jenis transaksi, kelompok saldo, dan saldo rekening arsip. Pada payload v2+, setiap pemasukan/pengeluaran wajib mempunyai allocation yang jumlahnya sama dengan total header; transfer/penyesuaian wajib tidak mempunyai allocation. Payload v3+ mewajibkan `balanceGroup` yang dikenal pada setiap rekening, sedangkan hasil normalisasi v1/v2 memakai `primary`. Payload v4 juga memvalidasi periode Gregorian/canonical, kategori leaf pengeluaran, mapping, batas, timestamp, dan overlap anggaran. Penggantian data kemudian dijalankan dalam satu transaksi Drift/SQLite dengan urutan relasi yang aman. ID asli dan sequence dipulihkan, hasilnya diperiksa kembali, dan commit hanya dilakukan jika seluruh langkah berhasil. Jika insert atau pemeriksaan akhir gagal, transaksi di-rollback sehingga data lama tetap ada.
+Sebelum restore, payload diperiksa terhadap batas nominal, bentuk tanggal, keunikan ID/nama, hierarki kategori, foreign key, aturan jenis transaksi, kelompok saldo, dan saldo rekening arsip. Pada payload v2+, setiap pemasukan/pengeluaran wajib mempunyai allocation yang jumlahnya sama dengan total header; transfer/penyesuaian wajib tidak mempunyai allocation. Payload v3+ mewajibkan `balanceGroup` yang dikenal pada setiap rekening, sedangkan hasil normalisasi v1/v2 memakai `primary`. Payload v4+ juga memvalidasi periode Gregorian/canonical, kategori leaf pengeluaran, mapping, batas, timestamp, dan overlap anggaran. Payload v5 mewajibkan field `iconKey` pada anggaran, bernilai null atau key katalog yang dikenal. Penggantian data kemudian dijalankan dalam satu transaksi Drift/SQLite dengan urutan relasi yang aman. ID asli dan sequence dipulihkan, hasilnya diperiksa kembali, dan commit hanya dilakukan jika seluruh langkah berhasil. Jika insert atau pemeriksaan akhir gagal, transaksi di-rollback sehingga data lama tetap ada.
 
 Kontrak rinci evolusi tersebut berada pada [spesifikasi alokasi kategori transaksi](transaction-allocations.md), [spesifikasi Anggaran v1](budgets.md), dan rancangan [Tujuan Keuangan v1](financial-goals.md).
 
@@ -124,7 +125,7 @@ Gunakan data percobaan dan salinan file, bukan satu-satunya catatan keuangan.
 - [ ] Uji kegagalan penulisan atau baca ulang hasil simpan bila memungkinkan; operasi harus dianggap gagal, dan khusus safety backup restore harus batal dengan data aktif tetap utuh.
 - [ ] Bandingkan kelompok rekening aktif, kelompok tersimpan milik rekening arsip, kategori, transaksi, anggaran beserta progres/kategorinya, saldo utama, subtotal simpanan, total seluruh rekening, ringkasan bulanan, dan kalender dengan keadaan sumber.
 - [ ] Restore fixture payload v1 dan v2, lalu pastikan seluruh rekening lama masuk ke Saldo utama; restore payload v3 harus mempertahankan kedua nilai `balanceGroup`. Ketiganya harus menampilkan peringatan bahwa anggaran akan kosong setelah replace-all.
-- [ ] Restore payload v4 dan pastikan anggaran bulanan/tahunan/kustom, kategori, nominal, periode, timestamp, dan sequence tetap utuh.
+- [ ] Restore payload v4 (ikon otomatis) dan v5 (ikon pilihan), lalu pastikan anggaran bulanan/tahunan/kustom, kategori, nominal, periode, timestamp, dan sequence tetap utuh.
 - [ ] Tambahkan rekening, kategori, transaksi, dan anggaran setelah restore untuk memastikan ID baru tidak bertabrakan.
 - [ ] Uji pada perangkat atau instalasi terpisah: ambil file dari Downloads/Drive, restore, tutup aplikasi sepenuhnya, lalu buka kembali dan periksa data.
 - [ ] Pastikan container di atas 16 MiB, plaintext di atas 10 MiB, dan parameter KDF v1 yang tidak sama persis dengan profil produksi ditolak tanpa mengubah database.

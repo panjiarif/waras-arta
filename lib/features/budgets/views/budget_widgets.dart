@@ -110,6 +110,17 @@ class BudgetProgressCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           );
+          final titleWithIcon = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                categoryIconFor(progress.effectiveIconKey),
+                key: const Key('budget-detail-icon'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: title),
+            ],
+          );
           final badge = _BudgetKindBadge(kind: budget.period.kind);
           final spent = Text(
             'Terpakai ${formatRupiah(progress.spentAmount)} dari '
@@ -131,14 +142,14 @@ class BudgetProgressCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (stacked) ...[
-                title,
+                titleWithIcon,
                 const SizedBox(height: 8),
                 Align(alignment: Alignment.centerLeft, child: badge),
               ] else
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: title),
+                    Expanded(child: titleWithIcon),
                     const SizedBox(width: 12),
                     badge,
                   ],
@@ -412,9 +423,7 @@ class BudgetCompactRow extends StatelessWidget {
       BudgetUsageStatus.nearLimit => const Color(0xFF9D5A00),
       BudgetUsageStatus.normal => forest,
     };
-    final icon = progress.categories.length == 1
-        ? categoryIconFor(progress.categories.single.iconKey)
-        : Icons.category_outlined;
+    final icon = categoryIconFor(progress.effectiveIconKey);
     final iconLabel = progress.categories.length == 1
         ? progress.categories.single.displayName
         : '${progress.categories.length} kategori';
@@ -454,6 +463,7 @@ class BudgetCompactRow extends StatelessWidget {
                   ),
                   child: Icon(
                     icon,
+                    key: ValueKey('budget-icon-${budget.id}'),
                     color: Theme.of(context).colorScheme.onSecondaryContainer,
                   ),
                 ),

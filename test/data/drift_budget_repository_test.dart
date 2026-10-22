@@ -62,6 +62,103 @@ void main() {
   };
 
   test(
+    'persists, edits, copies and clears a custom multi-category icon',
+    () async {
+      final id = await budgets.createBudget(
+        BudgetDraft(
+          period: BudgetPeriod.monthly(2024, 1),
+          name: 'Kebutuhan rumah',
+          limitAmount: 500000,
+          categoryIds: [10, 12],
+          iconKey: 'home',
+        ),
+      );
+      var details = (await budgets.getBudget(id))!;
+      expect(details.budget.iconKey, 'home');
+      expect(details.effectiveIconKey, 'home');
+      await budgets.updateBudget(
+        id,
+        BudgetUpdateDraft(
+          name: 'Kebutuhan rumah',
+          limitAmount: 600000,
+          categoryIds: [10, 12],
+          iconKey: 'bolt',
+        ),
+      );
+      expect((await budgets.getBudget(id))!.effectiveIconKey, 'bolt');
+      await budgets.copyMonthlyBudgets(
+        source: BudgetPeriod.monthly(2024, 1),
+        target: BudgetPeriod.monthly(2024, 2),
+      );
+      final copied = await budgets.loadBudgets(
+        filter(BudgetTemporalStatus.active, referenceDay: 20240215),
+      );
+      expect(copied.items.single.budget.iconKey, 'bolt');
+
+      await budgets.updateBudget(
+        id,
+        BudgetUpdateDraft(
+          name: 'Kebutuhan rumah',
+          limitAmount: 600000,
+          categoryIds: [10, 12],
+        ),
+      );
+      details = (await budgets.getBudget(id))!;
+      expect(details.budget.iconKey, isNull);
+      expect(details.effectiveIconKey, 'category');
+      await budgets.updateBudget(
+        id,
+        BudgetUpdateDraft(
+          name: 'Kebutuhan rumah',
+          limitAmount: 600000,
+          categoryIds: [10],
+        ),
+      );
+      expect((await budgets.getBudget(id))!.effectiveIconKey, 'restaurant');
+    },
+  );
+
+  test('rejects unknown icon keys without modifying stored budgets', () async {
+    await expectLater(
+      budgets.createBudget(
+        BudgetDraft(
+          period: BudgetPeriod.monthly(2024, 1),
+          name: 'Invalid',
+          limitAmount: 500000,
+          categoryIds: [10],
+          iconKey: 'unknown',
+        ),
+      ),
+      throwsA(validationError),
+    );
+    expect(await db.select(db.budgets).get(), isEmpty);
+    final id = await budgets.createBudget(
+      BudgetDraft(
+        period: BudgetPeriod.monthly(2024, 1),
+        name: 'Valid',
+        limitAmount: 500000,
+        categoryIds: [10],
+        iconKey: 'home',
+      ),
+    );
+    await expectLater(
+      budgets.updateBudget(
+        id,
+        BudgetUpdateDraft(
+          name: 'Diubah',
+          limitAmount: 100,
+          categoryIds: [10],
+          iconKey: 'unknown',
+        ),
+      ),
+      throwsA(validationError),
+    );
+    final stored = (await budgets.getBudget(id))!.budget;
+    expect(stored.name, 'Valid');
+    expect(stored.iconKey, 'home');
+  });
+
+  test(
     'creates every period kind and filters them in deterministic order',
     () async {
       final expenseGroups = await categoryGroups(CategoryKind.expense);

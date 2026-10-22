@@ -194,7 +194,7 @@ Ikuti spesifikasi lengkap pada [backup-restore.md](backup-restore.md). Gunakan s
 12. Buka safety backup dengan kata sandi restore yang sama untuk memastikan keadaan sebelum restore dapat dipulihkan.
 13. Uji kegagalan penulisan atau baca ulang safety backup bila memungkinkan. Restore harus berhenti dan data aktif tidak boleh berubah.
 14. Bandingkan kelompok rekening aktif/arsip, kategori, riwayat, anggaran beserta progres/kategorinya, Saldo utama, subtotal simpanan, total seluruh rekening, ringkasan bulanan, dan kalender dengan data sumber.
-15. Restore fixture payload v1 dan v2 lalu pastikan semua rekening lama masuk ke Saldo utama; restore payload v3 harus mempertahankan kedua kelompok. Ketiga format legacy harus memperingatkan bahwa anggaran akan kosong. Restore payload v4 harus mempertahankan anggaran, lalu penambahan rekening, kategori, transaksi, dan anggaran baru tidak boleh menabrak ID.
+15. Restore fixture payload v1 dan v2 lalu pastikan semua rekening lama masuk ke Saldo utama; restore payload v3 harus mempertahankan kedua kelompok. Ketiga format legacy harus memperingatkan bahwa anggaran akan kosong. Restore payload v4 harus mempertahankan anggaran dengan ikon otomatis; v5 mempertahankan ikon pilihan, lalu penambahan rekening, kategori, transaksi, dan anggaran baru tidak boleh menabrak ID.
 16. Ulangi dari instalasi atau perangkat terpisah dengan mengambil file dari Downloads/Drive. Tutup aplikasi sepenuhnya setelah restore, buka lagi, dan pastikan data tetap sama.
 17. Pastikan dokumen restore lebih dari 16 MiB ditolak selama pembacaan berbatas, plaintext lebih dari 10 MiB ditolak, dan parameter KDF container v1 yang tidak sama persis dengan profil produksi ditolak tanpa mengubah database.
 18. Pada HP referensi, periksa waktu derivasi kata sandi, penggunaan memori, layar sempit, ukuran teks besar, keyboard, pembatalan pemilih dokumen, dan ketukan tombol berulang.
@@ -281,7 +281,7 @@ Jangan commit data keuangan pribadi, database SQLite beserta berkas journal/WAL/
 
 1. Jalankan checklist transaksi, kelola rekening, kalender, serta backup/restore pada HP referensi dan perbaiki setiap ketidaksesuaian.
 2. Uji file Downloads dan penyedia dokumen cloud pada perangkat/instalasi terpisah menggunakan data percobaan; ukur juga Argon2id pada HP referensi.
-3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini memakai schema v6 dan payload backup v4 dengan `balanceGroup`, allocation, serta anggaran.
+3. Pertahankan ekspor schema dan uji migrasi setiap kali versi database berubah; fitur saat ini memakai schema v7 dan payload backup v5 dengan `balanceGroup`, allocation, anggaran, serta ikon anggaran nullable.
 4. Jalankan checklist perangkat untuk [Alokasi Kategori Transaksi](transaction-allocations.md): satu rincian, split, edit, perubahan jenis, kategori arsip, backup v4, serta restore file legacy v1/v2/v3 dan file aktif v4. Fixture v1/v2 harus menghasilkan rekening Saldo utama; seluruh fixture legacy harus menghasilkan anggaran kosong.
 5. Jalankan checklist perangkat untuk [Anggaran v1](budgets.md), termasuk CRUD bulanan/tahunan/kustom, navigator periode, section/baris ringkas, cutoff progres historis, salin bulanan manual atomik, multi-subkategori, overlap, kategori arsip, dan round-trip backup v4. Setelah alur ini stabil, lanjutkan fitur produk berikutnya tanpa mengubah kontrak data Anggaran secara diam-diam.
 

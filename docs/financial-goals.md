@@ -2,7 +2,7 @@
 
 ## Status dan tujuan
 
-Dokumen ini adalah kontrak rancangan **Tujuan Keuangan v1** untuk versi produk 0.2. Implementasi belum dimulai. Schema database aktif tetap v6 dan payload backup aktif tetap v4 sampai seluruh domain, persistence, UI, migrasi, backup, serta pengujiannya selesai sebagai satu perubahan yang konsisten. Implementasi fitur ini direncanakan menaikkan schema menjadi v7 dan payload backup menjadi v5; versi container enkripsi tetap v1.
+Dokumen ini adalah kontrak rancangan **Tujuan Keuangan v1** untuk versi produk 0.2. Implementasi belum dimulai. Schema aktif v7/payload v5 saat ini mencakup ikon anggaran. Tujuan Keuangan direncanakan menaikkan schema menjadi v8 dan payload menjadi v6 setelah domain, persistence, UI, migrasi, backup, serta pengujiannya selesai sebagai satu perubahan konsisten; container enkripsi tetap v1.
 
 Tujuan keuangan digunakan untuk dana darurat, tabungan perangkat, liburan, atau kebutuhan lain yang mempunyai sasaran nominal. Tujuan adalah **maksud penggunaan uang**, bukan tempat uang disimpan. Uang nyata tetap hanya berada pada rekening, sedangkan tujuan menandai sebagian saldo rekening tersebut secara virtual.
 
@@ -279,9 +279,9 @@ Kontrak repository minimal:
 
 ViewModel mengelola filter, input, status simpan, retry, serta invalidasi setelah restore. Repository mengulang seluruh validasi identitas, kapasitas, relasi, dan atomicity; UI tidak menjadi batas keamanan data.
 
-## Rencana schema Drift v7
+## Rencana schema Drift v8
 
-Schema v7 menambah dua tabel tanpa menulis ulang rekening, kategori, ledger, allocation transaksi, atau anggaran.
+Schema v8 menambah dua tabel tanpa menulis ulang rekening, kategori, ledger, allocation transaksi, atau anggaran.
 
 ### `financial_goals`
 
@@ -310,7 +310,7 @@ Tidak ada ID atau sequence terpisah untuk mapping. Row nol dihapus. Indeks tamba
 
 Setiap create/update/delete mapping dan pemindahan alokasi juga memperbarui `financial_goals.updated_at` dalam transaksi yang sama. Pada move, row asal, row tujuan, dan goal memakai timestamp monoton yang sama; setiap allocation yang tersimpan wajib mempunyai `updatedAt <= goal.updatedAt`. Ini menyediakan urutan aktivitas terakhir tanpa mengklaim sebagai timeline perubahan nominal.
 
-Trigger/guard schema v7:
+Trigger/guard schema v8:
 
 - menolak insert/update alokasi ke rekening arsip;
 - menolak perubahan rekening menjadi arsip ketika masih mempunyai alokasi;
@@ -322,7 +322,7 @@ Validasi kapasitas `freeAmount` dijalankan repository di dalam transaksi tulis. 
 
 `AppDatabase` menyediakan verifier integritas tujuan untuk dipanggil adapter backup setelah restore. Verifier memeriksa foreign key, pasangan unik, nominal/agregat, nama canonical, timestamp, rekening arsip, dan high-water mark; pemeriksaan ini bukan tanggung jawab ViewModel atau kontrak repository UI.
 
-Migrasi dan schema verifier wajib menguji fresh-create v7 serta jalur v1→v7 sampai v6→v7. Snapshot `drift_schema_v7.json`, generated schema test, indeks, trigger, foreign key, identity, dan seluruh data lama harus diverifikasi.
+Migrasi dan schema verifier wajib menguji fresh-create v8 serta jalur v1→v8 sampai v7→v8. Snapshot `drift_schema_v8.json`, generated schema test, indeks, trigger, foreign key, identity, dan seluruh data lama harus diverifikasi.
 
 ## Query dan performa
 
@@ -336,29 +336,30 @@ Target tetap HP Snapdragon 460/RAM 4 GB. Batas awal backup dan validasi:
 - batas plaintext 10 MiB tetap membatasi materialisasi awal oleh `jsonDecode`; setelah decode, panjang array dan jumlah mapping kumulatif diperiksa sebelum DTO/domain tambahan dibangun;
 - validasi relasi/agregat ditargetkan `O(N log N)` atau lebih baik, bukan pairwise `O(N²)`.
 
-## Rencana backup payload v5
+## Rencana backup payload v6
 
-Schema v7 dan payload v5 wajib masuk dalam perubahan yang sama. Container `.warasarta` tetap versi 1 dengan Argon2id serta XChaCha20-Poly1305 yang sudah aktif.
+Schema v8 dan payload v6 wajib masuk dalam perubahan yang sama. Container `.warasarta` tetap versi 1 dengan Argon2id serta XChaCha20-Poly1305 yang sudah aktif.
 
-Payload v5 menambahkan `data.financialGoals`. Setiap record membawa `id`, `name`, `normalizedName`, `targetAmount`, `deadlineDay`, `iconKey`, `note`, `createdAtUtc`, `updatedAtUtc`, dan `allocations[]`. Setiap allocation membawa `accountId`, `amount`, serta `updatedAtUtc`, diurutkan menurut `accountId`.
+Payload v6 menambahkan `data.financialGoals`. Setiap record membawa `id`, `name`, `normalizedName`, `targetAmount`, `deadlineDay`, `iconKey`, `note`, `createdAtUtc`, `updatedAtUtc`, dan `allocations[]`. Setiap allocation membawa `accountId`, `amount`, serta `updatedAtUtc`, diurutkan menurut `accountId`.
 
 `sequences.financialGoals` ditambahkan pada wire. Mapping tidak mempunyai sequence. `BackupSummary.financialGoalCount` merupakan nilai preview yang diturunkan dari `data.financialGoals`, bukan key JSON redundan. Exporter selalu menghasilkan urutan deterministik menurut ID.
 
 Kompatibilitas:
 
-| Payload | Schema | Tujuan keuangan | Status setelah v5 aktif |
+| Payload | Schema | Tujuan keuangan | Status setelah v6 aktif |
 | --- | --- | --- | --- |
 | v1 | 3 | Tidak ada | Legacy, dipulihkan dengan tujuan kosong |
 | v2 | 4 | Tidak ada | Legacy, dipulihkan dengan tujuan kosong |
 | v3 | 5 | Tidak ada | Legacy, dipulihkan dengan tujuan kosong |
 | v4 | 6 | Tidak ada | Legacy, anggaran dipertahankan dan tujuan kosong |
-| v5 | 7 | Definisi serta allocation current-state | Format aktif mendatang |
+| v5 | 7 | Tidak ada | Legacy, anggaran beserta ikon dipertahankan dan tujuan kosong |
+| v6 | 8 | Definisi serta allocation current-state | Format aktif mendatang |
 
-Parser v1–v4 tetap exact-key: field `financialGoals` maupun sequence tujuan ditolak sebagai field asing dan hasil normalisasinya selalu `financialGoals = []` serta sequence `0`. Parser v5 mewajibkan kedua field baru dan hanya menerima pasangan `(payload v5, schema 7)`; schema 7 selalu mengekspor payload v5. Setiap daftar allocation wajib strictly ascending menurut `accountId` dan unik.
+Parser v1–v5 tetap exact-key: field `financialGoals` maupun sequence tujuan ditolak sebagai field asing dan hasil normalisasinya selalu `financialGoals = []` serta sequence `0`. Parser v6 mewajibkan kedua field baru dan hanya menerima pasangan `(payload v6, schema 8)`; schema 8 selalu mengekspor payload v6. Setiap daftar allocation wajib strictly ascending menurut `accountId` dan unik.
 
-Validasi v5 juga menolak ID tujuan duplikat, `normalizedName` duplikat/tidak canonical, `iconKey` di luar katalog yang dikenal, target/tanggal/catatan invalid, timestamp goal/allocation invalid atau melanggar relasi, serta sequence yang lebih rendah daripada ID maksimum maupun melewati batas headroom SQLite/aplikasi. Semua parser versi lama tetap menjalankan invariant formatnya sendiri sebelum normalisasi.
+Validasi v6 juga menolak ID tujuan duplikat, `normalizedName` duplikat/tidak canonical, `iconKey` di luar katalog yang dikenal, target/tanggal/catatan invalid, timestamp goal/allocation invalid atau melanggar relasi, serta sequence yang lebih rendah daripada ID maksimum maupun melewati batas headroom SQLite/aplikasi. Semua parser versi lama tetap menjalankan invariant formatnya sendiri sebelum normalisasi.
 
-Preview restore legacy memberi peringatan eksplisit bahwa tujuan keuangan akan kosong setelah replace-all. Safety backup aplikasi schema 7 selalu berupa payload v5 sebelum restore v1, v2, v3, v4, maupun v5. Estimator ukuran, batas record, validasi exact-key, restore atomik, count verification, high-water mark, dan invalidasi provider semuanya wajib mencakup tujuan.
+Preview restore legacy memberi peringatan eksplisit bahwa tujuan keuangan akan kosong setelah replace-all. Safety backup aplikasi schema 8 selalu berupa payload v6 sebelum restore v1, v2, v3, v4, v5, maupun v6. Estimator ukuran, batas record, validasi exact-key, restore atomik, count verification, high-water mark, dan invalidasi provider semuanya wajib mencakup tujuan.
 
 Urutan restore penuh:
 
@@ -407,12 +408,12 @@ Kegagalan apa pun me-rollback seluruh replace-all. Failpoint test wajib tersedia
 - raw SQL menolak insert/update allocation ke rekening arsip serta menolak pengarsipan rekening yang masih dialokasikan;
 - nama/kelompok rekening berubah tanpa memutus referensi;
 - query count tetap dan urutan daftar deterministik;
-- fresh schema v7 dan setiap jalur v1→v7, v2→v7, v3→v7, v4→v7, v5→v7, serta v6→v7 memverifikasi snapshot, indeks, trigger, dan foreign key; seluruh ledger/allocation, `balanceGroup`, anggaran/mapping/sequence lama dipertahankan dan goals dimulai kosong.
+- fresh schema v8 dan setiap jalur v1→v8, v2→v8, v3→v8, v4→v8, v5→v8, v6→v8, serta v7→v8 memverifikasi snapshot, indeks, trigger, dan foreign key; seluruh ledger/allocation, `balanceGroup`, anggaran/mapping/sequence lama dipertahankan dan goals dimulai kosong.
 
 ### Backup
 
-- payload v5 round-trip dengan tujuan kosong, multi-rekening, surplus, tanggal nullable, dan state under-backed;
-- v1–v4 menghasilkan tujuan kosong tanpa kehilangan data format masing-masing;
+- payload v6 round-trip dengan tujuan kosong, multi-rekening, surplus, tanggal nullable, dan state under-backed;
+- v1–v5 menghasilkan tujuan kosong tanpa kehilangan data format masing-masing;
 - strict parser menolak key asing, duplicate pair, orphan, rekening arsip, nominal invalid, aggregate overflow, timestamp/sequence invalid, serta batas record;
 - restore replace-all, safety backup, provider invalidation, dan rollback mencakup tujuan;
 - ukuran container/plaintext tetap dihormati.
@@ -445,12 +446,12 @@ Kegagalan apa pun me-rollback seluruh replace-all. Failpoint test wajib tersedia
 ## Urutan implementasi dan commit
 
 1. `docs: specify financial goals v1`
-2. `feat(goals): add persistence and backup v5`
+2. `feat(goals): add persistence and backup v6`
 3. `feat(goals): add financial goal planning UI`
 4. `docs: document implemented financial goals workflow`
 
-Schema v7, guard rekening, repository tujuan, payload v5, decoder legacy, restore, dan seluruh test fondasi berada dalam commit persistence yang sama agar tidak ada commit yang dapat menghasilkan backup parsial.
+Schema v8, guard rekening, repository tujuan, payload v6, decoder legacy, restore, dan seluruh test fondasi berada dalam commit persistence yang sama agar tidak ada commit yang dapat menghasilkan backup parsial.
 
 ## Kriteria selesai
 
-Tujuan Keuangan v1 selesai ketika pengguna dapat membuat dan mengubah target, mengalokasikan dana dari beberapa rekening tanpa double allocation, memindahkan atau melepaskan alokasi tanpa mengubah saldo/arus kas/anggaran, melihat progres/tenggat/surplus/coverage deficit secara benar, melindungi rekening yang masih direferensikan, menghapus tujuan kosong, serta melakukan backup–restore v1 sampai v5 sesuai kontrak. Migrasi lama, rollback, aksesibilitas, performa, dan alur utama pada HP referensi harus terverifikasi sebelum status dokumen diubah menjadi selesai.
+Tujuan Keuangan v1 selesai ketika pengguna dapat membuat dan mengubah target, mengalokasikan dana dari beberapa rekening tanpa double allocation, memindahkan atau melepaskan alokasi tanpa mengubah saldo/arus kas/anggaran, melihat progres/tenggat/surplus/coverage deficit secara benar, melindungi rekening yang masih direferensikan, menghapus tujuan kosong, serta melakukan backup–restore v1 sampai v6 sesuai kontrak. Migrasi lama, rollback, aksesibilitas, performa, dan alur utama pada HP referensi harus terverifikasi sebelum status dokumen diubah menjadi selesai.

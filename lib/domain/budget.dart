@@ -1,5 +1,7 @@
 import 'dart:collection';
 
+import 'finance.dart';
+
 enum BudgetPeriodKind { monthly, yearly, custom }
 
 extension BudgetPeriodKindLabel on BudgetPeriodKind {
@@ -141,6 +143,7 @@ class Budget {
     required this.limitAmount,
     required this.createdAt,
     required this.updatedAt,
+    this.iconKey,
   });
 
   final int id;
@@ -150,6 +153,9 @@ class Budget {
   final int limitAmount;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Null follows the selected subcategory, or uses a generic multi-category icon.
+  final String? iconKey;
 }
 
 class BudgetCategoryRef {
@@ -182,6 +188,10 @@ class BudgetDetails {
 
   final Budget budget;
   final List<BudgetCategoryRef> categories;
+
+  String get effectiveIconKey =>
+      budget.iconKey ??
+      (categories.length == 1 ? categories.single.iconKey : 'category');
 }
 
 class BudgetProgress extends BudgetDetails {
@@ -421,12 +431,14 @@ class BudgetDraft {
     required this.name,
     required this.limitAmount,
     required Iterable<int> categoryIds,
+    this.iconKey,
   }) : categoryIds = UnmodifiableSetView(Set.of(categoryIds));
 
   final BudgetPeriod period;
   final String name;
   final int limitAmount;
   final Set<int> categoryIds;
+  final String? iconKey;
 }
 
 class BudgetUpdateDraft {
@@ -434,11 +446,19 @@ class BudgetUpdateDraft {
     required this.name,
     required this.limitAmount,
     required Iterable<int> categoryIds,
+    this.iconKey,
   }) : categoryIds = UnmodifiableSetView(Set.of(categoryIds));
 
   final String name;
   final int limitAmount;
   final Set<int> categoryIds;
+  final String? iconKey;
+}
+
+void validateBudgetIconKey(String? key) {
+  if (key != null && !categoryIconKeys.contains(key)) {
+    throw const BudgetValidationException('Ikon anggaran tidak dikenal.');
+  }
 }
 
 String canonicalizeBudgetName(String value) {

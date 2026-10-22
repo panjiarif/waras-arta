@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:waras_arta/app/providers.dart';
 import 'package:waras_arta/domain/budget.dart';
@@ -13,6 +14,54 @@ import 'fake_budget_repository.dart';
 
 void main() {
   setUpAll(() => initializeDateFormatting('id_ID'));
+
+  testWidgets('saves a manual icon and allows resetting it to automatic', (
+    tester,
+  ) async {
+    final repository = FakeBudgetRepository();
+    addTearDown(repository.dispose);
+    await _pumpBudgetForm(tester, repository);
+    final categoryPicker = find.byKey(const Key('budget-category-picker'));
+    await tester.ensureVisible(categoryPicker);
+    await tester.tap(categoryPicker);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('budget-category-10')));
+    await tester.tap(find.byKey(const Key('budget-categories-done')));
+    await tester.pumpAndSettle();
+    final iconPicker = find.byKey(const Key('budget-icon-picker'));
+    await tester.ensureVisible(iconPicker);
+    await tester.tap(iconPicker);
+    await tester.pumpAndSettle();
+    final homeIcon = find.byKey(const ValueKey('category-icon-home'));
+    await tester.scrollUntilVisible(
+      homeIcon,
+      120,
+      scrollable: find.descendant(
+        of: find.byKey(const Key('category-icon-grid')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(homeIcon);
+    await tester.pumpAndSettle();
+    await _submitRequiredFields(tester);
+    expect(repository.createdDraft!.iconKey, 'home');
+    expect(repository.createdDraft!.categoryIds, [10]);
+
+    await tester.pumpWidget(const SizedBox());
+    await _pumpBudgetForm(
+      tester,
+      repository,
+      initial: fakeBudgetProgress(iconKey: 'home'),
+    );
+    await tester.ensureVisible(iconPicker);
+    await tester.tap(iconPicker);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('budget-icon-automatic')));
+    await tester.pumpAndSettle();
+    await _submitRequiredFields(tester);
+    expect(repository.updatedDraft!.iconKey, isNull);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('formats the limit while typing and initializes edits grouped', (
     tester,
@@ -237,6 +286,26 @@ Future<void> _pumpBudgetForm(
   DateTime? initialMonth,
   BudgetDetails? initial,
 }) async {
+  final router = GoRouter(
+    initialLocation: '/form',
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (_, _) => const Scaffold(),
+        routes: [
+          GoRoute(
+            path: 'form',
+            builder: (_, _) => BudgetFormScreen(
+              initial: initial,
+              initialKind: initialKind,
+              initialMonth: initialMonth,
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -246,13 +315,7 @@ Future<void> _pumpBudgetForm(
         ),
         currentDateProvider.overrideWithValue(DateTime(2026, 2, 10)),
       ],
-      child: MaterialApp(
-        home: BudgetFormScreen(
-          initial: initial,
-          initialKind: initialKind,
-          initialMonth: initialMonth,
-        ),
-      ),
+      child: MaterialApp.router(routerConfig: router),
     ),
   );
   await tester.pumpAndSettle();
@@ -303,6 +366,7 @@ Future<void> _submitRequiredFields(WidgetTester tester) async {
     '100.000',
   );
   await tester.ensureVisible(find.byKey(const Key('save-budget')));
+  await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('save-budget')));
   await tester.pumpAndSettle();
 }

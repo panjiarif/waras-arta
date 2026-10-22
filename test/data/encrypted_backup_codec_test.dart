@@ -20,20 +20,21 @@ void main() {
 
     test('round-trips a valid backup document', () async {
       final codec = _testCodec();
-      final original = _backupDocument();
+      final original = _backupDocument(budgetIconKey: 'home');
 
       final encrypted = await codec.encrypt(original, password: password);
       final decrypted = await codec.decrypt(encrypted, password: password);
 
       expect(decrypted.toJson(), original.toJson());
-      expect(decrypted.backupVersion, 4);
-      expect(decrypted.databaseSchemaVersion, 6);
+      expect(decrypted.backupVersion, 5);
+      expect(decrypted.databaseSchemaVersion, 7);
       expect(
         decrypted.accounts.single.balanceGroup,
         AccountBalanceGroup.savingsInvestment,
       );
       expect(decrypted.ledgerEntries.single.allocations, hasLength(2));
       expect(decrypted.budgets.single.categoryIds, [4]);
+      expect(decrypted.budgets.single.iconKey, 'home');
     });
 
     test('continues rejecting unknown icon keys in backup data', () {
@@ -45,6 +46,65 @@ void main() {
         () => BackupDocument.fromJson(json),
         throwsA(isA<BackupValidationException>()),
       );
+    });
+
+    test(
+      'v4 budgets default to automatic icons and retain their wire shape',
+      () {
+        final json = _mutableJson(_backupDocument().toJson());
+        json['backupVersion'] = 4;
+        json['databaseSchemaVersion'] = 6;
+        final budgets =
+            (json['data']! as Map<String, Object?>)['budgets']!
+                as List<Object?>;
+        for (final budget in budgets.cast<Map<String, Object?>>()) {
+          budget.remove('iconKey');
+        }
+        final decoded = BackupDocument.fromJson(json);
+        expect(decoded.budgets.single.iconKey, isNull);
+        expect(decoded.toJson(), json);
+        expect(canRestoreBackupDocumentToSchema(decoded, 7), isTrue);
+        (budgets.single as Map<String, Object?>)['iconKey'] = 'home';
+        expect(
+          () => BackupDocument.fromJson(json),
+          throwsA(isA<BackupFormatException>()),
+        );
+      },
+    );
+
+    test('v5 requires a nullable known budget icon', () {
+      for (final key in ['home', 'bolt', null]) {
+        final json = _mutableJson(_backupDocument().toJson());
+        final budgets =
+            (json['data']! as Map<String, Object?>)['budgets']!
+                as List<Object?>;
+        (budgets.single as Map<String, Object?>)['iconKey'] = key;
+        expect(BackupDocument.fromJson(json).budgets.single.iconKey, key);
+      }
+      final json = _mutableJson(_backupDocument().toJson());
+      final budget =
+          ((json['data']! as Map<String, Object?>)['budgets']! as List<Object?>)
+                  .single
+              as Map<String, Object?>;
+      budget['iconKey'] = 'unknown_icon';
+      expect(
+        () => BackupDocument.fromJson(json),
+        throwsA(isA<BackupValidationException>()),
+      );
+      budget.remove('iconKey');
+      expect(
+        () => BackupDocument.fromJson(json),
+        throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('legacy encoding cannot silently discard a manual budget icon', () {
+      final document = _backupDocument(
+        backupVersion: 4,
+        databaseSchemaVersion: 6,
+        budgetIconKey: 'home',
+      );
+      expect(document.toJson, throwsA(isA<BackupValidationException>()));
     });
 
     test('decodes strict payload v1 into the current allocation model', () {
@@ -147,7 +207,10 @@ void main() {
       expect(canRestoreBackupDocumentToSchema(current, 3), isFalse);
       expect(canRestoreBackupDocumentToSchema(current, 4), isFalse);
       expect(canRestoreBackupDocumentToSchema(current, 5), isFalse);
-      expect(canRestoreBackupDocumentToSchema(current, 6), isTrue);
+      expect(canRestoreBackupDocumentToSchema(current, 6), isFalse);
+      expect(canRestoreBackupDocumentToSchema(current, 7), isTrue);
+      expect(canRestoreBackupDocumentToSchema(legacy, 7), isTrue);
+      expect(canRestoreBackupDocumentToSchema(allocationLegacy, 7), isTrue);
     });
 
     test('keeps v1 and v4 ledger shapes strict and separate', () {
@@ -233,7 +296,7 @@ void main() {
       expect(split - single, 128);
     });
 
-    test('payload v4 rejects overlapping budgets for one category', () {
+    test('payload v5 rejects overlapping budgets for one category', () {
       final json = _mutableJson(_backupDocument().toJson());
       final sequences = json['sequences']! as Map<String, Object?>;
       sequences['budgets'] = 2;
@@ -261,7 +324,7 @@ void main() {
       );
     });
 
-    test('payload v4 validates period shape and sorted category IDs', () {
+    test('payload v5 validates period shape and sorted category IDs', () {
       Map<String, Object?> firstBudget(Map<String, Object?> document) {
         final data = document['data']! as Map<String, Object?>;
         final budgets = data['budgets']! as List<Object?>;
@@ -291,7 +354,7 @@ void main() {
 
     test('rejects a document above the total allocation record limit', () {
       final oversized = BackupDocument(
-        databaseSchemaVersion: 6,
+        databaseSchemaVersion: 7,
         createdAtUtc: DateTime.utc(2026, 9, 6),
         sequences: const BackupSequences(
           accounts: 0,
@@ -865,8 +928,9 @@ Map<String, Object?> _legacyV2Json() {
 
 BackupDocument _backupDocument({
   int backupVersion = currentBackupVersion,
-  int databaseSchemaVersion = 6,
+  int databaseSchemaVersion = 7,
   bool split = true,
+  String? budgetIconKey,
 }) {
   final createdAt = DateTime.utc(2026, 9, 5, 4, 30);
   return BackupDocument(
@@ -998,6 +1062,7 @@ BackupDocument _backupDocument({
         name: 'Makan September',
         normalizedName: 'makan september',
         limitAmount: 500000,
+        iconKey: budgetIconKey,
         categoryIds: const [4],
         createdAtUtc: createdAt,
         updatedAtUtc: createdAt,

@@ -349,7 +349,7 @@ Batas plaintext 10 MiB serta container 16 MiB tetap berlaku. Estimator pra-encod
 - Aplikasi schema 3 menolak payload v2. Aplikasi schema 4 menerima v1/v2.
 - Parser v3 strict terhadap pasangan payload v3/schema 5 dan mewajibkan `balanceGroup` rekening; exporter schema 5 selalu menghasilkan payload v3.
 - Aplikasi schema 5 menerima v1/v2/v3. Restore v1 atau v2 mempertahankan allocation yang tersedia dan memberi seluruh rekening `balanceGroup = primary`.
-- Pada schema 6 yang aktif, payload v4 mempertahankan bentuk allocation serta kelompok rekening dan menambahkan anggaran. Aplikasi schema 6 menerima v1/v2/v3/v4; restore v1, v2, atau v3 menghasilkan `budgets = []` dan sequence budget 0, dengan dampaknya dijelaskan pada preview.
+- Pada schema 6, payload v4 mempertahankan bentuk allocation serta kelompok rekening dan menambahkan anggaran. Schema aktif v7/payload v5 menambahkan ikon anggaran nullable dan menerima v1–v5; restore v1, v2, atau v3 menghasilkan `budgets = []` dan sequence budget 0, dengan dampaknya dijelaskan pada preview.
 
 ## Restore atomik
 

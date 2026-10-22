@@ -184,6 +184,7 @@ class DriftBudgetRepository implements BudgetRepository {
 
   @override
   Future<int> createBudget(BudgetDraft draft) async {
+    validateBudgetIconKey(draft.iconKey);
     final normalized = _normalizeDraft(
       period: draft.period,
       name: draft.name,
@@ -209,6 +210,7 @@ class DriftBudgetRepository implements BudgetRepository {
               name: normalized.name,
               normalizedName: normalized.normalizedName,
               limitAmount: normalized.limitAmount,
+              iconKey: Value(draft.iconKey),
               createdAt: now,
               updatedAt: now,
             ),
@@ -222,6 +224,7 @@ class DriftBudgetRepository implements BudgetRepository {
   @override
   Future<void> updateBudget(int id, BudgetUpdateDraft draft) async {
     _validateBudgetId(id);
+    validateBudgetIconKey(draft.iconKey);
     final name = canonicalizeBudgetName(draft.name);
     _validateLimit(draft.limitAmount);
     final categoryIds = Set<int>.of(draft.categoryIds);
@@ -256,6 +259,7 @@ class DriftBudgetRepository implements BudgetRepository {
               name: Value(name),
               normalizedName: Value(normalizedName),
               limitAmount: Value(draft.limitAmount),
+              iconKey: Value(draft.iconKey),
               updatedAt: Value(updatedAt),
             ),
           );
@@ -377,6 +381,7 @@ class DriftBudgetRepository implements BudgetRepository {
                 name: row.name,
                 normalizedName: row.normalizedName,
                 limitAmount: row.limitAmount,
+                iconKey: Value(row.iconKey),
                 createdAt: now,
                 updatedAt: now,
               ),
@@ -772,6 +777,7 @@ class DriftBudgetRepository implements BudgetRepository {
     name: row.name,
     normalizedName: row.normalizedName,
     limitAmount: row.limitAmount,
+    iconKey: row.iconKey,
     createdAt: row.createdAt.toUtc(),
     updatedAt: row.updatedAt.toUtc(),
   );

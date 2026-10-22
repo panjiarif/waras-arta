@@ -3,13 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/formatters.dart';
+import '../../../core/category_icons.dart';
 import '../../../core/rupiah_input_formatter.dart';
 import '../../../domain/budget.dart';
 import '../../../domain/finance.dart';
 import '../../calendar/view_models/calendar_view_model.dart';
+import '../../categories/views/category_widgets.dart';
 import '../../ledger/views/form_widgets.dart';
 import '../view_models/budget_view_model.dart';
 import 'budget_widgets.dart';
+import 'budget_category_picker.dart';
 
 class BudgetFormScreen extends ConsumerStatefulWidget {
   const BudgetFormScreen({
@@ -72,6 +75,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   late int _year;
   DateTimeRange? _customRange;
   late Set<int> _categoryIds;
+  String? _iconKey;
   bool _dirty = false;
   bool _allowPop = false;
   String? _localError;
@@ -84,6 +88,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
     final initial = widget.initial;
     final today = dateOnly(ref.read(currentDateProvider));
     _name = TextEditingController(text: initial?.budget.name ?? '');
+    _iconKey = initial?.budget.iconKey;
     _limit = TextEditingController(
       text: initial == null
           ? ''
@@ -324,6 +329,59 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
                       isError: true,
                     ),
                   ],
+                  const SizedBox(height: 20),
+                  OutlinedButton(
+                    key: const Key('budget-icon-picker'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.all(16),
+                    ),
+                    onPressed: () async {
+                      final selected = await showModalBottomSheet<String>(
+                        context: context,
+                        isScrollControlled: true,
+                        showDragHandle: true,
+                        useSafeArea: true,
+                        builder: (_) => CategoryIconPicker(
+                          selectedKey: _iconKey ?? 'automatic',
+                          allowAutomatic: true,
+                          automaticIconKey: _automaticIconKey(categories),
+                        ),
+                      );
+                      if (selected == null || !mounted) return;
+                      setState(() {
+                        _iconKey = selected == 'automatic' ? null : selected;
+                        _dirty = true;
+                      });
+                    },
+                    child: Row(
+                      children: [
+                        Icon(
+                          categoryIconFor(
+                            _iconKey ?? _automaticIconKey(categories),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Ikon anggaran'),
+                              const SizedBox(height: 2),
+                              Text(
+                                _iconKey == null
+                                    ? 'Otomatis'
+                                    : categoryIconLabelFor(_iconKey!),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.expand_more),
+                      ],
+                    ),
+                  ),
                   if (_localError != null) ...[
                     const SizedBox(height: 14),
                     FormMessage(_localError!, isError: true),
@@ -364,6 +422,20 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   ) {
     final values = conflicts.asData?.value ?? const {};
     return _categoryIds.where((id) => values[id]?.isNotEmpty ?? false).length;
+  }
+
+  String _automaticIconKey(AsyncValue<List<CategoryGroup>> categories) {
+    if (_categoryIds.length != 1) return 'category';
+    for (final group in categories.asData?.value ?? const <CategoryGroup>[]) {
+      for (final child in group.children) {
+        if (_categoryIds.contains(child.id)) return child.iconKey;
+      }
+    }
+    return widget.initial?.categories
+            .where((category) => _categoryIds.contains(category.id))
+            .firstOrNull
+            ?.iconKey ??
+        'category';
   }
 
   Future<void> _pickPeriod() async {
@@ -481,6 +553,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
           name: _name.text,
           limitAmount: amount,
           categoryIds: _categoryIds,
+          iconKey: _iconKey,
         ),
       );
     } else {
@@ -490,6 +563,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
           name: _name.text,
           limitAmount: amount,
           categoryIds: _categoryIds,
+          iconKey: _iconKey,
         ),
       );
       saved = updated ? initial.budget.id : null;
@@ -639,7 +713,7 @@ class _BudgetCategoryField extends StatelessWidget {
                 isScrollControlled: true,
                 showDragHandle: true,
                 useSafeArea: true,
-                builder: (context) => _BudgetCategoryPickerSheet(
+                builder: (context) => BudgetCategoryPickerSheet(
                   groups: groups,
                   conflicts: conflictMap,
                   initialIds: selectedIds,
@@ -702,185 +776,5 @@ class _BudgetCategoryField extends StatelessWidget {
         picker,
       ],
     );
-  }
-}
-
-class _BudgetCategoryPickerSheet extends StatefulWidget {
-  const _BudgetCategoryPickerSheet({
-    required this.groups,
-    required this.conflicts,
-    required this.initialIds,
-  });
-
-  final List<CategoryGroup> groups;
-  final Map<int, List<BudgetConflict>> conflicts;
-  final Set<int> initialIds;
-
-  @override
-  State<_BudgetCategoryPickerSheet> createState() =>
-      _BudgetCategoryPickerSheetState();
-}
-
-class _BudgetCategoryPickerSheetState
-    extends State<_BudgetCategoryPickerSheet> {
-  late final Set<int> _selected = Set.of(widget.initialIds);
-  String? _selectionMessage;
-
-  @override
-  Widget build(BuildContext context) {
-    final height = MediaQuery.sizeOf(context).height;
-    return SizedBox(
-      height: (height * .88).clamp(420.0, 760.0).toDouble(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-            child: Text(
-              'Pilih subkategori pengeluaran',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          if (_selectionMessage != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-              child: Text(_selectionMessage!),
-            ),
-          const Divider(height: 1),
-          Expanded(
-            child: ListView.builder(
-              key: const Key('budget-category-options'),
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-              itemCount: widget.groups.length,
-              itemBuilder: (context, index) {
-                final group = widget.groups[index];
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Wrap(
-                            alignment: WrapAlignment.spaceBetween,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8,
-                            runSpacing: 4,
-                            children: [
-                              Text(
-                                group.parent.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Wrap(
-                                spacing: 4,
-                                children: [
-                                  TextButton(
-                                    key: ValueKey(
-                                      'budget-select-all-${group.parent.id}',
-                                    ),
-                                    onPressed: () => _selectAll(group),
-                                    child: const Text('Pilih semua'),
-                                  ),
-                                  TextButton(
-                                    key: ValueKey(
-                                      'budget-clear-all-${group.parent.id}',
-                                    ),
-                                    onPressed: () => _clearAll(group),
-                                    child: const Text('Hapus semua'),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        for (final category in group.children)
-                          _categoryTile(group, category),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: FilledButton(
-              key: const Key('budget-categories-done'),
-              onPressed: () => Navigator.pop(context, Set.of(_selected)),
-              child: Text('Selesai (${_selected.length})'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _categoryTile(CategoryGroup group, FinanceCategory category) {
-    final selected = _selected.contains(category.id);
-    final archived = group.parent.isArchived || category.isArchived;
-    final conflicts = widget.conflicts[category.id] ?? const [];
-    final canAdd = !archived && conflicts.isEmpty;
-    final subtitle = archived
-        ? 'Diarsipkan · pilihan lama hanya dapat dilepas'
-        : conflicts.isNotEmpty
-        ? _conflictLabel(conflicts)
-        : null;
-    return CheckboxListTile(
-      key: ValueKey('budget-category-${category.id}'),
-      value: selected,
-      controlAffinity: ListTileControlAffinity.leading,
-      title: Text(category.name),
-      subtitle: subtitle == null ? null : Text(subtitle),
-      onChanged: selected
-          ? (_) => setState(() => _selected.remove(category.id))
-          : canAdd
-          ? (_) => setState(() => _selected.add(category.id))
-          : null,
-    );
-  }
-
-  void _selectAll(CategoryGroup group) {
-    var added = 0;
-    var skipped = 0;
-    setState(() {
-      for (final category in group.children) {
-        final blocked =
-            group.parent.isArchived ||
-            category.isArchived ||
-            (widget.conflicts[category.id]?.isNotEmpty ?? false);
-        if (blocked) {
-          skipped++;
-        } else if (_selected.add(category.id)) {
-          added++;
-        }
-      }
-      _selectionMessage =
-          '$added dipilih dari ${group.parent.name}; '
-          '$skipped dilewati karena arsip atau konflik.';
-    });
-  }
-
-  void _clearAll(CategoryGroup group) {
-    setState(() {
-      for (final category in group.children) {
-        _selected.remove(category.id);
-      }
-      _selectionMessage = 'Semua pilihan dari ${group.parent.name} dilepas.';
-    });
-  }
-
-  String _conflictLabel(List<BudgetConflict> conflicts) {
-    final examples = conflicts
-        .take(2)
-        .map((item) => '${item.budgetName} (${budgetPeriodLabel(item.period)})')
-        .join(', ');
-    final remaining = conflicts.length - 2;
-    return remaining > 0
-        ? 'Dipakai $examples +$remaining anggaran lain'
-        : 'Dipakai $examples';
   }
 }

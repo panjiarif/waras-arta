@@ -144,7 +144,7 @@ void main() {
   }
 
   test(
-    'JSON v4 round-trip preserves budgets, account groups, and ID sequences',
+    'JSON v5 round-trip preserves budgets, account groups, and ID sequences',
     () async {
       final walletId = await createAccount(
         sourceFinance,
@@ -184,6 +184,7 @@ void main() {
           period: BudgetPeriod.monthly(2024, 3),
           name: 'Makan Maret',
           limitAmount: 500,
+          iconKey: 'home',
           categoryIds: const [10],
         ),
       );
@@ -237,6 +238,7 @@ void main() {
       expect(decoded.summary.ledgerEntryCount, 5);
       expect(decoded.summary.budgetCount, 1);
       expect(decoded.budgets.single.id, budgetId);
+      expect(decoded.budgets.single.iconKey, 'home');
       expect(decoded.budgets.single.categoryIds, [10]);
       final split = decoded.ledgerEntries.singleWhere(
         (entry) => entry.note == 'Gaji tambahan',
@@ -297,7 +299,44 @@ void main() {
     },
   );
 
-  test('restores payload v1/schema 3 into schema 6 allocations', () async {
+  test(
+    'restores v4 budgets with automatic icons without losing mappings',
+    () async {
+      final accountId = await createAccount(sourceFinance, 'Bank');
+      await sourceFinance.addEntry(income(accountId, 1000));
+      final id = await sourceBudget.createBudget(
+        BudgetDraft(
+          period: BudgetPeriod.monthly(2024, 3),
+          name: 'Gabungan',
+          limitAmount: 500,
+          categoryIds: [10, 12],
+        ),
+      );
+      final original = await sourceStore.exportDocument(
+        createdAtUtc: createdAtUtc,
+      );
+      final json = (jsonDecode(jsonEncode(original.toJson())) as Map)
+          .cast<String, Object?>();
+      json['backupVersion'] = 4;
+      json['databaseSchemaVersion'] = 6;
+      final data = json['data']! as Map<String, dynamic>;
+      for (final budget
+          in (data['budgets']! as List).cast<Map<String, dynamic>>()) {
+        budget.remove('iconKey');
+      }
+      final legacy = BackupDocument.fromJson(json);
+      await targetStore.restoreDocument(legacy);
+      final restored = await targetStore.exportDocument(
+        createdAtUtc: createdAtUtc,
+      );
+      expect(restored.toJson(), original.toJson());
+      final details = (await targetBudget.getBudget(id))!;
+      expect(details.effectiveIconKey, 'category');
+      expect(details.categories.map((item) => item.id), [10, 12]);
+    },
+  );
+
+  test('restores payload v1/schema 3 into schema 7 allocations', () async {
     final accountId = await createAccount(sourceFinance, 'Sumber lama');
     await sourceFinance.addEntry(income(accountId, 125, note: 'Transaksi v1'));
     final current = await sourceStore.exportDocument(
@@ -330,8 +369,8 @@ void main() {
       createdAtUtc: createdAtUtc,
     );
 
-    expect(restored.backupVersion, 4);
-    expect(restored.databaseSchemaVersion, 6);
+    expect(restored.backupVersion, 5);
+    expect(restored.databaseSchemaVersion, 7);
     expect(restored.budgets, isEmpty);
     expect(restored.accounts.single.balanceGroup, AccountBalanceGroup.primary);
     final restoredEntry = restored.ledgerEntries.single;
@@ -413,10 +452,10 @@ void main() {
     );
   });
 
-  test('backup adapter coverage pins schema v6 tables and persistent columns', () async {
+  test('backup adapter coverage pins schema v7 tables and persistent columns', () async {
     expect(
       sourceDb.schemaVersion,
-      6,
+      7,
       reason:
           'A database schema bump must update the backup DTO, encoder, restore, '
           'decoder migration, and coverage guard before this expectation.',
@@ -471,6 +510,7 @@ void main() {
           'name',
           'normalized_name',
           'limit_amount',
+          'icon_key',
           'created_at',
           'updated_at',
         },
@@ -484,8 +524,8 @@ void main() {
     final document = await sourceStore.exportDocument(
       createdAtUtc: createdAtUtc,
     );
-    expect(document.backupVersion, 4);
-    expect(document.databaseSchemaVersion, 6);
+    expect(document.backupVersion, 5);
+    expect(document.databaseSchemaVersion, 7);
   });
 
   test('export fails closed for an uncovered database schema', () async {

@@ -57,9 +57,16 @@ class CategoryIconField extends StatelessWidget {
 }
 
 class CategoryIconPicker extends StatelessWidget {
-  const CategoryIconPicker({super.key, required this.selectedKey});
+  const CategoryIconPicker({
+    super.key,
+    required this.selectedKey,
+    this.allowAutomatic = false,
+    this.automaticIconKey = 'category',
+  });
 
   final String selectedKey;
+  final bool allowAutomatic;
+  final String automaticIconKey;
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +86,18 @@ class CategoryIconPicker extends StatelessWidget {
               ),
             ),
             const Divider(height: 1),
+            if (allowAutomatic)
+              ListTile(
+                key: const Key('budget-icon-automatic'),
+                leading: Icon(categoryIconFor(automaticIconKey)),
+                title: const Text('Otomatis'),
+                subtitle: const Text('Mengikuti subkategori yang dipilih'),
+                selected: selectedKey == 'automatic',
+                trailing: selectedKey == 'automatic'
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(context, 'automatic'),
+              ),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {

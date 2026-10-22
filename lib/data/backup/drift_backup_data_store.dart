@@ -9,8 +9,8 @@ import '../database/app_database.dart';
 // Deliberately independent from AppDatabase.schemaVersion. A database or
 // backup-format change must first extend the DTO, export, restore, and decoder
 // migration before these adapter coverage pins are updated.
-const _encodedBackupVersion = 4;
-const _encodedDatabaseSchemaVersion = 6;
+const _encodedBackupVersion = 5;
+const _encodedDatabaseSchemaVersion = 7;
 const _encodedTableColumns = <String, Set<String>>{
   'accounts': {
     'id',
@@ -53,6 +53,7 @@ const _encodedTableColumns = <String, Set<String>>{
     'name',
     'normalized_name',
     'limit_amount',
+    'icon_key',
     'created_at',
     'updated_at',
   },
@@ -280,6 +281,7 @@ class DriftBackupDataStore implements BackupDataStore {
               name: budget.name,
               normalizedName: budget.normalizedName,
               limitAmount: budget.limitAmount,
+              iconKey: budget.iconKey,
               createdAt: budget.createdAtUtc,
               updatedAt: budget.updatedAtUtc,
             ),
@@ -519,6 +521,7 @@ class DriftBackupDataStore implements BackupDataStore {
         name: row.name,
         normalizedName: row.normalizedName,
         limitAmount: row.limitAmount,
+        iconKey: row.iconKey,
         categoryIds: categoryIds,
         createdAtUtc: row.createdAt.toUtc(),
         updatedAtUtc: row.updatedAt.toUtc(),

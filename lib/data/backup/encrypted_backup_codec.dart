@@ -382,6 +382,7 @@ int estimateBackupPayloadUpperBoundBytes(BackupDocument document) {
         6 *
             (budget.name.length +
                 budget.normalizedName.length +
+                (budget.iconKey?.length ?? 0) +
                 budget.periodKind.name.length);
     estimatedBytes += 48 * budget.categoryIds.length;
   }

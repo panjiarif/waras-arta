@@ -2,7 +2,9 @@
 
 Perubahan penting Waras Arta dicatat di sini. Versi alpha ditujukan untuk pengujian awal, bukan satu-satunya tempat menyimpan catatan keuangan penting.
 
-## 0.1.1 — Alpha 2 (belum dirilis)
+## 0.1.1 - Alpha 2 - 2026-10-22
+
+Dipublikasikan sebagai [pre-release v0.1.1](https://github.com/panjiarif/waras-arta/releases/tag/v0.1.1) untuk pengujian awal.
 
 ### Ditambahkan
 
@@ -31,7 +33,7 @@ Perubahan penting Waras Arta dicatat di sini. Versi alpha ditujukan untuk penguj
 - Cek versi telah dicoba pada perangkat dan pemeriksaan metadata GitHub telah diuji langsung. Pemasangan pembaruan menyeluruh melalui aplikasi masih perlu smoke test dengan rilis yang lebih baru dan signing yang sama.
 - Unduhan belum mendukung resume setelah aplikasi dihentikan OS; unduh ulang dimulai dari awal. Membuka pemasang Android bukan konfirmasi bahwa pembaruan selesai terpasang.
 
-## 0.1.0 — Alpha 1
+## 0.1.0 - Alpha 1
 
 Rilis publik pertama untuk Android.
 

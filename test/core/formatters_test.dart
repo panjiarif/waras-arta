@@ -12,6 +12,9 @@ void main() {
       expect(parseRupiah('25000'), 25000);
       expect(parseRupiah('  25000\n'), 25000);
       expect(parseRupiah('00025'), 25);
+      expect(parseRupiah('25.000'), 25000);
+      expect(parseRupiah('1.250.000'), 1250000);
+      expect(parseRupiah('  999.999.999.999\n'), maxAmount);
       expect(parseRupiah('$maxAmount'), maxAmount);
     });
 
@@ -21,7 +24,12 @@ void main() {
         for (final input in [
           '',
           '   ',
-          '25.000',
+          '25.00',
+          '1234.567',
+          '1..000',
+          '.100',
+          '1.000.',
+          '1.000.000.000.000',
           '25,000',
           '25000.50',
           '25000,50',
@@ -57,11 +65,11 @@ void main() {
 
     test('reports a format error for missing, decimal, or oversized input', () {
       const error =
-          'Gunakan rupiah bulat, maksimal 12 digit, tanpa titik/koma.';
+          'Gunakan rupiah bulat, maksimal 12 digit. Titik hanya untuk ribuan.';
       for (final input in <String?>[
         null,
         '',
-        '1.000',
+        '1.00',
         '1,50',
         '1000000000000',
       ]) {
@@ -75,6 +83,9 @@ void main() {
       expect(parseSignedRupiah('25000'), 25000);
       expect(parseSignedRupiah('0'), 0);
       expect(parseSignedRupiah('-12500'), -12500);
+      expect(parseSignedRupiah('-12.500'), -12500);
+      expect(parseSignedRupiah('999.999.999.999'), maxAmount);
+      expect(parseSignedRupiah('-999.999.999.999'), -maxAmount);
       expect(parseSignedRupiah('  -500\n'), -500);
       expect(validateSignedRupiah('-12500'), isNull);
     });
@@ -84,7 +95,9 @@ void main() {
         '',
         '-',
         '+100',
-        '1.000',
+        '1.00',
+        '--100',
+        '- 100',
         '-1,000',
         '1000000000000',
         '-1000000000000',
@@ -103,6 +116,16 @@ void main() {
     expect(formatRupiah(0), 'Rp 0');
     expect(formatRupiah(1250000), 'Rp 1.250.000');
     expect(formatRupiah(-12500), '-Rp 12.500');
+  });
+
+  test('formats editable amounts without a currency prefix', () {
+    expect(formatRupiahInput(0), '0');
+    expect(formatRupiahInput(1250000), '1.250.000');
+    expect(formatRupiahInput(-12500), '-12.500');
+    expect(parseRupiah(formatRupiahInput(maxAmount)), maxAmount);
+    expect(parseSignedRupiah(formatRupiahInput(-maxAmount)), -maxAmount);
+    expect(validateRupiah('1.000'), isNull);
+    expect(validateSignedRupiah('-1.000'), isNull);
   });
 
   test('formats month and date in Indonesian', () {

@@ -14,6 +14,29 @@ import 'fake_budget_repository.dart';
 void main() {
   setUpAll(() => initializeDateFormatting('id_ID'));
 
+  testWidgets('formats the limit while typing and initializes edits grouped', (
+    tester,
+  ) async {
+    final repository = FakeBudgetRepository();
+    addTearDown(repository.dispose);
+    await _pumpBudgetForm(tester, repository);
+    final field = find.byKey(const Key('budget-limit'));
+    await tester.enterText(field, '1250000');
+    expect(tester.widget<TextFormField>(field).controller!.text, '1.250.000');
+    await tester.enterText(field, '15,50');
+    expect(tester.widget<TextFormField>(field).controller!.text, '1.250.000');
+
+    // Recreate the form so controller initialization is tested, too.
+    await tester.pumpWidget(const SizedBox());
+    await _pumpBudgetForm(
+      tester,
+      repository,
+      initial: fakeBudgetProgress(limitAmount: 2750000),
+    );
+    expect(tester.widget<TextFormField>(field).controller!.text, '2.750.000');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('conflict load error disables picker and retry recovers it', (
     tester,
   ) async {
@@ -212,6 +235,7 @@ Future<void> _pumpBudgetForm(
   FakeBudgetRepository repository, {
   BudgetPeriodKind? initialKind,
   DateTime? initialMonth,
+  BudgetDetails? initial,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -224,6 +248,7 @@ Future<void> _pumpBudgetForm(
       ],
       child: MaterialApp(
         home: BudgetFormScreen(
+          initial: initial,
           initialKind: initialKind,
           initialMonth: initialMonth,
         ),
@@ -270,6 +295,13 @@ Future<void> _submitRequiredFields(WidgetTester tester) async {
     'Anggaran pengujian',
   );
   await tester.enterText(find.byKey(const Key('budget-limit')), '100000');
+  expect(
+    tester
+        .widget<TextFormField>(find.byKey(const Key('budget-limit')))
+        .controller!
+        .text,
+    '100.000',
+  );
   await tester.ensureVisible(find.byKey(const Key('save-budget')));
   await tester.tap(find.byKey(const Key('save-budget')));
   await tester.pumpAndSettle();

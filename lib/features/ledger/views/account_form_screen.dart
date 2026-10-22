@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/formatters.dart';
+import '../../../core/rupiah_input_formatter.dart';
 import '../../../domain/finance.dart';
 import '../view_models/ledger_view_model.dart';
 import 'form_widgets.dart';
@@ -137,11 +138,11 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
                     key: const Key('opening-balance'),
                     controller: _balance,
                     keyboardType: TextInputType.number,
+                    inputFormatters: const [RupiahInputFormatter()],
                     decoration: const InputDecoration(
                       labelText: 'Saldo awal',
                       prefixText: 'Rp ',
-                      helperText:
-                          'Tanpa titik/koma. Isi 0 jika mulai dari kosong.',
+                      helperText: 'Titik ribuan otomatis. Isi 0 jika mulai dari kosong.',
                       helperMaxLines: 2,
                       errorMaxLines: 3,
                     ),

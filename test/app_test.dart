@@ -160,6 +160,13 @@ void main() {
         find.byKey(const Key('opening-balance')),
         '100000',
       );
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('opening-balance')))
+            .controller
+            ?.text,
+        '100.000',
+      );
       await tester.ensureVisible(find.byKey(const Key('save-account')));
       await tester.tap(find.byKey(const Key('save-account')));
       await tester.pumpAndSettle();
@@ -272,9 +279,27 @@ void main() {
     await tester.tap(find.byKey(const Key('open-balance-adjustment')));
     await tester.pumpAndSettle();
 
+    expect(
+      tester
+          .widget<TextFormField>(
+            find.byKey(const Key('target-account-balance')),
+          )
+          .controller
+          ?.text,
+      '100.000',
+    );
     await tester.enterText(
       find.byKey(const Key('target-account-balance')),
       '60000',
+    );
+    expect(
+      tester
+          .widget<TextFormField>(
+            find.byKey(const Key('target-account-balance')),
+          )
+          .controller
+          ?.text,
+      '60.000',
     );
     await tester.pump();
     expect(find.text('Penyesuaian mengurangi Rp 40.000.'), findsOneWidget);
@@ -1119,7 +1144,7 @@ void main() {
           .widget<TextFormField>(find.byKey(const Key('entry-amount')))
           .controller
           ?.text,
-      '17000',
+      '17.000',
     );
     await tester.ensureVisible(find.byKey(const Key('save-entry')));
     await tester.tap(find.byKey(const Key('save-entry')));
@@ -1149,7 +1174,7 @@ void main() {
             .widget<TextFormField>(find.byKey(const Key('entry-amount')))
             .controller
             ?.text,
-        '17000',
+        '17.000',
       );
 
       await tester.tap(find.byKey(const Key('entry-kind')));
@@ -1196,7 +1221,7 @@ void main() {
             .widget<TextFormField>(find.byKey(const Key('entry-amount')))
             .controller
             ?.text,
-        '25000',
+        '25.000',
       );
       expect(
         tester
@@ -2080,7 +2105,7 @@ void main() {
     final note = tester.widget<TextFormField>(
       find.byKey(const Key('entry-note')),
     );
-    expect(amount.controller?.text, '12500');
+    expect(amount.controller?.text, '12.500');
     expect(note.controller?.text, 'Makan siang');
 
     await tester.enterText(find.byKey(const Key('entry-amount')), '15000');
@@ -2164,7 +2189,7 @@ void main() {
           .widget<TextFormField>(find.byKey(const Key('entry-amount')))
           .controller
           ?.text,
-      '15000',
+      '15.000',
     );
     expect(
       tester
@@ -2173,7 +2198,7 @@ void main() {
           )
           .controller
           ?.text,
-      '2000',
+      '2.000',
     );
     expect(
       tester
@@ -3083,6 +3108,13 @@ void main() {
         'Makan kantor',
       );
       await tester.enterText(find.byKey(const Key('budget-limit')), '750000');
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('budget-limit')))
+            .controller
+            ?.text,
+        '750.000',
+      );
       await tester.ensureVisible(
         find.byKey(const Key('budget-category-picker')),
       );
@@ -3119,6 +3151,13 @@ void main() {
       await tester.tap(find.byKey(const Key('open-budget-edit')));
       await tester.pumpAndSettle();
 
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('budget-limit')))
+            .controller
+            ?.text,
+        '750.000',
+      );
       await tester.enterText(
         find.byKey(const Key('budget-name')),
         'Makan kantor revisi',
@@ -3128,6 +3167,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(budgets.updatedId, 1);
       expect(budgets.updatedDraft?.name, 'Makan kantor revisi');
+      expect(budgets.updatedDraft?.limitAmount, 750000);
       expect(find.text('Makan kantor revisi'), findsWidgets);
 
       await tester.ensureVisible(find.byKey(const Key('delete-budget')));

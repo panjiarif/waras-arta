@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/formatters.dart';
+import '../../../core/rupiah_input_formatter.dart';
 import '../../../domain/budget.dart';
 import '../../../domain/finance.dart';
 import '../../calendar/view_models/calendar_view_model.dart';
@@ -84,7 +85,9 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
     final today = dateOnly(ref.read(currentDateProvider));
     _name = TextEditingController(text: initial?.budget.name ?? '');
     _limit = TextEditingController(
-      text: initial?.budget.limitAmount.toString() ?? '',
+      text: initial == null
+          ? ''
+          : formatRupiahInput(initial.budget.limitAmount),
     );
     _kind =
         initial?.budget.period.kind ??
@@ -212,6 +215,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
                     key: const Key('budget-limit'),
                     controller: _limit,
                     keyboardType: TextInputType.number,
+                    inputFormatters: const [RupiahInputFormatter()],
                     decoration: const InputDecoration(
                       labelText: 'Batas anggaran',
                       prefixText: 'Rp ',

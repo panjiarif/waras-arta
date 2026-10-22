@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/formatters.dart';
+import '../../../core/rupiah_input_formatter.dart';
 import '../../../domain/finance.dart';
 import '../../categories/view_models/category_view_model.dart';
 import '../view_models/ledger_view_model.dart';
@@ -43,7 +44,9 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
     super.initState();
     final entry = widget.initialEntry;
     _transferAmount = TextEditingController(
-      text: entry?.kind == EntryKind.transfer ? entry!.amount.toString() : '',
+      text: entry?.kind == EntryKind.transfer
+          ? formatRupiahInput(entry!.amount)
+          : '',
     );
     _note = TextEditingController(text: entry?.note ?? '');
     _kind = entry?.kind ?? EntryKind.expense;
@@ -57,7 +60,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
       if (entry != null && entry.allocations.isNotEmpty)
         for (final allocation in entry.allocations)
           _createAllocation(
-            amount: allocation.amount.toString(),
+            amount: formatRupiahInput(allocation.amount),
             categoryId: allocation.categoryId,
             originalCategoryId: allocation.categoryId,
           )
@@ -183,7 +186,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
     if (value == EntryKind.transfer && previousKind != EntryKind.transfer) {
       final total = _allocationTotal;
       final transferText = total != null && total > 0 && total <= maxAmount
-          ? total.toString()
+          ? formatRupiahInput(total)
           : '';
       _replaceControllerText(_transferAmount, transferText);
     } else if (previousKind == EntryKind.transfer) {
@@ -196,7 +199,7 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
           transferAmount > 0) {
         _replaceControllerText(
           _allocations.first.amount,
-          transferAmount.toString(),
+          formatRupiahInput(transferAmount),
         );
       }
     }
@@ -502,12 +505,13 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                   key: const Key('entry-amount'),
                   controller: _transferAmount,
                   keyboardType: TextInputType.number,
+                  inputFormatters: const [RupiahInputFormatter()],
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     labelText: 'Nominal transfer',
                     prefixText: 'Rp ',
-                    hintText: '25000',
-                    helperText: 'Rupiah bulat, tanpa titik/koma.',
+                    hintText: '25.000',
+                    helperText: 'Titik ribuan ditambahkan otomatis.',
                     errorMaxLines: 3,
                   ),
                   validator: validateRupiah,
@@ -893,14 +897,15 @@ class _EntryFormScreenState extends ConsumerState<EntryFormScreen> {
                 controller: allocation.amount,
                 focusNode: allocation.amountFocusNode,
                 keyboardType: TextInputType.number,
+                inputFormatters: const [RupiahInputFormatter()],
                 textInputAction: TextInputAction.next,
                 decoration: InputDecoration(
                   labelText: multiple
                       ? 'Nominal rincian ${index + 1}'
                       : 'Nominal',
                   prefixText: 'Rp ',
-                  hintText: '25000',
-                  helperText: 'Rupiah bulat, tanpa titik/koma.',
+                  hintText: '25.000',
+                  helperText: 'Titik ribuan ditambahkan otomatis.',
                   errorMaxLines: 3,
                 ),
                 validator: validateRupiah,

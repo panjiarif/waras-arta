@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/formatters.dart';
+import '../../../core/rupiah_input_formatter.dart';
 import '../../../domain/finance.dart';
 import '../view_models/account_view_model.dart';
 import 'account_widgets.dart';
@@ -74,7 +75,9 @@ class _AccountBalanceAdjustmentFormState
   @override
   void initState() {
     super.initState();
-    _target = TextEditingController(text: widget.account.balance.toString());
+    _target = TextEditingController(
+      text: formatRupiahInput(widget.account.balance),
+    );
     _target.addListener(_onFieldChanged);
     _note.addListener(_onFieldChanged);
     ref.read(accountActionsProvider.notifier).clearError();
@@ -203,6 +206,9 @@ class _AccountBalanceAdjustmentFormState
                   TextFormField(
                     key: const Key('target-account-balance'),
                     controller: _target,
+                    inputFormatters: const [
+                      RupiahInputFormatter(allowNegative: true),
+                    ],
                     autofocus: true,
                     keyboardType: const TextInputType.numberWithOptions(
                       signed: true,
@@ -212,7 +218,7 @@ class _AccountBalanceAdjustmentFormState
                       labelText: 'Saldo aktual sekarang',
                       prefixText: 'Rp ',
                       helperText:
-                          'Boleh nol atau negatif; tulis tanpa titik/koma.',
+                          'Boleh nol atau negatif. Titik ribuan otomatis.',
                       errorMaxLines: 3,
                     ),
                     validator: _validateTarget,

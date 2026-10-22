@@ -114,7 +114,9 @@ Mulailah dengan data percobaan, lalu coba alur berikut:
 4. Buat anggaran dan periksa progresnya.
 5. Tutup lalu buka kembali aplikasi untuk memastikan data tetap ada.
 6. Buat backup terenkripsi dan uji restore.
-7. Laporkan perilaku yang tidak sesuai melalui [GitHub Issues](https://github.com/panjiarif/waras-arta/issues/new).
+7. Laporkan perilaku yang tidak sesuai melalui [formulir GitHub Issues](https://github.com/panjiarif/waras-arta/issues/new/choose).
+
+Pilih **Laporan bug** untuk kesalahan pada fitur yang sudah ada, atau **Usulan fitur** untuk kebutuhan baru dan perbaikan alur/tampilan. Formulir bug meminta versi aplikasi, perangkat/Android, langkah kejadian, serta hasil yang diharapkan dan yang terjadi. Gunakan satu issue untuk satu masalah atau kebutuhan dan cari laporan serupa terlebih dahulu.
 
 Sertakan versi aplikasi, tipe HP, versi Android, langkah untuk mengulangi masalah, hasil yang diharapkan, dan hasil yang terjadi. Jangan unggah file backup, database, kata sandi, atau screenshot yang memuat data keuangan pribadi ke issue publik.
 

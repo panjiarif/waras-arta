@@ -1,4 +1,4 @@
-# Waras Arta — Product Brief
+# Waras Arta - Product Brief
 
 > Catat, atur, tetap waras.
 
@@ -253,7 +253,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 
 ## Ruang Lingkup Versi
 
-### Versi 0.1 — Fondasi/MVP
+### Versi 0.1 - Fondasi/MVP
 
 - rekening dengan kelompok Saldo utama/Simpanan & investasi serta status arsip terpisah;
 - kategori;
@@ -267,7 +267,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 - backup dan restore manual;
 - pengujian aturan saldo serta migrasi database.
 
-### Versi 0.2 — Perencanaan dan Analisis
+### Versi 0.2 - Perencanaan dan Analisis
 
 - fondasi alokasi kategori transaksi dan alur split transaction *(sudah tersedia pada alpha saat ini)*;
 - anggaran multi-kategori bulanan/tahunan/kustom *(sudah tersedia pada alpha saat ini)*;
@@ -277,7 +277,7 @@ Grafik menggunakan data agregat agar tetap ringan ketika jumlah transaksi bertam
 - pencarian dan filter lanjutan;
 - ekspor CSV.
 
-### Versi 0.3 — Kewajiban dan Penyempurnaan
+### Versi 0.3 - Kewajiban dan Penyempurnaan
 
 - utang dan piutang;
 - transaksi berulang;

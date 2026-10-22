@@ -1,0 +1,133 @@
+name: Laporan bug
+description: Laporkan kesalahan, perhitungan yang tidak sesuai, atau fitur yang tidak berjalan.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Terima kasih sudah mencoba Waras Arta. Buat satu laporan untuk satu masalah agar mudah ditelusuri.
+
+        **Issue ini bersifat publik. Jangan unggah backup `.warasarta`, database, kata sandi, PIN/OTP, kunci signing, nomor rekening, atau data keuangan pribadi.** Gunakan data contoh dan sensor informasi pribadi pada tangkapan layar maupun pesan error.
+
+        Jika ada data hilang atau saldo tidak sesuai, jangan uninstall, hapus data, atau mengulangi transaksi penting hanya untuk mereproduksi masalah. Simpan backup secara privat terlebih dahulu; jangan lampirkan backup ke issue.
+
+  - type: checkboxes
+    id: preparation
+    attributes:
+      label: Sebelum mengirim
+      options:
+        - label: Saya sudah memeriksa isi laporan dan lampiran agar tidak memuat data pribadi, data keuangan nyata, backup, atau rahasia.
+          required: true
+        - label: Saya sudah mencari laporan serupa di daftar Issues.
+          required: false
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Versi Waras Arta
+      description: Buka halaman Tentang dan tulis versi beserta angka build yang ditampilkan. Jika aplikasi tidak bisa dibuka, tulis versi terakhir yang diketahui atau "tidak tahu".
+      placeholder: "Contoh: 0.1.1 (2)"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Merek dan model HP
+      description: Cukup merek/model perangkat; jangan sertakan IMEI, nomor telepon, atau serial perangkat.
+      placeholder: "Contoh: OPPO A53 / CPH2127"
+    validations:
+      required: true
+
+  - type: input
+    id: android-version
+    attributes:
+      label: Versi Android
+      description: Lihat Pengaturan HP → Tentang perangkat. Tulis "tidak tahu" jika belum dapat memeriksanya.
+      placeholder: "Contoh: Android 11"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-source
+    attributes:
+      label: Sumber pemasangan aplikasi
+      options:
+        - APK dari GitHub Releases
+        - Pembaruan dari dalam aplikasi
+        - Build sendiri dengan Flutter
+        - Sumber lain atau tidak tahu
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Bagian yang bermasalah
+      options:
+        - Ikhtisar dan grafik
+        - Transaksi (tambah, edit, hapus, atau detail)
+        - Rekening dan saldo
+        - Kategori dan subkategori
+        - Kalender
+        - Anggaran
+        - Ringkasan bulanan
+        - Backup dan restore
+        - Pembaruan aplikasi
+        - Aplikasi tidak dapat dibuka
+        - Lainnya atau belum tahu
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-result
+    attributes:
+      label: Apa yang terjadi?
+      description: Jelaskan masalah dan dampaknya. Apakah hanya tampilan, operasi gagal, perhitungan salah, aplikasi menutup sendiri, atau ada data yang berubah/hilang? Gunakan nominal dan nama fiktif jika diperlukan.
+      placeholder: "Contoh: Setelah menyimpan pengeluaran percobaan, transaksi muncul dua kali meskipun saya hanya menekan Simpan sekali."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Langkah untuk mengulangi masalah
+      description: Tulis urutan yang dilakukan dan kondisi awal yang relevan. Jika masalah hanya terjadi sekali, jelaskan kejadian terakhir yang diingat; tidak perlu memaksakan reproduksi pada data penting.
+      placeholder: |
+        1. Buka ...
+        2. Pilih ...
+        3. Masukkan data contoh ...
+        4. Tekan ...
+        5. Masalah muncul ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-result
+    attributes:
+      label: Hasil yang diharapkan
+      placeholder: "Contoh: Hanya satu transaksi percobaan tersimpan dan saldo berkurang satu kali."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Seberapa sering terjadi? (opsional)
+      options:
+        - Selalu dengan langkah tersebut
+        - Kadang-kadang
+        - Baru terjadi sekali
+        - Belum tahu
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Bukti atau informasi tambahan (opsional)
+      description: Boleh menambahkan pesan error atau tangkapan layar dengan data contoh. Sensor dahulu nama, rekening, saldo, transaksi, dan rahasia. Jangan unggah file backup/database atau menyalin log yang belum diperiksa.
+      placeholder: "Pesan error yang sudah dibersihkan, tangkapan layar tersensor, atau kondisi tambahan seperti masalah mulai terjadi setelah pembaruan."
+    validations:
+      required: false

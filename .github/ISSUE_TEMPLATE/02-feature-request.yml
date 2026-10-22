@@ -1,0 +1,85 @@
+name: Usulan fitur
+description: Usulkan fitur baru atau perbaikan alur dan tampilan Waras Arta.
+title: "[Fitur] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ceritakan kebutuhan yang ingin diselesaikan, bukan hanya nama fiturnya. Buat satu usulan untuk satu kebutuhan; jika ada usulan serupa, kamu dapat menambahkan konteks pada issue tersebut.
+
+        **Issue ini bersifat publik. Gunakan nama dan nominal fiktif. Jangan unggah backup `.warasarta`, database, kata sandi, PIN/OTP, nomor rekening, atau data keuangan pribadi.** Sensor informasi pribadi pada contoh dan tangkapan layar.
+
+        Usulan akan dipertimbangkan berdasarkan manfaat, keamanan data, pendekatan local-first, dan kenyamanan pada HP dengan spesifikasi terbatas. Usulan tidak otomatis masuk ke rilis berikutnya. Jika fitur yang sudah ada tidak berjalan semestinya, gunakan formulir **Laporan bug**.
+
+  - type: checkboxes
+    id: preparation
+    attributes:
+      label: Sebelum mengirim
+      options:
+        - label: Saya sudah memeriksa isi usulan dan lampiran agar tidak memuat data pribadi, data keuangan nyata, backup, atau rahasia.
+          required: true
+        - label: Saya sudah mencari usulan serupa di daftar Issues dan membaca batasan fitur pada README.
+          required: false
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Kebutuhan atau masalah yang ingin diselesaikan
+      description: Ceritakan kapan kebutuhan ini muncul dan kesulitan pada alur saat ini. Gunakan contoh fiktif, bukan catatan keuangan asli.
+      placeholder: "Contoh: Saya sering perlu menemukan transaksi percobaan berdasarkan nama tempat, tetapi saat ini harus menelusuri riwayat satu per satu."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Perubahan yang diusulkan
+      description: Jelaskan perilaku atau alur yang kamu harapkan. Tidak perlu mengetahui teknologi atau cara menulis kodenya.
+      placeholder: "Contoh: Pada halaman Riwayat tersedia pencarian berdasarkan catatan transaksi, lalu hasilnya bisa dibuka seperti transaksi biasa."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Bagian aplikasi yang terkait (opsional)
+      options:
+        - Ikhtisar dan grafik
+        - Transaksi dan riwayat
+        - Rekening dan saldo
+        - Kategori dan subkategori
+        - Kalender
+        - Anggaran
+        - Ringkasan bulanan
+        - Backup dan restore
+        - Pembaruan aplikasi
+        - Fitur baru atau bagian lain
+    validations:
+      required: false
+
+  - type: textarea
+    id: benefit
+    attributes:
+      label: Manfaat dan contoh penggunaan (opsional)
+      description: Apa yang menjadi lebih mudah, lebih jelas, atau lebih aman? Seberapa sering kamu membutuhkan perubahan ini?
+      placeholder: "Contoh: Mempercepat pengecekan transaksi lama tanpa harus mengingat bulannya."
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Cara yang dilakukan sekarang atau alternatif (opsional)
+      description: Jelaskan solusi sementara yang sudah dicoba atau alternatif yang lebih sederhana.
+      placeholder: "Contoh: Saat ini saya membuka riwayat setiap bulan dan memeriksa detail transaksi secara manual."
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: Sketsa atau referensi (opsional)
+      description: Boleh menyertakan sketsa, tautan referensi, atau tangkapan layar yang tidak memuat informasi pribadi. Jelaskan bagian yang menjadi inspirasi; jangan melampirkan data keuangan asli.
+    validations:
+      required: false

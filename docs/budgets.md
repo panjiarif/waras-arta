@@ -25,7 +25,7 @@ Tujuan versi pertama:
 - menyalin anggaran bulanan sebelumnya secara manual sebagai snapshot independen;
 - memasukkan seluruh data anggaran ke backup terenkripsi berikutnya.
 
-## Ikon anggaran dan pemilih subkategori — 22 Oktober 2026
+## Ikon anggaran dan pemilih subkategori - 22 Oktober 2026
 
 - Form tambah/edit menyediakan **Ikon anggaran** dari katalog ikon kategori, termasuk untuk anggaran multi-subkategori. Pilihan ikon tidak memengaruhi perhitungan atau kategori yang ditautkan.
 - `Budget.iconKey` nullable: null berarti **Otomatis**. Satu subkategori mengikuti ikonnya; multi-subkategori memakai ikon generik. Pilihan manual tetap sama meskipun kategori diubah, dan dapat direset ke otomatis.

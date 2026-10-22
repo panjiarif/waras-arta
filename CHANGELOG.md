@@ -27,6 +27,7 @@ Perubahan penting Waras Arta dicatat di sini. Versi alpha ditujukan untuk penguj
 
 ### Batas pengujian
 
+- Smoke test perangkat pada 22 Oktober 2026 berhasil: APK release `0.1.1 (2)` dipasang tanpa uninstall, data tetap utuh, dan backup baru berhasil dibuat. Ini belum menguji alur pembaruan internal secara menyeluruh.
 - Cek versi telah dicoba pada perangkat dan pemeriksaan metadata GitHub telah diuji langsung. Pemasangan pembaruan menyeluruh melalui aplikasi masih perlu smoke test dengan rilis yang lebih baru dan signing yang sama.
 - Unduhan belum mendukung resume setelah aplikasi dihentikan OS; unduh ulang dimulai dari awal. Membuka pemasang Android bukan konfirmasi bahwa pembaruan selesai terpasang.
 

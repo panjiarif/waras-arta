@@ -23,6 +23,8 @@
 
 Versi publik terbaru adalah **v0.1.0 — Alpha 1** untuk Android 7.0 atau lebih baru.
 
+Versi pada branch pengembangan adalah **v0.1.1 — Alpha 2** (`0.1.1+2`) dan masih dalam persiapan rilis. Lihat [changelog](CHANGELOG.md) serta [catatan rilis v0.1.1](docs/releases/v0.1.1.md). Tautan unduhan di atas tetap mengarah ke v0.1.0 sampai v0.1.1 dipublikasikan.
+
 > [!WARNING]
 > Ini adalah versi alpha untuk pengujian awal. Gunakan data percobaan terlebih dahulu dan jangan menjadikannya satu-satunya tempat menyimpan catatan keuangan penting.
 
@@ -83,7 +85,7 @@ Jika perangkat sebelumnya memakai build debug atau APK dengan signature berbeda,
 
 ## Tentang data dan backup
 
-Data aktif disimpan secara lokal pada penyimpanan privat aplikasi. Waras Arta tidak meminta akun, tidak memiliki server aplikasi, tidak meminta izin Internet pada APK release, dan tidak menyinkronkan data ke cloud secara otomatis.
+Data aktif disimpan secara lokal pada penyimpanan privat aplikasi. Waras Arta tidak meminta akun, tidak memiliki server aplikasi, dan tidak menyinkronkan data ke cloud secara otomatis. APK publik v0.1.0 tidak meminta izin Internet. Mulai source v0.1.1, Internet hanya digunakan saat pengguna meminta cek/unduh pembaruan GitHub; catatan keuangan dan file backup tidak dikirim. Lihat [alur pembaruan aplikasi](docs/app-updates.md).
 
 Hal yang perlu diperhatikan:
 
